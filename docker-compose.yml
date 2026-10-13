@@ -1,0 +1,40 @@
+# Hosted setup: the app and PostgreSQL with pgvector. Create .env first (see README).
+#   docker compose up -d --build
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bookalive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: bookalive
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookalive -d bookalive"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://bookalive:${POSTGRES_PASSWORD}@db:5432/bookalive
+      # Encrypts stored API keys and signs sessions. Changing it makes stored keys unreadable.
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      # The one password that opens the app. Never run a public instance without it:
+      # anyone who reaches the app can spend your model credits.
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+    volumes:
+      - data:/data
+    ports:
+      - "${PORT:-8000}:8000"
+
+volumes:
+  db:
+  data:

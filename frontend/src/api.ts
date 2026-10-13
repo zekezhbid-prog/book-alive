@@ -252,6 +252,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     init.headers = { 'Content-Type': 'application/json' }
   }
   const response = await fetch(`/api${path}`, init)
+  if (response.status === 401 && path !== '/login') {
+    // The session ended (or never started): the app shows the login screen.
+    window.dispatchEvent(new Event('login-required'))
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
     const detail = typeof payload?.detail === 'string' ? payload.detail : ''
@@ -260,7 +264,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return response.status === 204 ? (undefined as T) : response.json()
 }
 
+export interface SessionInfo {
+  password_required: boolean
+  authenticated: boolean
+}
+
 export const api = {
+  session: () => request<SessionInfo>('GET', '/session'),
+  login: (password: string) => request<SessionInfo>('POST', '/login', { password }),
+  logout: () => request<SessionInfo>('POST', '/logout'),
   projects: () => request<ProjectBrief[]>('GET', '/projects'),
   createProject: (mode: Mode, title: string, file: File | null) => {
     const form = new FormData()

@@ -21,6 +21,16 @@ def _fernet() -> Fernet:
     return Fernet(key_file.read_bytes().strip())
 
 
+def signing_key() -> bytes:
+    """Key for signing session cookies: derived from the same secret, never the same bytes."""
+    if settings.secret_key:
+        seed = settings.secret_key.encode()
+    else:
+        _fernet()  # makes sure the key file exists
+        seed = (settings.data_dir / "secret.key").read_bytes()
+    return hashlib.sha256(b"session:" + seed).digest()
+
+
 def encrypt(value: str) -> str:
     return _fernet().encrypt(value.encode()).decode() if value else ""
 

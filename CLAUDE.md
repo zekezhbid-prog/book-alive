@@ -14,6 +14,8 @@ Backend (from `backend/`, Python 3.12 via uv):
 - `uv run uvicorn app.main:app --reload --port 8000` - API; also serves `frontend/dist` if built
 - `uv run pytest -q` - tests (start their own throwaway embedded PostgreSQL)
 - `uv run ruff check . && uv run ruff format .`
+- `uv run alembic revision --autogenerate -m "..."` - after changing `models.py`; migrations
+  run on startup
 
 Frontend (from `frontend/`):
 - `npm run dev` - Vite on :5173, proxies `/api` to :8000
@@ -29,6 +31,7 @@ backend/app/
   db.py              engine, session, embedded PostgreSQL when DATABASE_URL is empty
   models.py          SQLAlchemy models
   crypto.py          encryption of stored API keys
+  auth.py            one shared password for a hosted instance (off when APP_PASSWORD is empty)
   importing/         file -> paragraphs -> chapters, no AI
   services/versions.py  whole-book commits and rollback
   llm/registry.py    the only place that builds chat models and lists provider models
@@ -87,6 +90,6 @@ demo/                a short original story used for demos and end-to-end checks
 5. Scenes, first frame, video prompt, reference archive - done; the first frame, like
    all image generation, has not been run against a real provider yet
 6. Writer extras: refresh of stale cards, plot suggestions - done
-7. Docker, shared password for hosting, README, opening the repository.
-   Also Alembic migrations: until then the schema is created by `create_all`, and a new
-   column on an existing table needs a manual `ALTER TABLE` on existing databases.
+7. Docker, shared password for hosting, Alembic migrations, README - written; the Docker
+   setup has not been run (no Docker on the development machine). Opening the repository
+   is the owner's call.

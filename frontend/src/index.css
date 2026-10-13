@@ -199,3 +199,5 @@ details summary { cursor: pointer; margin-bottom: 8px; }
 
 /* Messages inside the reading column use the interface font, not the book font. */
 .chapter p.muted, .chapter p.faint, .chapter p.error, .chapter p.notice { font: 14px/1.5 var(--sans); margin: 0; }
+
+.login { margin: 12vh auto 0; max-width: 360px; }

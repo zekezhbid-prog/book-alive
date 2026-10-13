@@ -7,6 +7,10 @@ const ru = {
   'app.settings': 'Настройки',
   'app.projects': 'Проекты',
   'app.loading': 'Загрузка…',
+  'login.title': 'Вход',
+  'login.password': 'Пароль',
+  'login.submit': 'Войти',
+  'login.logout': 'Выйти',
   'app.cancel': 'Отмена',
   'app.delete': 'Удалить',
   'app.save': 'Сохранить',
@@ -316,6 +320,8 @@ const ru = {
   'error.no_prompt_yet': 'Сначала соберите промпт для видео.',
   'error.scene_not_found': 'Такой сцены больше нет.',
   'error.empty_chapter': 'В главе нет текста.',
+  'error.wrong_password': 'Неверный пароль.',
+  'error.login_required': 'Нужно войти заново.',
   'error.unknown': 'Что-то пошло не так: {detail}',
 }
 
@@ -323,6 +329,10 @@ const en: Record<keyof typeof ru, string> = {
   'app.settings': 'Settings',
   'app.projects': 'Projects',
   'app.loading': 'Loading…',
+  'login.title': 'Sign in',
+  'login.password': 'Password',
+  'login.submit': 'Sign in',
+  'login.logout': 'Sign out',
   'app.cancel': 'Cancel',
   'app.delete': 'Delete',
   'app.save': 'Save',
@@ -629,6 +639,8 @@ const en: Record<keyof typeof ru, string> = {
   'error.no_prompt_yet': 'Build the video prompt first.',
   'error.scene_not_found': 'This scene no longer exists.',
   'error.empty_chapter': 'The chapter has no text.',
+  'error.wrong_password': 'Wrong password.',
+  'error.login_required': 'Please sign in again.',
   'error.unknown': 'Something went wrong: {detail}',
 }
 

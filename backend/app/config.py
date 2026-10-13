@@ -2,7 +2,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
@@ -13,6 +14,8 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     # Key for encrypting API keys at rest. Empty means "generate and keep in data_dir".
     secret_key: str = ""
+    # One shared password for a hosted instance. Empty (the local default) means no login.
+    app_password: str = ""
     # Local embedding model for search over the book; "hash" needs no download (tests).
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     # Built frontend served by the API in production.

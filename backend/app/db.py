@@ -3,11 +3,11 @@ from datetime import datetime
 from typing import Annotated, ClassVar
 
 from fastapi import Depends
-from sqlalchemy import DateTime, create_engine, text
+from sqlalchemy import DateTime, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from app.config import settings
+from app.config import BACKEND_DIR, settings
 
 
 class Base(DeclarativeBase):
@@ -42,13 +42,24 @@ def get_engine() -> Engine:
     return _engine
 
 
+BASELINE = "0001"  # the schema as it was when migrations were introduced
+
+
 def init_db() -> None:
-    from app import models  # noqa: F401  (registers tables)
+    """Bring the database to the current schema with Alembic."""
+    from alembic import command
+    from alembic.config import Config
 
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.create_all(engine)
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    tables = set(inspect(engine).get_table_names())
+    if "projects" in tables and "alembic_version" not in tables:
+        # A database made by `create_all` before migrations existed already has
+        # the baseline schema: record that instead of creating the tables again.
+        command.stamp(config, BASELINE)
+    command.upgrade(config, "head")
 
 
 def get_session() -> Iterator[Session]:

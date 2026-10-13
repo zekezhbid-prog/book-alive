@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+from app import auth
 from app.analysis import runner
 from app.api import analysis, chat, connections, images, projects, scenes
 from app.config import settings
@@ -20,6 +21,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Book Alive", lifespan=lifespan)
+app.middleware("http")(auth.require_login)
+app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(connections.router)
 app.include_router(analysis.router)
