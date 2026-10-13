@@ -24,6 +24,7 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
     stay finished; starting again continues from there."""
     pending = [cid for cid in run.chapter_ids if cid not in run.done_chapter_ids]
     project = session.get(Project, run.project_id)
+    forget_deleted_chapters(session, project, run.kind)
     if not run.done_chapter_ids and {c.id for c in project.chapters} <= set(run.chapter_ids):
         # A run over the whole book rebuilds the cards from scratch, so other names
         # collected by earlier runs must not carry over. Facts are rebuilt per chapter.
@@ -48,6 +49,19 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
     else:
         session.refresh(run)
         run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
+    session.commit()
+
+
+def forget_deleted_chapters(session: Session, project: Project, kind: str) -> None:
+    """Facts read from chapters that no longer exist cannot be refreshed, only dropped."""
+    alive = {c.id for c in project.chapters}
+    for entity in session.scalars(
+        select(Entity).where(Entity.project_id == project.id, Entity.kind == kind)
+    ):
+        for fact in [f for f in entity.facts if f.chapter_id not in alive]:
+            entity.facts.remove(fact)
+        if not entity.facts and not entity.standalone and not entity.images:
+            session.delete(entity)
     session.commit()
 
 

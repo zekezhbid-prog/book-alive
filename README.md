@@ -38,7 +38,9 @@ with pgvector, and React.
 - [x] Scenes: split a chapter with the model or mark a stretch of text by hand; references
       picked by chapter and style; video prompt with plain-language changes; archive with
       the prompt and pictures under readable names; first frame (not yet run live)
-- [ ] Docker and hosting
+- [x] Writer extras: plot suggestions grounded in the text, one-click refresh of cards for
+      the chapters that changed
+- [ ] Docker, hosting, database migrations
 
 ## Run locally
 
@@ -51,6 +53,8 @@ cd backend && uv sync && uv run uvicorn app.main:app --port 8000
 ```
 
 Open http://127.0.0.1:8000, then add a connection in Settings.
+
+To try it without your own book, create a project from `demo/lighthouse.txt`.
 
 For development run the API with `--reload` and `npm run dev` in `frontend/` (port 5173).
 

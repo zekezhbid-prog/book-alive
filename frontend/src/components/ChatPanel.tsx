@@ -7,10 +7,12 @@ interface Props {
   projectId: string
   /** The chapter open in the reader: lets the user ask about "here". */
   chapterId?: string
+  /** Writer projects: offer ideas for what happens next in the open chapter. */
+  canSuggest?: boolean
 }
 
 /** Questions about the book. Answers come only from its text, with links to the source. */
-export default function ChatPanel({ projectId, chapterId }: Props) {
+export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
   const { t } = useI18n()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [question, setQuestion] = useState('')
@@ -35,6 +37,19 @@ export default function ChatPanel({ projectId, chapterId }: Props) {
       const added = await api.ask(projectId, text, chapterId)
       setMessages((list) => [...list, ...added])
       setQuestion('')
+    } catch (e) {
+      setError(errorText(t, e))
+    } finally {
+      setWaiting(false)
+    }
+  }
+  const suggest = async () => {
+    if (waiting) return
+    setWaiting(true)
+    setError('')
+    try {
+      const added = await api.suggest(projectId, t('chat.suggest.question'), chapterId)
+      setMessages((list) => [...list, ...added])
     } catch (e) {
       setError(errorText(t, e))
     } finally {
@@ -73,6 +88,11 @@ export default function ChatPanel({ projectId, chapterId }: Props) {
         <div ref={end} />
       </div>
       {error && <p className="error small">{error}</p>}
+      {canSuggest && (
+        <button className="btn small" disabled={waiting || !chapterId} onClick={suggest}>
+          {t('chat.suggest')}
+        </button>
+      )}
       <form className="chat-form" onSubmit={send}>
         <textarea
           className="input"

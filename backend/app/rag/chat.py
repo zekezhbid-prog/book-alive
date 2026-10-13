@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
-from app.models import ChatMessage, Project
+from app.models import FACT_PERMANENT, ChatMessage, Entity, Project
 from app.rag.index import BookRetriever, index_project
+from app.scenes.service import entities_in
 
 HISTORY_MESSAGES = 6
 
@@ -116,6 +117,92 @@ def ask(
         content=answer.answer,
         citations=citations if answer.found else [],
     )
+    session.add(reply)
+    session.commit()
+    return asked, reply
+
+
+SUGGEST_SYSTEM = """You help the author of a book that is being written. Below are the \
+last pages written so far, what is known about the characters in them, and related \
+passages from earlier in the book.
+
+Offer three different ways the story could go on from here. Rules:
+- Each must follow from what is already written: the characters' natures, their stated \
+intentions, unresolved threads. Do not contradict the text.
+- Make the three really different from one another (in direction, not in detail).
+- Two or three sentences each. Describe what happens; do not write the prose itself: \
+the author writes the book.
+- Write in the language of the book.
+
+Reply with one JSON object and nothing else:
+{{"options": [{{"title": "", "text": ""}}, {{"title": "", "text": ""}}, {{"title": "", "text": ""}}]}}
+
+The last pages:
+
+{tail}
+
+Characters and places in them:
+
+{cast}
+
+Related passages from earlier:
+
+{passages}"""
+
+TAIL_CHARS = 4000
+
+
+class Option(BaseModel):
+    title: str = ""
+    text: str
+
+
+class Options(BaseModel):
+    options: list[Option]
+
+
+def suggest(
+    session: Session, project: Project, model: TextModel, request: str, chapter_id: str
+) -> tuple[ChatMessage, ChatMessage]:
+    """Three ways to continue from the end of a chapter. The request text is only what
+    the user sees in the conversation; nothing is ever written into the book."""
+    index_project(session, project)
+    chapter = next((c for c in project.chapters if c.id == chapter_id), None)
+    tail = (chapter.text if chapter else "")[-TAIL_CHARS:]
+    asked = ChatMessage(project_id=project.id, role="user", content=request)
+    session.add(asked)
+    if not tail.strip():
+        reply = ChatMessage(project_id=project.id, role="assistant", content="", citations=[])
+        session.add(reply)
+        session.commit()
+        return asked, reply
+
+    cast = []
+    for entity_id in entities_in(session, project.id, tail, []):
+        entity = session.get(Entity, entity_id)
+        traits = [f.text for f in entity.facts if f.category == FACT_PERMANENT][:5]
+        cast.append(f"- {entity.name}" + (f": {'; '.join(traits)}" if traits else ""))
+    retriever = BookRetriever(session=session, project_id=project.id, limit=5)
+    # The closing paragraphs say best what the story is about right now.
+    documents = [
+        doc
+        for doc in retriever.invoke(tail[-800:])
+        if doc.page_content not in tail  # the tail itself is already in the prompt
+    ]
+    passages = "\n\n".join(
+        f"({doc.metadata['chapter_title'] or '—'}) {doc.page_content}" for doc in documents
+    )
+    system = SUGGEST_SYSTEM.format(
+        tail=tail, cast="\n".join(cast) or "(no cards yet)", passages=passages or "(none)"
+    )
+    answer = model.invoke_json(
+        "suggest_plot", [SystemMessage(system), HumanMessage(request)], Options
+    )
+    content = "\n\n".join(
+        f"{n}. {option.title.strip()}\n{option.text.strip()}".replace(f"{n}. \n", f"{n}. ")
+        for n, option in enumerate(answer.options[:3], 1)
+    )
+    reply = ChatMessage(project_id=project.id, role="assistant", content=content, citations=[])
     session.add(reply)
     session.commit()
     return asked, reply

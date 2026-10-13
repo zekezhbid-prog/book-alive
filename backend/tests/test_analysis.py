@@ -236,3 +236,28 @@ def test_merge_rejects_cards_of_different_kinds(client, session, project):
         client.post(f"/api/entities/{person.id}/merge", json={"other_id": person.id}).status_code
         == 422
     )
+
+
+def test_stale_chapters_are_listed_and_deleted_ones_forgotten(client, session, project):
+    run(session, project, FakeModel())
+    url = f"/api/projects/{project.id}/stale"
+    assert client.get(url, params={"kind": "character"}).json() == {
+        "chapter_ids": [],
+        "orphaned_facts": 0,
+    }
+    first, second = project.chapters
+    client.patch(f"/api/chapters/{first.id}", json={"text": CHAPTER_1 + "\n\nПравка."})
+    client.delete(f"/api/chapters/{second.id}")
+    report = client.get(url, params={"kind": "character"}).json()
+    assert report["chapter_ids"] == [first.id]
+    assert report["orphaned_facts"] > 0
+
+    # Reading the changed chapter again also drops what came from the deleted one.
+    session.expire_all()
+    project = session.get(type(project), project.id)
+    run(session, project, FakeModel(), chapters=[project.chapters[0]])
+    assert client.get(url, params={"kind": "character"}).json() == {
+        "chapter_ids": [],
+        "orphaned_facts": 0,
+    }
+    assert set(cast(session, project)) == {"Рыхташ"}  # "Люта" lived only in the deleted chapter

@@ -207,6 +207,33 @@ def list_entities(project_id: str, kind: str, session: SessionDep) -> list[Entit
     return sorted(briefs, key=lambda b: (-b.chapters, b.name))
 
 
+class StaleOut(BaseModel):
+    # Chapters read before their text changed: reading them again refreshes the cards.
+    chapter_ids: list[str]
+    # Facts left from chapters that were deleted; the next run drops them.
+    orphaned_facts: int
+
+
+@router.get("/projects/{project_id}/stale")
+def stale(project_id: str, kind: str, session: SessionDep) -> StaleOut:
+    project = _project(session, project_id)
+    hashes = {c.id: c.content_hash for c in project.chapters}
+    changed: set[str] = set()
+    orphaned = 0
+    for entity in session.scalars(
+        select(Entity).where(Entity.project_id == project_id, Entity.kind == _kind(kind))
+    ):
+        for fact in entity.facts:
+            if fact.chapter_id not in hashes:
+                orphaned += 1
+            elif hashes[fact.chapter_id] != fact.chapter_hash:
+                changed.add(fact.chapter_id)
+    ordered = sorted(
+        changed, key=lambda cid: next(c.position for c in project.chapters if c.id == cid)
+    )
+    return StaleOut(chapter_ids=ordered, orphaned_facts=orphaned)
+
+
 @router.get("/entities/{entity_id}")
 def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
     entity = session.get(Entity, entity_id)

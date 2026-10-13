@@ -268,6 +268,11 @@ def create_project(
         if not book.paragraphs:
             raise HTTPException(422, "empty_book")
         project.split_method, detected = detect_chapters(book.paragraphs)
+        opening = detected[0]
+        if not opening.title and len(detected) > 1 and len(opening.text) <= 100:
+            # One short line before the first chapter is the book's title, not a chapter.
+            book.title = book.title or opening.text.replace("\n\n", " ")
+            detected = detected[1:]
         project.source_filename = filename
         project.author = book.author[:TITLE_MAX]
         project.title = project.title or book.title[:TITLE_MAX] or PurePath(filename).stem

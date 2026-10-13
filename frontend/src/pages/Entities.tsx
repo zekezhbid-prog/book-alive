@@ -26,14 +26,16 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const [list, setList] = useState<EntityBrief[] | null>(null)
   const [entity, setEntity] = useState<Entity | null>(null)
   const [run, setRun] = useState<Run | null>(null)
-  const [choosing, setChoosing] = useState(false)
+  // null: closed. Otherwise the chapters ticked when the dialog opens (empty = all).
+  const [choosing, setChoosing] = useState<string[] | null>(null)
+  const [staleChapters, setStaleChapters] = useState<string[]>([])
   const [error, setError] = useState('')
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
-  const loadList = useCallback(
-    () => api.entities(projectId, kind).then(setList, fail),
-    [projectId, kind, fail],
-  )
+  const loadList = useCallback(() => {
+    api.stale(projectId, kind).then((report) => setStaleChapters(report.chapter_ids), fail)
+    return api.entities(projectId, kind).then(setList, fail)
+  }, [projectId, kind, fail])
   useEffect(() => {
     setList(null)
     setRun(null)
@@ -82,7 +84,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
       <ProjectHeader project={project} />
       <div className="workspace">
         <aside className="chapters">
-          <button className="btn primary" disabled={running} onClick={() => setChoosing(true)}>
+          <button className="btn primary" disabled={running} onClick={() => setChoosing([])}>
             {t(`entities.find.${kind}`)}
           </button>
           <button className="btn small" onClick={addCard}>
@@ -116,6 +118,14 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   </button>
                 </div>
                 <progress value={run.done} max={run.total} />
+              </div>
+            )}
+            {staleChapters.length > 0 && !running && (
+              <div className="notice row">
+                <span className="grow">{t('entities.refresh', { n: staleChapters.length })}</span>
+                <button className="btn small" onClick={() => setChoosing(staleChapters)}>
+                  {t('entities.refresh.button')}
+                </button>
               </div>
             )}
             {run?.status === 'failed' && (
@@ -156,9 +166,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
         <RunDialog
           project={project}
           kind={kind}
-          onClose={() => setChoosing(false)}
+          initial={choosing}
+          onClose={() => setChoosing(null)}
           onStarted={(started) => {
-            setChoosing(false)
+            setChoosing(null)
             setError('')
             setRun(started)
           }}
@@ -269,14 +280,18 @@ function Card({ entity, projectId, others, onChanged, onError }: CardProps) {
 interface DialogProps {
   project: Project
   kind: EntityKind
+  /** Chapters ticked at the start; empty means the whole book. */
+  initial: string[]
   onClose: () => void
   onStarted: (run: Run) => void
 }
 
 /** Pick chapters, see what it will cost, then start. Nothing is spent before "Start". */
-function RunDialog({ project, kind, onClose, onStarted }: DialogProps) {
+function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) {
   const { t } = useI18n()
-  const [selected, setSelected] = useState(() => new Set(project.chapters.map((c) => c.id)))
+  const [selected, setSelected] = useState(
+    () => new Set(initial.length ? initial : project.chapters.map((c) => c.id)),
+  )
   const [estimate, setEstimate] = useState<Estimate | null>(null)
   const [error, setError] = useState('')
   const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)

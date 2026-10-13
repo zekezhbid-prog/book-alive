@@ -152,3 +152,14 @@ def test_project_list_reports_sizes(client):
     listed = next(p for p in client.get("/api/projects").json() if p["id"] == project["id"])
     assert listed["chapters"] == 2
     assert listed["chars"] == sum(c["chars"] for c in project["chapters"])
+
+
+def test_title_line_before_the_first_chapter_names_the_book(client):
+    text = "Хранитель маяка\n\n" + make_book(2).decode()
+    project = client.post(
+        "/api/projects",
+        data={"mode": "reader"},
+        files={"file": ("book.txt", text.encode(), "text/plain")},
+    ).json()
+    assert project["title"] == "Хранитель маяка"
+    assert [c["title"] for c in project["chapters"]] == ["Глава 1", "Глава 2"]

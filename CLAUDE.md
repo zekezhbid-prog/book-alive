@@ -46,6 +46,7 @@ frontend/src/
   pages/, components/
 data/                runtime, gitignored: PostgreSQL cluster, uploads, secret.key
 _private/, _reference/  gitignored: the owner's test book and the earlier Node prototype
+demo/                a short original story used for demos and end-to-end checks
 ```
 
 ## Rules that hold everywhere
@@ -85,7 +86,7 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
    that image generation has only been exercised against a mocked HTTP endpoint
 5. Scenes, first frame, video prompt, reference archive - done; the first frame, like
    all image generation, has not been run against a real provider yet
-6. Writer extras: stale markers, plot suggestions
+6. Writer extras: refresh of stale cards, plot suggestions - done
 7. Docker, shared password for hosting, README, opening the repository.
    Also Alembic migrations: until then the schema is created by `create_all`, and a new
    column on an existing table needs a manual `ALTER TABLE` on existing databases.

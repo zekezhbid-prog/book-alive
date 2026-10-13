@@ -308,6 +308,11 @@ export const api = {
   latestRun: (projectId: string, kind: EntityKind) =>
     request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
   cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),
+  stale: (projectId: string, kind: EntityKind) =>
+    request<{ chapter_ids: string[]; orphaned_facts: number }>(
+      'GET',
+      `/projects/${projectId}/stale?kind=${kind}`,
+    ),
   entities: (projectId: string, kind: EntityKind) =>
     request<EntityBrief[]>('GET', `/projects/${projectId}/entities?kind=${kind}`),
   entity: (id: string) => request<Entity>('GET', `/entities/${id}`),
@@ -319,6 +324,11 @@ export const api = {
   ask: (projectId: string, question: string, chapterId?: string) =>
     request<ChatMessage[]>('POST', `/projects/${projectId}/chat`, {
       question,
+      chapter_id: chapterId ?? '',
+    }),
+  suggest: (projectId: string, label: string, chapterId?: string) =>
+    request<ChatMessage[]>('POST', `/projects/${projectId}/chat/suggest`, {
+      question: label,
       chapter_id: chapterId ?? '',
     }),
   clearChat: (projectId: string) => request<void>('DELETE', `/projects/${projectId}/chat`),

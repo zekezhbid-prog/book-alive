@@ -136,3 +136,29 @@ def test_chat_api_history_and_clear(client, project):
     response = client.post(f"/api/projects/{project.id}/chat", json={"question": "Кто такая Люта?"})
     assert (response.status_code, response.json()["detail"]) == (409, "text_model_not_configured")
     assert client.delete(f"/api/projects/{project.id}/chat").status_code == 204
+
+
+def test_plot_suggestions_for_the_writer(session, project):
+    options = {
+        "options": [
+            {"title": "Погоня", "text": "Стражник узнаёт Люту."},
+            {"title": "Обман", "text": "Она выдаёт себя за служанку."},
+            {"title": "Ночь", "text": "Люта ждёт темноты у стены."},
+        ]
+    }
+    model = FakeModel(options)
+    road = project.chapters[1]
+    asked, reply = chat.suggest(session, project, model, "Предложи развитие событий", road.id)
+    assert asked.content == "Предложи развитие событий"
+    assert reply.content.startswith("1. Погоня\nСтражник узнаёт Люту.\n\n2. Обман")
+    assert reply.citations == []
+    # The prompt carries the end of the open chapter and passages from elsewhere in the book.
+    assert "посох из орешника" in model.prompts[0]
+    assert "(Мельница)" in model.prompts[0]
+
+
+def test_suggestions_are_for_writer_projects_only(client, session, project):
+    project.mode = "reader"
+    session.commit()
+    response = client.post(f"/api/projects/{project.id}/chat/suggest", json={"question": "x"})
+    assert (response.status_code, response.json()["detail"]) == (409, "reader_mode_readonly")

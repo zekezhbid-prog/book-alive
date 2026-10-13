@@ -6,7 +6,7 @@ from sqlalchemy import delete
 
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
-from app.models import ChatMessage, Project
+from app.models import MODE_WRITER, ChatMessage, Project
 from app.rag import chat
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -65,6 +65,26 @@ def ask(project_id: str, body: Question, session: SessionDep) -> list[MessageOut
         raise HTTPException(409, str(exc)) from exc
     try:
         asked, reply = chat.ask(session, project, model, body.question.strip(), body.chapter_id)
+    except BadModelOutput as exc:
+        raise HTTPException(502, f"bad_model_output: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return [_out(asked), _out(reply)]
+
+
+@router.post("/projects/{project_id}/chat/suggest")
+def suggest(project_id: str, body: Question, session: SessionDep) -> list[MessageOut]:
+    """Writer projects only: ideas for what happens next. `question` is the label the
+    user sees in the conversation."""
+    project = _project(session, project_id)
+    if project.mode != MODE_WRITER:
+        raise HTTPException(409, "reader_mode_readonly")
+    try:
+        model = TextModel(session, project.id)
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        asked, reply = chat.suggest(session, project, model, body.question.strip(), body.chapter_id)
     except BadModelOutput as exc:
         raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:

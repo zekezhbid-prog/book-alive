@@ -77,7 +77,10 @@ export default function Book() {
   if (error && !project) return <main className="page error">{error}</main>
   if (!project) return <main className="page muted">{t('app.loading')}</main>
 
-  const writing = project.mode === 'writer' && view === 'writer'
+  // A link to a paragraph (a quote on a card, a citation in the chat, a search hit) is
+  // shown in the reading view even in a writer project: the editor cannot highlight.
+  const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
+  const writing = project.mode === 'writer' && view === 'writer' && highlighted === undefined
   const shown = chapter?.id === activeId ? chapter : null
   const open = (id: string, paragraph?: number) =>
     navigate(`/projects/${projectId}/chapters/${id}${paragraph === undefined ? '' : `?p=${paragraph}`}`)
@@ -86,6 +89,8 @@ export default function Book() {
     await savesSettled()
     localStorage.setItem(`view:${projectId}`, next)
     setViewState(next)
+    // Choosing a view by hand leaves the paragraph link behind.
+    if (highlighted !== undefined && activeId) open(activeId)
   }
   const afterStructureChange = async (goTo?: string) => {
     setError('')
@@ -101,7 +106,6 @@ export default function Book() {
       fail(e)
     }
   }
-  const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
 
   return (
     <>
@@ -109,7 +113,9 @@ export default function Book() {
         {project.mode === 'writer' && (
           <div className="segmented">
             {(['writer', 'illustrator'] as const).map((option) => (
-              <button key={option} className={view === option ? 'active' : ''} onClick={() => setView(option)}>
+              <button key={option} className={(writing ? 'writer' : 'illustrator') === option ? 'active' : ''}
+                onClick={() => setView(option)}
+              >
                 {t(`book.view.${option}`)}
               </button>
             ))}
@@ -213,7 +219,7 @@ export default function Book() {
           {project.mode === 'writer' && side === 'versions' ? (
             <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
           ) : (
-            <ChatPanel projectId={project.id} chapterId={activeId} />
+            <ChatPanel projectId={project.id} chapterId={activeId} canSuggest={writing} />
           )}
         </aside>
       </div>
