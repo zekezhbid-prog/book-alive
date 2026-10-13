@@ -1,0 +1,18 @@
+# Runtime data: database, uploaded books, generated images, encryption key
+data/
+.env
+
+# Private test books and the earlier prototype kept for reference
+_private/
+_reference/
+docs/gpt-dialog.docx
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+dist/

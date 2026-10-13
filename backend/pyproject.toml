@@ -1,0 +1,40 @@
+[project]
+name = "book-alive"
+version = "0.1.0"
+description = "Turn a book into characters, locations, scenes and video prompts with LangChain and LangGraph"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "cryptography>=50.0.2",
+    "fastapi>=0.143.0",
+    "httpx>=0.28.1",
+    "langchain-core>=1.6.10",
+    "langchain-openai>=1.7.1",
+    "langgraph>=1.2.15",
+    "lxml>=6.1.3",
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.15.0",
+    "pypdf>=6.20.1",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.optional-dependencies]
+# Embedded PostgreSQL + pgvector for running without Docker.
+embedded = [
+    "pgserver>=0.1.4",
+]
+
+[dependency-groups]
+dev = [
+    "pgserver>=0.1.4",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
