@@ -139,6 +139,8 @@ const ru = {
   'usage.op.find_locations': 'Поиск локаций',
   'usage.op.merge_locations': 'Сведение дублей локаций',
   'usage.op.chat': 'Чат по книге',
+  'usage.op.image_prompt': 'Промпт для картинки',
+  'usage.op.image': 'Картинка',
 
   'chat.title': 'Чат по книге',
   'chat.hint':
@@ -151,6 +153,53 @@ const ru = {
   'chat.empty_book': 'В книге пока нет текста, искать негде.',
   'side.chat': 'Чат',
   'side.versions': 'Версии',
+
+  'tabs.style': 'Стиль',
+  'style.title': 'Стиль проекта',
+  'style.hint':
+    'Один стиль на все картинки проекта, чтобы персонажи и места выглядели как из одного фильма. Он добавляется в каждый промпт.',
+  'style.preset.cinematic': 'Кинореализм',
+  'style.preset.dark_fantasy': 'Тёмное фэнтези',
+  'style.preset.anime': 'Аниме',
+  'style.preset.illustration': 'Книжная иллюстрация',
+  'style.custom': 'Свой стиль',
+  'style.custom.placeholder': 'Опишите стиль, лучше по-английски: его читает нейросеть',
+  'style.custom.use': 'Использовать этот стиль',
+  'style.change.confirm':
+    'Сменить стиль проекта? Картинки, сделанные в прежнем стиле, останутся, но перестанут предлагаться как референсы: их нужно будет создать заново.',
+
+  'gallery.title': 'Картинки',
+  'gallery.general': 'Общие референсы проекта',
+  'gallery.empty': 'Картинок пока нет. Загрузите свои или сгенерируйте ниже.',
+  'gallery.general.empty':
+    'Сюда можно сложить картинки, которые задают настроение и стиль всей книги и не относятся к одному персонажу.',
+  'gallery.upload': 'Загрузить картинки',
+  'gallery.uploading': 'Загружаю…',
+  'gallery.main': 'основная',
+  'gallery.make_main': 'Сделать основной',
+  'gallery.origin.upload': 'загружена',
+  'gallery.origin.generated': 'сгенерирована',
+  'gallery.other_style': 'другой стиль',
+  'gallery.other_style.hint': 'Сделана в другом стиле проекта и как референс сейчас не предлагается.',
+  'gallery.look.placeholder': 'Облик: например, «в кольчуге»',
+  'gallery.from.start': 'с начала',
+  'gallery.to.end': 'до конца',
+  'gallery.delete.confirm': 'Удалить эту картинку? Файл будет стёрт.',
+
+  'generate.title': 'Сгенерировать',
+  'generate.hint.main':
+    'Основная картинка задаёт лицо и фигуру. Промпт собирается из постоянных черт карточки, его можно поправить.',
+  'generate.hint.look':
+    'Облик рисуется от основной картинки. Укажите, какой это облик и к каким главам он относится: в промпт попадут детали из этих глав. Пустые поля означают ещё один вариант основной картинки.',
+  'generate.prompt': 'Собрать промпт',
+  'generate.prompt.busy': 'Собираю…',
+  'generate.image': 'Сгенерировать картинку',
+  'generate.look': 'Сгенерировать облик',
+  'generate.image.busy': 'Рисую…',
+  'generate.copy': 'Скопировать промпт',
+  'generate.no_style': 'Стиль проекта не выбран: промпт будет без стиля, а рисовать нельзя.',
+  'entities.add': 'Добавить карточку',
+  'entities.add.prompt': 'Имя, как в книге:',
 
   'settings.title': 'Настройки',
   'settings.connections': 'Подключения',
@@ -212,6 +261,12 @@ const ru = {
     'Сохранённый ключ не удалось расшифровать. Удалите подключение и добавьте его заново.',
   'error.bad_model_output':
     'Модель ответила не в том виде, который ожидался. Попробуйте ещё раз или выберите другую модель.',
+  'error.image_model_not_configured':
+    'Не выбрана модель для картинок. Откройте Настройки, добавьте подключение с ключом и выберите модель. Промпт можно скопировать и нарисовать в другом сервисе, а результат загрузить сюда.',
+  'error.style_not_chosen': 'Сначала выберите стиль проекта на вкладке «Стиль».',
+  'error.not_an_image': 'Это не картинка. Подходят PNG, JPEG и WebP.',
+  'error.style_text_required': 'Опишите свой стиль.',
+  'error.image_not_found': 'Такой картинки больше нет.',
   'error.unknown': 'Что-то пошло не так: {detail}',
 }
 
@@ -351,6 +406,8 @@ const en: Record<keyof typeof ru, string> = {
   'usage.op.find_locations': 'Finding locations',
   'usage.op.merge_locations': 'Merging duplicate locations',
   'usage.op.chat': 'Chat about the book',
+  'usage.op.image_prompt': 'Image prompt',
+  'usage.op.image': 'Picture',
 
   'chat.title': 'Chat about the book',
   'chat.hint':
@@ -363,6 +420,53 @@ const en: Record<keyof typeof ru, string> = {
   'chat.empty_book': 'The book has no text yet, so there is nothing to search.',
   'side.chat': 'Chat',
   'side.versions': 'Versions',
+
+  'tabs.style': 'Style',
+  'style.title': 'Project style',
+  'style.hint':
+    'One style for every picture in the project, so characters and places look like they are from the same film. It is added to every prompt.',
+  'style.preset.cinematic': 'Cinematic realism',
+  'style.preset.dark_fantasy': 'Dark fantasy',
+  'style.preset.anime': 'Anime',
+  'style.preset.illustration': 'Book illustration',
+  'style.custom': 'Your own style',
+  'style.custom.placeholder': 'Describe the style, preferably in English: a model reads it',
+  'style.custom.use': 'Use this style',
+  'style.change.confirm':
+    'Change the project style? Pictures made in the previous style stay, but are no longer offered as references: they will have to be made again.',
+
+  'gallery.title': 'Pictures',
+  'gallery.general': 'General project references',
+  'gallery.empty': 'No pictures yet. Upload your own or generate below.',
+  'gallery.general.empty':
+    'Pictures that set the mood and style of the whole book and belong to no single character go here.',
+  'gallery.upload': 'Upload pictures',
+  'gallery.uploading': 'Uploading…',
+  'gallery.main': 'main',
+  'gallery.make_main': 'Make main',
+  'gallery.origin.upload': 'uploaded',
+  'gallery.origin.generated': 'generated',
+  'gallery.other_style': 'other style',
+  'gallery.other_style.hint': 'Made in a different project style and not offered as a reference now.',
+  'gallery.look.placeholder': 'Look: for example, “in chain mail”',
+  'gallery.from.start': 'from the start',
+  'gallery.to.end': 'to the end',
+  'gallery.delete.confirm': 'Delete this picture? The file will be erased.',
+
+  'generate.title': 'Generate',
+  'generate.hint.main':
+    'The main picture defines the face and build. The prompt is built from the permanent traits on the card and can be edited.',
+  'generate.hint.look':
+    'A look is drawn from the main picture. Say what look it is and which chapters it belongs to: details from those chapters go into the prompt. Empty fields mean another variant of the main picture.',
+  'generate.prompt': 'Build prompt',
+  'generate.prompt.busy': 'Building…',
+  'generate.image': 'Generate picture',
+  'generate.look': 'Generate look',
+  'generate.image.busy': 'Drawing…',
+  'generate.copy': 'Copy prompt',
+  'generate.no_style': 'No project style is chosen: the prompt will have no style, and drawing is disabled.',
+  'entities.add': 'Add a card',
+  'entities.add.prompt': 'Name, as in the book:',
 
   'settings.title': 'Settings',
   'settings.connections': 'Connections',
@@ -423,6 +527,12 @@ const en: Record<keyof typeof ru, string> = {
     'The stored key could not be decrypted. Delete the connection and add it again.',
   'error.bad_model_output':
     'The model replied in an unexpected form. Try again or choose another model.',
+  'error.image_model_not_configured':
+    'No image model is selected. Open Settings, add a connection with a key and choose a model. You can copy the prompt, draw it in another service and upload the result here.',
+  'error.style_not_chosen': 'Choose the project style on the Style tab first.',
+  'error.not_an_image': 'This is not a picture. PNG, JPEG and WebP are accepted.',
+  'error.style_text_required': 'Describe your style.',
+  'error.image_not_found': 'This picture no longer exists.',
   'error.unknown': 'Something went wrong: {detail}',
 }
 

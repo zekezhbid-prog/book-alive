@@ -78,6 +78,8 @@ class ProjectOut(BaseModel):
     mode: str
     source_filename: str
     split_method: str
+    style_id: str
+    style_text: str
     created_at: datetime
     chapters: list[ChapterBrief]
     # Writer projects only.
@@ -199,6 +201,8 @@ def _project_out(session: Session, project: Project) -> ProjectOut:
         mode=project.mode,
         source_filename=project.source_filename,
         split_method=project.split_method,
+        style_id=project.style_id,
+        style_text=project.style_text,
         created_at=project.created_at,
         chapters=[_brief(c) for c in _ordered(project)],
     )

@@ -37,6 +37,7 @@ backend/app/
                      the background runner
   llm/claude_cli.py  LangChain chat model over the local Claude Code CLI (subscription)
   rag/               local embeddings, chunk index and hybrid search, chat with citations
+  images/            project style, image prompt from a card, image generation client
   api/               REST routes
 frontend/src/
   api.ts             typed client
@@ -67,6 +68,9 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
   into its own card (`pinned_names`, `standalone`). Later runs must keep those decisions.
 - Embeddings are local (fastembed). Chunks are a few sentences because the model reads
   about 128 tokens; search returns each hit with its neighbours.
+- Pictures are never deleted as a side effect, only by the user's own action. Each one
+  carries the `style_key` it was made in; only pictures in the project's current style are
+  offered as references.
 - Every UI string goes through `i18n.tsx` in both languages. The server returns error
   codes (`reader_mode_readonly`), the frontend translates them.
 - Book text and anything from `_private/` never goes into the repository.
@@ -76,7 +80,8 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
 1. Projects, import, chapters, reader, connections - done
 2. Characters and locations on demand (LangGraph, per chapter, resumable), usage journal - done
 3. Chat over the book with citations (RAG, pgvector) - done
-4. Project style, images of characters and locations, looks by chapter
+4. Project style, images of characters and locations, looks by chapter - done, except
+   that image generation has only been exercised against a mocked HTTP endpoint
 5. Scenes, first frame, video prompt, reference archive
 6. Writer extras: stale markers, plot suggestions
 7. Docker, shared password for hosting, README, opening the repository.

@@ -280,7 +280,7 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
     # An entity that existed only in the old version of this chapter is gone now.
     for entity in existing:
         session.refresh(entity, ["facts"])
-        if not entity.facts and not entity.standalone:
+        if not entity.facts and not entity.standalone and not entity.images:
             session.delete(entity)
 
 
@@ -329,6 +329,9 @@ def absorb(session: Session, main: Entity, other: Entity) -> list[str]:
     main.pinned_names = [*main.pinned_names, *other.pinned_names]
     for item in list(other.facts):
         item.entity = main
+    for image in list(other.images):
+        image.entity = main
+        image.is_main = False  # the card that stays keeps its own main picture
     session.flush()
     session.delete(other)
     # One mention per chapter is enough after a merge.

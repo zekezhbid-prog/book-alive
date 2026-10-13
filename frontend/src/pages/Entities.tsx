@@ -10,6 +10,7 @@ import {
   type Project,
   type Run,
 } from '../api'
+import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n } from '../i18n'
 
@@ -61,6 +62,18 @@ export default function Entities({ kind }: { kind: EntityKind }) {
 
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
 
+  // A card for someone the search has not reached yet, so pictures can be attached now.
+  const addCard = async () => {
+    const name = prompt(t('entities.add.prompt'))?.trim()
+    if (!name) return
+    try {
+      const created = await api.createEntity(projectId, kind, name)
+      await loadList()
+      navigate(`/projects/${projectId}/${section}/${created.id}`)
+    } catch (e) {
+      fail(e)
+    }
+  }
   const cancel = () => run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
   const runError = run?.error === 'interrupted' ? t('run.interrupted') : run?.error
 
@@ -71,6 +84,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
         <aside className="chapters">
           <button className="btn primary" disabled={running} onClick={() => setChoosing(true)}>
             {t(`entities.find.${kind}`)}
+          </button>
+          <button className="btn small" onClick={addCard}>
+            + {t('entities.add')}
           </button>
           <nav>
             {list?.map((item) => (
@@ -122,6 +138,15 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   navigate(`/projects/${projectId}/${section}/${next.id}`)
                 }}
                 onError={fail}
+              />
+            )}
+            {entity && (
+              <Gallery
+                key={entity.id}
+                projectId={projectId}
+                entityId={entity.id}
+                chapters={project.chapters}
+                hasStyle={Boolean(project.style_id)}
               />
             )}
           </div>

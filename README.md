@@ -32,7 +32,9 @@ with pgvector, and React.
 - [x] Chat over the book: local embeddings in pgvector, hybrid search (meaning + wording,
       fused by reciprocal rank), answers only from retrieved passages, citations checked
       against the text and linked to the paragraph
-- [ ] Images of characters and locations in one project style
+- [x] One visual style per project; galleries for characters, locations and the project;
+      looks tied to chapter ranges; image prompt built from a card; image generation through
+      OpenAI-compatible endpoints (covered by tests against a mock, not yet run live)
 - [ ] Scenes, first frame, video prompt, reference archive
 - [ ] Docker and hosting
 

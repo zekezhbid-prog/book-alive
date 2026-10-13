@@ -37,6 +37,9 @@ class Project(Base):
     source_filename: Mapped[str] = mapped_column(String(300), default="")
     # How chapters were found on import: headings | pattern | sections | manual
     split_method: Mapped[str] = mapped_column(String(20), default="manual")
+    # Visual style of every picture in the project: a preset id, "custom" or "" (not chosen).
+    style_id: Mapped[str] = mapped_column(String(30), default="")
+    style_text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(default=now)
 
     chapters: Mapped[list["Chapter"]] = relationship(
@@ -156,6 +159,8 @@ class Entity(Base):
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"
     )
+    # No delete cascade: pictures are never removed as a side effect.
+    images: Mapped[list["Image"]] = relationship(back_populates="entity", passive_deletes=True)
 
 
 class EntityFact(Base):
@@ -251,3 +256,31 @@ class ChatMessage(Base):
     # For assistant messages: [{"n", "chapter_id", "chapter_title", "paragraph", "quote"}]
     citations: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class Image(Base):
+    """A reference picture: of a character, of a location, or of the project in general."""
+
+    __tablename__ = "images"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    entity_id: Mapped[str | None] = mapped_column(
+        ForeignKey("entities.id", ondelete="SET NULL"), default=None
+    )
+    origin: Mapped[str] = mapped_column(String(20))  # upload | generated
+    # The project style the picture was made in; see app/images/styles.py.
+    style_key: Mapped[str] = mapped_column(String(40), default="")
+    # The main picture defines face and build; the others are looks drawn from it.
+    is_main: Mapped[bool] = mapped_column(default=False)
+    look_label: Mapped[str] = mapped_column(String(200), default="")
+    # Part of the story the look belongs to; empty means an open end.
+    chapter_from_id: Mapped[str] = mapped_column(String(32), default="")
+    chapter_to_id: Mapped[str] = mapped_column(String(32), default="")
+    prompt: Mapped[str] = mapped_column(Text, default="")
+    filename: Mapped[str] = mapped_column(String(300), default="")
+    path: Mapped[str] = mapped_column(String(300))  # relative to the files directory
+    mime: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+    entity: Mapped[Entity | None] = relationship(back_populates="images")

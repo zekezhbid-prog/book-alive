@@ -46,6 +46,8 @@ export interface Project {
   mode: Mode
   source_filename: string
   split_method: 'headings' | 'pattern' | 'titles' | 'sections' | 'manual'
+  style_id: string
+  style_text: string
   created_at: string
   chapters: ChapterBrief[]
   version: Version | null
@@ -172,6 +174,32 @@ export interface ChatMessage {
   created_at: string
 }
 
+export interface StylePreset {
+  id: string
+  prompt: string
+}
+
+export interface ImageInfo {
+  id: string
+  entity_id: string | null
+  origin: 'upload' | 'generated'
+  style_key: string
+  current_style: boolean
+  is_main: boolean
+  look_label: string
+  chapter_from_id: string
+  chapter_to_id: string
+  prompt: string
+  url: string
+  created_at: string
+}
+
+export interface LookRequest {
+  look_label: string
+  chapter_from_id: string
+  chapter_to_id: string
+}
+
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
 export class ApiError extends Error {
   code: string
@@ -264,6 +292,31 @@ export const api = {
       chapter_id: chapterId ?? '',
     }),
   clearChat: (projectId: string) => request<void>('DELETE', `/projects/${projectId}/chat`),
+  styles: () => request<StylePreset[]>('GET', '/styles'),
+  setStyle: (projectId: string, styleId: string, styleText: string) =>
+    request<{ style_id: string; style_text: string }>('PUT', `/projects/${projectId}/style`, {
+      style_id: styleId,
+      style_text: styleText,
+    }),
+  images: (projectId: string, entityId?: string) =>
+    request<ImageInfo[]>('GET', `/projects/${projectId}/images?entity_id=${entityId ?? ''}`),
+  uploadImages: (projectId: string, files: File[], entityId?: string) => {
+    const form = new FormData()
+    for (const file of files) form.append('files', file)
+    form.set('entity_id', entityId ?? '')
+    return request<ImageInfo[]>('POST', `/projects/${projectId}/images`, form)
+  },
+  updateImage: (
+    id: string,
+    patch: Partial<Pick<ImageInfo, 'is_main' | 'look_label' | 'chapter_from_id' | 'chapter_to_id'>>,
+  ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
+  deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
+  imagePrompt: (entityId: string, look: LookRequest) =>
+    request<{ prompt: string }>('POST', `/entities/${entityId}/image-prompt`, look),
+  generateImage: (entityId: string, body: LookRequest & { prompt: string }) =>
+    request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
+  createEntity: (projectId: string, kind: EntityKind, name: string) =>
+    request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
   usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 
   system: () => request<{ claude_cli: boolean }>('GET', '/system'),

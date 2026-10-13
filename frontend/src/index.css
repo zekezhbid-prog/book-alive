@@ -166,8 +166,23 @@ progress { width: 100%; height: 6px; accent-color: var(--accent); }
 .chat-form { display: flex; flex-direction: column; gap: 8px; }
 .chat-form textarea { resize: none; }
 
+/* ---------- pictures ---------- */
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button.mode-option { background: transparent; text-align: left; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.shot { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.shot img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--panel-2); }
+.shot.other-style img { opacity: 0.45; }
+.shot figcaption { padding: 8px; gap: 6px; }
+.input.small { padding: 4px 6px; font-size: 12px; }
+.shot select.input.small { min-width: 0; flex: 1; }
+.input.prompt { font-size: 13px; line-height: 1.5; }
+
 @media (max-width: 900px) {
   .workspace, .workspace.with-side { grid-template-columns: 1fr; height: auto; }
   .chapters nav { max-height: 240px; overflow-y: auto; }
   .mode-choice { grid-template-columns: 1fr; }
 }
+
+/* Messages inside the reading column use the interface font, not the book font. */
+.chapter p.muted, .chapter p.faint, .chapter p.error, .chapter p.notice { font: 14px/1.5 var(--sans); margin: 0; }
