@@ -22,6 +22,9 @@ class ModelInfo:
 
 def chat_model(connection: Connection, model: str, **kwargs) -> BaseChatModel:
     if connection.kind == KIND_CLAUDE_CLI:
+        if model not in CLI_MODELS:
+            # The name becomes a command-line argument: only known values pass.
+            raise ValueError(f"Unknown Claude CLI model: {model}")
         return ChatClaudeCLI(model=model)
     return ChatOpenAI(
         model=model,

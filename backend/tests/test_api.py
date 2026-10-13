@@ -163,3 +163,15 @@ def test_title_line_before_the_first_chapter_names_the_book(client):
     ).json()
     assert project["title"] == "Хранитель маяка"
     assert [c["title"] for c in project["chapters"]] == ["Глава 1", "Глава 2"]
+
+
+def test_upload_file_name_cannot_escape_the_project_folder(client):
+    for name in ("../../evil.txt", "..", "..\\..\\evil.txt"):
+        response = client.post(
+            "/api/projects",
+            data={"mode": "reader"},
+            files={"file": (name, make_book(2), "text/plain")},
+        )
+        assert response.status_code == 200, (name, response.text)
+        stored = response.json()["source_filename"]
+        assert "/" not in stored and stored not in ("", ".", "..")

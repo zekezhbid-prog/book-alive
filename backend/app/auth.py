@@ -8,6 +8,7 @@ machine, nothing here is active.
 import hashlib
 import hmac
 import time
+from collections import deque
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -18,6 +19,11 @@ from app.crypto import signing_key
 
 COOKIE = "book_alive_session"
 SESSION_SECONDS = 30 * 24 * 3600
+# A shared password has no per-user lockout, so wrong attempts are limited for everyone:
+# after MAX_FAILURES in WINDOW_SECONDS, logging in is refused until the window passes.
+MAX_FAILURES = 10
+WINDOW_SECONDS = 300
+_failures: deque[float] = deque()
 OPEN_PATHS = {"/api/session", "/api/login", "/api/logout"}
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -71,8 +77,13 @@ def session_info(request: Request) -> SessionInfo:
 def login(body: Login, request: Request, response: Response) -> SessionInfo:
     if not settings.app_password:
         return SessionInfo(password_required=False, authenticated=True)
+    now = time.monotonic()
+    while _failures and now - _failures[0] > WINDOW_SECONDS:
+        _failures.popleft()
+    if len(_failures) >= MAX_FAILURES:
+        raise HTTPException(429, "too_many_attempts")
     if not hmac.compare_digest(body.password.encode(), settings.app_password.encode()):
-        time.sleep(1)  # a shared password has no lockout: at least make guessing slow
+        _failures.append(now)
         raise HTTPException(401, "wrong_password")
     behind_https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
     response.set_cookie(

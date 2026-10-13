@@ -19,6 +19,18 @@ class UnsupportedBook(ValueError):
     pass
 
 
+# An uploaded book is untrusted input. XML inside it must not pull in local files or
+# URLs through entities (XXE), and an archive must not unpack into gigabytes.
+MAX_UNPACKED_BYTES = 300 * 1024 * 1024
+
+
+def _xml(data: bytes, *, recover: bool = False):
+    parser = etree.XMLParser(
+        resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False, recover=recover
+    )
+    return etree.fromstring(data, parser)
+
+
 @dataclass
 class Paragraph:
     text: str
@@ -49,6 +61,8 @@ def _extract(data: bytes, filename: str) -> ExtractedBook:
         return _pdf(data)
     if data[:2] == b"PK":
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            if sum(item.file_size for item in archive.infolist()) > MAX_UNPACKED_BYTES:
+                raise UnsupportedBook("The archive unpacks to an unreasonable size")
             names = set(archive.namelist())
             if "word/document.xml" in names:
                 return _docx(archive)
@@ -98,7 +112,7 @@ _HEADING_STYLE = re.compile(r"^(heading|заголовок|title)\s*[1-3]?$", re
 
 
 def _docx(archive: zipfile.ZipFile) -> ExtractedBook:
-    root = etree.fromstring(archive.read("word/document.xml"))
+    root = _xml(archive.read("word/document.xml"))
     paragraphs = []
     for p in root.iter(f"{_W}p"):
         parts = []
@@ -143,12 +157,12 @@ def _html_paragraphs(markup: bytes) -> list[Paragraph]:
 
 
 def _epub(archive: zipfile.ZipFile) -> ExtractedBook:
-    container = etree.fromstring(archive.read("META-INF/container.xml"))
+    container = _xml(archive.read("META-INF/container.xml"))
     rootfile = container.find(".//{*}rootfile")
     if rootfile is None:
         raise UnsupportedBook("EPUB: package file not found")
     opf_path = rootfile.get("full-path", "")
-    opf = etree.fromstring(archive.read(opf_path))
+    opf = _xml(archive.read(opf_path))
     base = posixpath.dirname(opf_path)
     manifest = {item.get("id"): item.get("href") for item in opf.iterfind(".//{*}manifest/{*}item")}
     names = set(archive.namelist())
@@ -172,7 +186,7 @@ def _epub(archive: zipfile.ZipFile) -> ExtractedBook:
 
 
 def _fb2(data: bytes) -> ExtractedBook:
-    root = etree.fromstring(data, etree.XMLParser(recover=True, resolve_entities=False))
+    root = _xml(data, recover=True)
     paragraphs: list[Paragraph] = []
     body = root.find("{*}body")
     if body is not None:

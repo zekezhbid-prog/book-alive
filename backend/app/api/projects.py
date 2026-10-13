@@ -260,7 +260,8 @@ def create_project(
         data = file.file.read(MAX_UPLOAD_BYTES + 1)
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "file_too_large")
-        filename = PurePath(file.filename or "book").name[-TITLE_MAX:]
+        # Only the last path component, and never a name that is itself a directory.
+        filename = PurePath(file.filename or "").name[-TITLE_MAX:].strip(". ") or "book"
         try:
             book = extract(data, filename)
         except UnsupportedBook as exc:

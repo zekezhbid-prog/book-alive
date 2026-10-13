@@ -1,11 +1,13 @@
 import pytest
 
+from app import auth
 from app.config import settings
 
 
 @pytest.fixture
 def password(monkeypatch):
     monkeypatch.setattr(settings, "app_password", "open sesame")
+    auth._failures.clear()
 
 
 def test_no_password_means_no_login(client):
@@ -48,3 +50,21 @@ def test_forged_and_expired_cookies_are_rejected(client, password):
     client.cookies.set("book_alive_session", "1.whatever")
     assert client.get("/api/projects").status_code == 401
     client.cookies.clear()
+
+
+def test_guessing_is_cut_off(client, password):
+    client.cookies.clear()
+    for _ in range(auth.MAX_FAILURES):
+        assert client.post("/api/login", json={"password": "guess"}).status_code == 401
+    # Even the right password has to wait now: the limit is on attempts, not on who makes them.
+    blocked = client.post("/api/login", json={"password": "open sesame"})
+    assert (blocked.status_code, blocked.json()["detail"]) == (429, "too_many_attempts")
+    auth._failures.clear()
+    assert client.post("/api/login", json={"password": "open sesame"}).status_code == 200
+    client.cookies.clear()
+
+
+def test_api_description_is_behind_the_login(client, password):
+    client.cookies.clear()
+    assert client.get("/api/openapi.json").status_code == 401
+    assert client.get("/api/docs").status_code == 401

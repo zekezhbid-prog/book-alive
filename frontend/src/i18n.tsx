@@ -321,6 +321,7 @@ const ru = {
   'error.scene_not_found': 'Такой сцены больше нет.',
   'error.empty_chapter': 'В главе нет текста.',
   'error.wrong_password': 'Неверный пароль.',
+  'error.too_many_attempts': 'Слишком много неверных попыток. Подождите несколько минут.',
   'error.login_required': 'Нужно войти заново.',
   'error.unknown': 'Что-то пошло не так: {detail}',
 }
@@ -640,6 +641,7 @@ const en: Record<keyof typeof ru, string> = {
   'error.scene_not_found': 'This scene no longer exists.',
   'error.empty_chapter': 'The chapter has no text.',
   'error.wrong_password': 'Wrong password.',
+  'error.too_many_attempts': 'Too many wrong attempts. Wait a few minutes.',
   'error.login_required': 'Please sign in again.',
   'error.unknown': 'Something went wrong: {detail}',
 }

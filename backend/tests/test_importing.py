@@ -187,3 +187,30 @@ def test_epub_with_url_encoded_file_names():
         ("Глава 1", True),
         ("Первый абзац.", False),
     ]
+
+
+def test_xml_entities_cannot_read_local_files(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP-SECRET")
+    w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    document = f"""<?xml version="1.0"?>
+    <!DOCTYPE d [<!ENTITY leak SYSTEM "{secret.as_uri()}">]>
+    <w:document xmlns:w="{w}"><w:body>
+      <w:p><w:r><w:t>Before &leak; after</w:t></w:r></w:p>
+    </w:body></w:document>"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document)
+    book = extract(buffer.getvalue(), "book.docx")
+    assert "TOP-SECRET" not in " ".join(p.text for p in book.paragraphs)
+
+
+def test_archive_that_unpacks_too_large_is_refused(monkeypatch):
+    from app.importing import extract as module
+
+    monkeypatch.setattr(module, "MAX_UNPACKED_BYTES", 1000)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", "0" * 100_000)  # compresses to almost nothing
+    with pytest.raises(UnsupportedBook, match="unreasonable size"):
+        extract(buffer.getvalue(), "bomb.docx")

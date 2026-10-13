@@ -53,8 +53,10 @@ class ChatClaudeCLI(BaseChatModel):
             prompt = "\n\n".join(f"[{m.type}]\n{m.content}" for m in turns)
 
         command = [executable, "-p", "--output-format", "json", "--model", self.model]
-        # No tools and no project settings: this is plain text completion.
-        command += ["--tools", "", "--setting-sources", "", "--no-session-persistence"]
+        # Plain text completion. Book text is untrusted and may try to instruct the
+        # model, so it gets nothing to act with: no tools, no MCP servers, no settings.
+        command += ["--tools", "", "--strict-mcp-config", "--setting-sources", ""]
+        command += ["--no-session-persistence"]
         if system:
             command += ["--system-prompt", system]
         # An empty working directory keeps the CLI from picking up any CLAUDE.md.

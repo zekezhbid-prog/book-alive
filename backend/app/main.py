@@ -20,7 +20,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Book Alive", lifespan=lifespan)
+app = FastAPI(
+    title="Book Alive",
+    lifespan=lifespan,
+    # Under /api, so the login middleware covers the API description too.
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    redoc_url=None,
+)
 app.middleware("http")(auth.require_login)
 app.include_router(auth.router)
 app.include_router(projects.router)
