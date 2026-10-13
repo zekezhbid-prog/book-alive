@@ -178,6 +178,19 @@ button.mode-option { background: transparent; text-align: left; }
 .shot select.input.small { min-width: 0; flex: 1; }
 .input.prompt { font-size: 13px; line-height: 1.5; }
 
+/* ---------- scenes ---------- */
+.vivid { color: var(--accent); }
+.chip.plain { padding: 1px 10px; }
+.chip.plain:hover { border-color: var(--accent); }
+.floating { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 30; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.refs { display: flex; flex-wrap: wrap; gap: 10px; }
+.refs figure { margin: 0; width: 120px; font-size: 13px; }
+.refs img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.refs.wide figure { width: 260px; }
+.refs.wide img { aspect-ratio: 16 / 9; }
+details summary { cursor: pointer; margin-bottom: 8px; }
+.chapters nav h4 { margin: 10px 0 4px 10px; }
+
 @media (max-width: 900px) {
   .workspace, .workspace.with-side { grid-template-columns: 1fr; height: auto; }
   .chapters nav { max-height: 240px; overflow-y: auto; }

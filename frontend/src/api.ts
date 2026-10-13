@@ -200,6 +200,36 @@ export interface LookRequest {
   chapter_to_id: string
 }
 
+export interface SceneBrief {
+  id: string
+  chapter_id: string
+  chapter_title: string
+  chapter_position: number
+  paragraph_from: number
+  paragraph_to: number
+  title: string
+  summary: string
+  vivid: boolean
+  origin: 'auto' | 'manual'
+  stale: boolean
+  has_prompt: boolean
+}
+
+export interface Scene extends SceneBrief {
+  text: string
+  prompt: string
+  participants: { id: string; kind: EntityKind; name: string }[]
+  references: {
+    number: number
+    entity_id: string
+    entity_name: string
+    role: 'main' | 'look'
+    look_label: string
+    url: string
+  }[]
+  frames: ImageInfo[]
+}
+
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
 export class ApiError extends Error {
   code: string
@@ -317,6 +347,29 @@ export const api = {
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
+  scenes: (projectId: string) => request<SceneBrief[]>('GET', `/projects/${projectId}/scenes`),
+  scene: (id: string) => request<Scene>('GET', `/scenes/${id}`),
+  deleteScene: (id: string) => request<void>('DELETE', `/scenes/${id}`),
+  splitEstimate: (chapterId: string) =>
+    request<{ input_tokens: number; output_tokens: number; existing: number }>(
+      'GET',
+      `/chapters/${chapterId}/scenes/estimate`,
+    ),
+  splitScenes: (chapterId: string) =>
+    request<SceneBrief[]>('POST', `/chapters/${chapterId}/scenes/split`),
+  markScene: (chapterId: string, from: number, to: number) =>
+    request<SceneBrief>('POST', `/chapters/${chapterId}/scenes`, {
+      paragraph_from: from,
+      paragraph_to: to,
+    }),
+  buildScenePrompt: (id: string, note: string) =>
+    request<Scene>('POST', `/scenes/${id}/prompt`, { note }),
+  refineScenePrompt: (id: string, change: string) =>
+    request<Scene>('POST', `/scenes/${id}/prompt/refine`, { change }),
+  saveScenePrompt: (id: string, prompt: string) =>
+    request<Scene>('PUT', `/scenes/${id}/prompt`, { prompt }),
+  generateSceneFrame: (id: string) => request<Scene>('POST', `/scenes/${id}/frame`),
+  sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
   usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 
   system: () => request<{ claude_cli: boolean }>('GET', '/system'),

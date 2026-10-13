@@ -268,6 +268,10 @@ class Image(Base):
     entity_id: Mapped[str | None] = mapped_column(
         ForeignKey("entities.id", ondelete="SET NULL"), default=None
     )
+    # Set for a generated first frame of a scene; such a picture belongs to no card.
+    scene_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), default=None
+    )
     origin: Mapped[str] = mapped_column(String(20))  # upload | generated
     # The project style the picture was made in; see app/images/styles.py.
     style_key: Mapped[str] = mapped_column(String(40), default="")
@@ -284,3 +288,25 @@ class Image(Base):
     created_at: Mapped[datetime] = mapped_column(default=now)
 
     entity: Mapped[Entity | None] = relationship(back_populates="images")
+
+
+class Scene(Base):
+    """A stretch of one chapter to bring to life. Read-only for the user, except the prompt."""
+
+    __tablename__ = "scenes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    chapter_id: Mapped[str] = mapped_column(String(32), index=True)
+    # Paragraph numbers refer to the chapter text with this hash.
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    paragraph_from: Mapped[int]
+    paragraph_to: Mapped[int]  # inclusive
+    title: Mapped[str] = mapped_column(String(300), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    vivid: Mapped[bool] = mapped_column(default=False)
+    origin: Mapped[str] = mapped_column(String(10))  # auto | manual
+    entity_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # The video prompt: only the latest version is kept.
+    prompt: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=now)

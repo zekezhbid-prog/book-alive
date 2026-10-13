@@ -3,6 +3,7 @@ import { useI18n } from './i18n'
 import Book from './pages/Book'
 import Entities from './pages/Entities'
 import Projects from './pages/Projects'
+import Scenes from './pages/Scenes'
 import Settings from './pages/Settings'
 import Style from './pages/Style'
 import Usage from './pages/Usage'
@@ -48,6 +49,8 @@ export default function App() {
             element={<Entities key="location" kind="location" />}
           />
         ))}
+        <Route path="/projects/:projectId/scenes" element={<Scenes />} />
+        <Route path="/projects/:projectId/scenes/:sceneId" element={<Scenes />} />
         <Route path="/projects/:projectId/style" element={<Style />} />
         <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />

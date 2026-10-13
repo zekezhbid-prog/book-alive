@@ -38,6 +38,7 @@ backend/app/
   llm/claude_cli.py  LangChain chat model over the local Claude Code CLI (subscription)
   rag/               local embeddings, chunk index and hybrid search, chat with citations
   images/            project style, image prompt from a card, image generation client
+  scenes/            scene split, references for a scene, video prompt, archive
   api/               REST routes
 frontend/src/
   api.ts             typed client
@@ -82,7 +83,8 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
 3. Chat over the book with citations (RAG, pgvector) - done
 4. Project style, images of characters and locations, looks by chapter - done, except
    that image generation has only been exercised against a mocked HTTP endpoint
-5. Scenes, first frame, video prompt, reference archive
+5. Scenes, first frame, video prompt, reference archive - done; the first frame, like
+   all image generation, has not been run against a real provider yet
 6. Writer extras: stale markers, plot suggestions
 7. Docker, shared password for hosting, README, opening the repository.
    Also Alembic migrations: until then the schema is created by `create_all`, and a new

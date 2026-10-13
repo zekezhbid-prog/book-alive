@@ -35,7 +35,9 @@ with pgvector, and React.
 - [x] One visual style per project; galleries for characters, locations and the project;
       looks tied to chapter ranges; image prompt built from a card; image generation through
       OpenAI-compatible endpoints (covered by tests against a mock, not yet run live)
-- [ ] Scenes, first frame, video prompt, reference archive
+- [x] Scenes: split a chapter with the model or mark a stretch of text by hand; references
+      picked by chapter and style; video prompt with plain-language changes; archive with
+      the prompt and pictures under readable names; first frame (not yet run live)
 - [ ] Docker and hosting
 
 ## Run locally

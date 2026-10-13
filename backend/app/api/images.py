@@ -168,7 +168,10 @@ def list_images(project_id: str, session: SessionDep, entity_id: str = "") -> li
     """Pictures of one card, or the project's general references when no card is given."""
     project = _project(session, project_id)
     query = select(Image).where(Image.project_id == project_id).order_by(Image.created_at)
-    query = query.where(Image.entity_id == entity_id if entity_id else Image.entity_id.is_(None))
+    if entity_id:
+        query = query.where(Image.entity_id == entity_id)
+    else:
+        query = query.where(Image.entity_id.is_(None), Image.scene_id.is_(None))
     return [_out(image, project) for image in session.scalars(query)]
 
 

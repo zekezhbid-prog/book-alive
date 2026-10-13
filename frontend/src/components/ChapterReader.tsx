@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n } from '../i18n'
 
@@ -31,7 +31,11 @@ export default function ChapterReader({
   onError,
 }: Props) {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const [title, setTitle] = useState(chapter.title)
+  const [splitting, setSplitting] = useState(false)
+  // Paragraphs covered by the current text selection: a scene the user can mark.
+  const [picked, setPicked] = useState<[number, number] | null>(null)
   const target = useRef<HTMLParagraphElement>(null)
   const paragraphs = chapter.text ? chapter.text.split('\n\n') : []
   const isLast = project.chapters.at(-1)?.id === chapter.id
@@ -54,6 +58,40 @@ export default function ChapterReader({
     if (!confirm(t('chapter.delete.confirm', { title: name }))) return
     await api.deleteChapter(chapter.id).then(() => onStructureChange(), onError)
   }
+  const splitIntoScenes = async () => {
+    try {
+      const estimate = await api.splitEstimate(chapter.id)
+      const question =
+        t('scenes.split.confirm', {
+          input: estimate.input_tokens.toLocaleString(),
+          output: estimate.output_tokens.toLocaleString(),
+        }) + (estimate.existing ? t('scenes.split.replace', { n: estimate.existing }) : '')
+      if (!confirm(question)) return
+      setSplitting(true)
+      const scenes = await api.splitScenes(chapter.id)
+      navigate(`/projects/${project.id}/scenes/${scenes[0]?.id ?? ''}`)
+    } catch (e) {
+      onError(e)
+    } finally {
+      setSplitting(false)
+    }
+  }
+  const readSelection = () => {
+    const selection = window.getSelection()
+    const paragraphOf = (node: Node | null) =>
+      (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>('p[data-index]')
+    const first = paragraphOf(selection?.anchorNode ?? null)
+    const last = paragraphOf(selection?.focusNode ?? null)
+    if (!selection || selection.isCollapsed || !first || !last) return setPicked(null)
+    const range = [Number(first.dataset.index), Number(last.dataset.index)].sort((a, b) => a - b)
+    setPicked([range[0], range[1]])
+  }
+  const markScene = async () => {
+    if (!picked) return
+    await api
+      .markScene(chapter.id, picked[0], picked[1])
+      .then((scene) => navigate(`/projects/${project.id}/scenes/${scene.id}`), onError)
+  }
   const split = async (index: number) => {
     const paragraph = paragraphs[index]
     // A short line without a full stop is most likely the heading itself.
@@ -66,10 +104,13 @@ export default function ChapterReader({
   }
 
   return (
-    <article className="chapter">
+    <article className="chapter" onMouseUp={readSelection}>
       <div className="chapter-tools">
         <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
         <span className="spacer" />
+        <button className="btn small" disabled={splitting || !paragraphs.length} onClick={splitIntoScenes}>
+          {splitting ? t('scenes.split.busy') : t('scenes.split')}
+        </button>
         {!isLast && (
           <button className="btn ghost small" onClick={merge}>
             {t('chapter.merge')}
@@ -91,6 +132,7 @@ export default function ChapterReader({
       {paragraphs.map((paragraph, index) => (
         <p
           key={index}
+          data-index={index}
           ref={index === highlighted ? target : undefined}
           className={index === highlighted ? 'highlighted' : ''}
         >
@@ -102,6 +144,12 @@ export default function ChapterReader({
           {renderInline(paragraph, linker)}
         </p>
       ))}
+      {picked && (
+        // onMouseDown: a click would clear the selection before it is read.
+        <button className="btn primary floating" onMouseDown={(e) => e.preventDefault()} onClick={markScene}>
+          {t('scenes.mark', { from: picked[0] + 1, to: picked[1] + 1 })}
+        </button>
+      )}
     </article>
   )
 }

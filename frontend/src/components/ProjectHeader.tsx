@@ -27,6 +27,9 @@ export default function ProjectHeader({ project, children }: { project: Project;
         <NavLink to={`${base}/locations`} className={({ isActive }) => tabClass(isActive)}>
           {t('tabs.location')}
         </NavLink>
+        <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
+          {t('tabs.scenes')}
+        </NavLink>
         <NavLink to={`${base}/style`} className={({ isActive }) => tabClass(isActive)}>
           {t('tabs.style')}
         </NavLink>
@@ -42,4 +45,4 @@ export default function ProjectHeader({ project, children }: { project: Project;
 }
 
 const tabClass = (active: boolean) => `tab ${active ? 'active' : ''}`
-const isSection = () => /\/(characters|locations|style|usage)(\/|$)/.test(location.pathname)
+const isSection = () => /\/(characters|locations|scenes|style|usage)(\/|$)/.test(location.pathname)
