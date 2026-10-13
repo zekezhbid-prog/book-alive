@@ -198,3 +198,41 @@ def test_parse_accepts_fenced_json():
 
 def test_token_estimate_counts_cyrillic_denser():
     assert estimate_tokens("привет" * 10) > estimate_tokens("hello!" * 10)
+
+
+def test_user_can_split_a_wrongly_merged_name_and_merge_it_back(client, session, project):
+    run(session, project, FakeModel())
+    rykhtash = cast(session, project)["Рыхташ"]
+    assert "Дед" in rykhtash.aliases
+
+    # "Дед" is someone else: he gets his own card with the facts the book gives under that name.
+    separate = client.post(f"/api/entities/{rykhtash.id}/split", json={"name": "Дед"}).json()
+    assert separate["name"] == "Дед"
+    assert [f["text"] for f in separate["timeline"][0]["facts"]] == ["кольчуга"]
+    people = cast(session, project)
+    assert "Дед" not in people["Рыхташ"].aliases
+    assert "кольчуга" not in {f.text for f in people["Рыхташ"].facts}
+
+    # A later run over the whole book does not undo the user's decision.
+    model = FakeModel()
+    run(session, project, model)
+    people = cast(session, project)
+    assert set(people) == {"Рыхташ", "Люта", "Дед"}
+    assert "Дед" not in people["Рыхташ"].aliases
+
+    # And the opposite decision: the user merges them, which also survives a full run.
+    client.post(f"/api/entities/{people['Рыхташ'].id}/merge", json={"other_id": people["Дед"].id})
+    run(session, project, FakeModel())
+    people = cast(session, project)
+    assert set(people) == {"Рыхташ", "Люта"}
+    assert "Дед" in people["Рыхташ"].aliases
+    assert "кольчуга" in {f.text for f in people["Рыхташ"].facts}
+
+
+def test_merge_rejects_cards_of_different_kinds(client, session, project):
+    run(session, project, FakeModel())
+    person = cast(session, project)["Люта"]
+    assert (
+        client.post(f"/api/entities/{person.id}/merge", json={"other_id": person.id}).status_code
+        == 422
+    )

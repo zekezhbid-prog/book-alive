@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app.analysis import runner
-from app.api import analysis, connections, projects
+from app.api import analysis, chat, connections, projects
 from app.config import settings
 from app.db import get_engine, init_db
 
@@ -23,6 +23,7 @@ app = FastAPI(title="Book Alive", lifespan=lifespan)
 app.include_router(projects.router)
 app.include_router(connections.router)
 app.include_router(analysis.router)
+app.include_router(chat.router)
 
 # In production the API also serves the built frontend; in development Vite does.
 if settings.frontend_dist.is_dir():

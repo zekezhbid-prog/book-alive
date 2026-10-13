@@ -8,6 +8,7 @@ import pytest
 _tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
 os.environ["DATA_DIR"] = _tmp.name
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "")
+os.environ["EMBEDDING_MODEL"] = "hash"  # no model download in tests
 
 from fastapi.testclient import TestClient
 

@@ -101,6 +101,12 @@ const ru = {
   'entities.stale.hint': 'Текст главы изменился после чтения. Запустите поиск по этой главе заново.',
   'entities.count': 'глав: {chapters} · фактов: {facts}',
   'entities.source': 'Открыть в тексте',
+  'entities.merge': 'Объединить с…',
+  'entities.merge.confirm':
+    'Объединить «{other}» с «{name}»? Все факты перейдут в карточку «{name}», а «{other}» станет её другим именем.',
+  'entities.split': 'Отделить в свою карточку',
+  'entities.split.confirm':
+    'Сделать «{alias}» отдельной карточкой? Факты из глав, где книга называет его этим именем, перейдут в неё.',
 
   'run.title': 'Какие главы читать',
   'run.all': 'Все',
@@ -132,6 +138,19 @@ const ru = {
   'usage.op.merge_characters': 'Сведение дублей персонажей',
   'usage.op.find_locations': 'Поиск локаций',
   'usage.op.merge_locations': 'Сведение дублей локаций',
+  'usage.op.chat': 'Чат по книге',
+
+  'chat.title': 'Чат по книге',
+  'chat.hint':
+    'Спросите о книге: как выглядит персонаж, что он собирался сделать, в какой главе что случилось. Ответ строится только по тексту и ссылается на место в книге. Первый вопрос дольше обычного: готовится поиск по книге.',
+  'chat.placeholder': 'Вопрос по книге…',
+  'chat.send': 'Спросить',
+  'chat.waiting': 'Ищу в книге и отвечаю…',
+  'chat.clear': 'Очистить',
+  'chat.clear.confirm': 'Удалить всю переписку по этому проекту?',
+  'chat.empty_book': 'В книге пока нет текста, искать негде.',
+  'side.chat': 'Чат',
+  'side.versions': 'Версии',
 
   'settings.title': 'Настройки',
   'settings.connections': 'Подключения',
@@ -191,6 +210,8 @@ const ru = {
   'error.title_too_long': 'Название слишком длинное (до 300 знаков).',
   'error.key_unreadable':
     'Сохранённый ключ не удалось расшифровать. Удалите подключение и добавьте его заново.',
+  'error.bad_model_output':
+    'Модель ответила не в том виде, который ожидался. Попробуйте ещё раз или выберите другую модель.',
   'error.unknown': 'Что-то пошло не так: {detail}',
 }
 
@@ -292,6 +313,12 @@ const en: Record<keyof typeof ru, string> = {
   'entities.stale.hint': 'The chapter text changed after it was read. Run the search for this chapter again.',
   'entities.count': 'chapters: {chapters} · facts: {facts}',
   'entities.source': 'Open in the text',
+  'entities.merge': 'Merge with…',
+  'entities.merge.confirm':
+    'Merge “{other}” into “{name}”? All facts move to the “{name}” card and “{other}” becomes its other name.',
+  'entities.split': 'Split into its own card',
+  'entities.split.confirm':
+    'Make “{alias}” a separate card? Facts from chapters where the book uses that name move to it.',
 
   'run.title': 'Chapters to read',
   'run.all': 'All',
@@ -323,6 +350,19 @@ const en: Record<keyof typeof ru, string> = {
   'usage.op.merge_characters': 'Merging duplicate characters',
   'usage.op.find_locations': 'Finding locations',
   'usage.op.merge_locations': 'Merging duplicate locations',
+  'usage.op.chat': 'Chat about the book',
+
+  'chat.title': 'Chat about the book',
+  'chat.hint':
+    'Ask about the book: what a character looks like, what they meant to do, in which chapter something happened. Answers come only from the text and link to the place in the book. The first question takes longer: search over the book is being prepared.',
+  'chat.placeholder': 'A question about the book…',
+  'chat.send': 'Ask',
+  'chat.waiting': 'Searching the book and answering…',
+  'chat.clear': 'Clear',
+  'chat.clear.confirm': 'Delete the whole conversation for this project?',
+  'chat.empty_book': 'The book has no text yet, so there is nothing to search.',
+  'side.chat': 'Chat',
+  'side.versions': 'Versions',
 
   'settings.title': 'Settings',
   'settings.connections': 'Connections',
@@ -381,6 +421,8 @@ const en: Record<keyof typeof ru, string> = {
   'error.title_too_long': 'The title is too long (up to 300 characters).',
   'error.key_unreadable':
     'The stored key could not be decrypted. Delete the connection and add it again.',
+  'error.bad_model_output':
+    'The model replied in an unexpected form. Try again or choose another model.',
   'error.unknown': 'Something went wrong: {detail}',
 }
 

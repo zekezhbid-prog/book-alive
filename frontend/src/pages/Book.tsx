@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, type Chapter, type EntityBrief, type Project, type SearchHit } from '../api'
 import ChapterEditor from '../components/ChapterEditor'
+import ChatPanel from '../components/ChatPanel'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
 import VersionsPanel from '../components/VersionsPanel'
@@ -25,6 +26,7 @@ export default function Book() {
   const [view, setViewState] = useState<View>(
     () => (localStorage.getItem(`view:${projectId}`) as View) || 'writer',
   )
+  const [side, setSide] = useState<'chat' | 'versions'>('chat')
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
 
@@ -114,7 +116,7 @@ export default function Book() {
           </div>
         )}
       </ProjectHeader>
-      <div className={`workspace ${project.mode === 'writer' ? 'with-side' : ''}`}>
+      <div className="workspace with-side">
         <aside className="chapters">
           <input
             className="input"
@@ -197,11 +199,23 @@ export default function Book() {
           )}
         </section>
 
-        {project.mode === 'writer' && (
-          <aside className="side">
+        <aside className="side">
+          {project.mode === 'writer' && (
+            <div className="segmented side-tabs">
+              {(['chat', 'versions'] as const).map((option) => (
+                <button key={option} className={side === option ? 'active' : ''} onClick={() => setSide(option)}>
+                  {t(`side.${option}`)}
+                  {option === 'versions' && project.changes?.dirty && <span className="dot" />}
+                </button>
+              ))}
+            </div>
+          )}
+          {project.mode === 'writer' && side === 'versions' ? (
             <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
-          </aside>
-        )}
+          ) : (
+            <ChatPanel projectId={project.id} chapterId={activeId} />
+          )}
+        </aside>
       </div>
     </>
   )

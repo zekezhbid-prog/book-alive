@@ -262,7 +262,11 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
             entity = Entity(project_id=project_id, kind=kind, name=names[0], aliases=[])
             session.add(entity)
         taken = {norm(entity.name), *map(norm, entity.aliases)}
-        new_aliases = [n for n in dict.fromkeys(names) if norm(n) not in taken]
+        new_aliases = [
+            n
+            for n in dict.fromkeys(names)
+            if norm(n) not in taken and by_key.get(norm(n)) in (None, entity)
+        ]
         entity.aliases = [*entity.aliases, *new_aliases]
         for known_name in names:
             by_key.setdefault(norm(known_name), entity)
@@ -276,14 +280,18 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
     # An entity that existed only in the old version of this chapter is gone now.
     for entity in existing:
         session.refresh(entity, ["facts"])
-        if not entity.facts:
+        if not entity.facts and not entity.standalone:
             session.delete(entity)
 
 
 def reconcile(state: State, config: RunnableConfig) -> dict:
     """One model call over the whole cast: merge the same entity under different names."""
     session, model, run = _context(config)
-    entities = sorted(_entities(session, run.project_id, run.kind), key=lambda e: e.name)
+    # Cards the user split off by hand stay out of it.
+    entities = sorted(
+        (e for e in _entities(session, run.project_id, run.kind) if not e.standalone),
+        key=lambda e: e.name,
+    )
     if len(entities) < 2:
         return {}
 
@@ -307,23 +315,54 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
         # The entry with the most facts is the best known one: it keeps its name.
         main, *others = sorted((entities[n - 1] for n in members), key=lambda e: -len(e.facts))
         for other in others:
-            taken = {norm(main.name), *map(norm, main.aliases)}
-            extra = [n for n in [other.name, *other.aliases] if norm(n) not in taken]
-            main.aliases = [*main.aliases, *dict.fromkeys(extra)]
-            for item in list(other.facts):
-                item.entity = main
-            session.flush()
-            session.delete(other)
-    # One mention per chapter is enough after a merge.
-    for entity in entities:
-        seen: set[str] = set()
-        for item in list(entity.facts):
-            if item.category == FACT_MENTION:
-                if item.chapter_id in seen:
-                    entity.facts.remove(item)
-                seen.add(item.chapter_id)
+            absorb(session, main, other)
     session.commit()
     return {}
+
+
+def absorb(session: Session, main: Entity, other: Entity) -> list[str]:
+    """Fold `other` into `main`: its names become other names of `main`, its facts move.
+    Returns the names that were added."""
+    taken = {norm(main.name), *map(norm, main.aliases)}
+    added = [n for n in dict.fromkeys([other.name, *other.aliases]) if norm(n) not in taken]
+    main.aliases = [*main.aliases, *added]
+    main.pinned_names = [*main.pinned_names, *other.pinned_names]
+    for item in list(other.facts):
+        item.entity = main
+    session.flush()
+    session.delete(other)
+    # One mention per chapter is enough after a merge.
+    seen: set[str] = set()
+    for item in list(main.facts):
+        if item.category == FACT_MENTION:
+            if item.chapter_id in seen:
+                main.facts.remove(item)
+            seen.add(item.chapter_id)
+    return added
+
+
+def merge_by_hand(session: Session, main: Entity, other: Entity) -> None:
+    """The user says these two cards are one. Remembered across later runs."""
+    added = absorb(session, main, other)
+    main.pinned_names = list(dict.fromkeys([*main.pinned_names, *added]))
+
+
+def split_by_hand(session: Session, entity: Entity, name: str) -> Entity:
+    """The user says `name` is someone else. The new card takes the facts of the
+    chapters where the book calls them by that name; stored answers are re-applied,
+    so no model is called."""
+    entity.aliases = [a for a in entity.aliases if norm(a) != norm(name)]
+    entity.pinned_names = [a for a in entity.pinned_names if norm(a) != norm(name)]
+    separate = Entity(
+        project_id=entity.project_id, kind=entity.kind, name=name, aliases=[], standalone=True
+    )
+    session.add(separate)
+    session.flush()
+    for chapter_id in {f.chapter_id for f in entity.facts}:
+        chapter = session.get(Chapter, chapter_id)
+        if chapter is not None and _cached(session, chapter, entity.kind):
+            apply_extraction(session, entity.project_id, entity.kind, chapter)
+    return separate
 
 
 def _next(state: State, config: RunnableConfig) -> str:

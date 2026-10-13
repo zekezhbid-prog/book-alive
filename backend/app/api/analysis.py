@@ -73,6 +73,14 @@ class EntityOut(BaseModel):
     timeline: list[ChapterFacts]
 
 
+class MergeRequest(BaseModel):
+    other_id: str
+
+
+class SplitRequest(BaseModel):
+    name: str
+
+
 class UsageRow(BaseModel):
     operation: str
     connection_name: str
@@ -247,6 +255,32 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),
     )
+
+
+@router.post("/entities/{entity_id}/merge")
+def merge_entities(entity_id: str, body: MergeRequest, session: SessionDep) -> EntityOut:
+    """Cards are read-only, but who is who is the user's call: models get names wrong."""
+    main = session.get(Entity, entity_id)
+    other = session.get(Entity, body.other_id)
+    if main is None or other is None:
+        raise HTTPException(404, "entity_not_found")
+    if main.id == other.id or (main.project_id, main.kind) != (other.project_id, other.kind):
+        raise HTTPException(422, "bad_merge")
+    analysis.merge_by_hand(session, main, other)
+    session.commit()
+    return get_entity(main.id, session)
+
+
+@router.post("/entities/{entity_id}/split")
+def split_entity(entity_id: str, body: SplitRequest, session: SessionDep) -> EntityOut:
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    if analysis.norm(body.name) not in map(analysis.norm, entity.aliases):
+        raise HTTPException(422, "bad_split")
+    separate = analysis.split_by_hand(session, entity, body.name)
+    session.commit()
+    return get_entity(separate.id, session)
 
 
 @router.get("/projects/{project_id}/usage")

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     # Key for encrypting API keys at rest. Empty means "generate and keep in data_dir".
     secret_key: str = ""
+    # Local embedding model for search over the book; "hash" needs no download (tests).
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     # Built frontend served by the API in production.
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"
 

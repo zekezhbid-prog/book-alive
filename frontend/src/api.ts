@@ -156,6 +156,22 @@ export interface Usage {
   output_tokens: number
 }
 
+export interface Citation {
+  n: number
+  chapter_id: string
+  chapter_title: string
+  paragraph: number
+  quote: string
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  citations: Citation[]
+  created_at: string
+}
+
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
 export class ApiError extends Error {
   code: string
@@ -237,6 +253,17 @@ export const api = {
   entities: (projectId: string, kind: EntityKind) =>
     request<EntityBrief[]>('GET', `/projects/${projectId}/entities?kind=${kind}`),
   entity: (id: string) => request<Entity>('GET', `/entities/${id}`),
+  mergeEntities: (id: string, otherId: string) =>
+    request<Entity>('POST', `/entities/${id}/merge`, { other_id: otherId }),
+  splitEntity: (id: string, name: string) =>
+    request<Entity>('POST', `/entities/${id}/split`, { name }),
+  chat: (projectId: string) => request<ChatMessage[]>('GET', `/projects/${projectId}/chat`),
+  ask: (projectId: string, question: string, chapterId?: string) =>
+    request<ChatMessage[]>('POST', `/projects/${projectId}/chat`, {
+      question,
+      chapter_id: chapterId ?? '',
+    }),
+  clearChat: (projectId: string) => request<void>('DELETE', `/projects/${projectId}/chat`),
   usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 
   system: () => request<{ claude_cli: boolean }>('GET', '/system'),

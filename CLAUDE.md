@@ -36,6 +36,7 @@ backend/app/
   analysis/          LangGraph loop that finds characters and locations, its prompts,
                      the background runner
   llm/claude_cli.py  LangChain chat model over the local Claude Code CLI (subscription)
+  rag/               local embeddings, chunk index and hybrid search, chat with citations
   api/               REST routes
 frontend/src/
   api.ts             typed client
@@ -62,6 +63,10 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
   `PROMPT_VERSION`; bump the version when the extraction prompt changes.
 - Quotes shown as sources are verified against the chapter text; an unverified quote is
   dropped, never displayed.
+- Cards are read-only, with one exception: the user may merge two cards or split a name
+  into its own card (`pinned_names`, `standalone`). Later runs must keep those decisions.
+- Embeddings are local (fastembed). Chunks are a few sentences because the model reads
+  about 128 tokens; search returns each hit with its neighbours.
 - Every UI string goes through `i18n.tsx` in both languages. The server returns error
   codes (`reader_mode_readonly`), the frontend translates them.
 - Book text and anything from `_private/` never goes into the repository.
@@ -70,8 +75,10 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
 
 1. Projects, import, chapters, reader, connections - done
 2. Characters and locations on demand (LangGraph, per chapter, resumable), usage journal - done
-3. Chat over the book with citations (RAG, pgvector)
+3. Chat over the book with citations (RAG, pgvector) - done
 4. Project style, images of characters and locations, looks by chapter
 5. Scenes, first frame, video prompt, reference archive
 6. Writer extras: stale markers, plot suggestions
-7. Docker, shared password for hosting, README, opening the repository
+7. Docker, shared password for hosting, README, opening the repository.
+   Also Alembic migrations: until then the schema is created by `create_all`, and a new
+   column on an existing table needs a manual `ALTER TABLE` on existing databases.

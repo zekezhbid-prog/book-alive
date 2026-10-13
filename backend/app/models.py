@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -146,6 +147,11 @@ class Entity(Base):
     kind: Mapped[str] = mapped_column(String(20))
     name: Mapped[str] = mapped_column(String(200))
     aliases: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # The user's own decisions, which later runs must respect:
+    # names the user attached to this card by merging,
+    pinned_names: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # and a card the user split off, which is never merged away again.
+    standalone: Mapped[bool] = mapped_column(default=False)
 
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"
@@ -214,4 +220,34 @@ class UsageEvent(Base):
     model: Mapped[str] = mapped_column(String(200))
     input_tokens: Mapped[int] = mapped_column(default=0)
     output_tokens: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+EMBEDDING_DIMENSIONS = 384
+
+
+class Chunk(Base):
+    """A few sentences of a chapter with their embedding: the search index."""
+
+    __tablename__ = "chunks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    chapter_id: Mapped[str] = mapped_column(String(32), index=True)
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    position: Mapped[int]  # order inside the chapter
+    paragraph: Mapped[int]  # first paragraph of the chapter covered by the chunk
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(10))  # user | assistant
+    content: Mapped[str] = mapped_column(Text)
+    # For assistant messages: [{"n", "chapter_id", "chapter_title", "paragraph", "quote"}]
+    citations: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)

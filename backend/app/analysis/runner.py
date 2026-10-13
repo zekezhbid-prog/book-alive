@@ -30,7 +30,7 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
         for entity in session.scalars(
             select(Entity).where(Entity.project_id == project.id, Entity.kind == run.kind)
         ):
-            entity.aliases = []
+            entity.aliases = list(entity.pinned_names)  # what the user merged by hand stays
         session.commit()
     try:
         GRAPH.invoke(

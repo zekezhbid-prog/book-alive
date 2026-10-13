@@ -112,7 +112,18 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             )}
             {list?.length === 0 && !running && <p className="muted">{t(`entities.empty.${kind}`)}</p>}
             {list && list.length > 0 && !entity && <p className="muted">{t('entities.select')}</p>}
-            {entity && <Card entity={entity} projectId={projectId} />}
+            {entity && (
+              <Card
+                entity={entity}
+                projectId={projectId}
+                others={list?.filter((e) => e.id !== entity.id) ?? []}
+                onChanged={(next) => {
+                  loadList()
+                  navigate(`/projects/${projectId}/${section}/${next.id}`)
+                }}
+                onError={fail}
+              />
+            )}
           </div>
         </section>
       </div>
@@ -132,8 +143,26 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   )
 }
 
-function Card({ entity, projectId }: { entity: Entity; projectId: string }) {
+interface CardProps {
+  entity: Entity
+  projectId: string
+  others: EntityBrief[]
+  onChanged: (shown: Entity) => void
+  onError: (error: unknown) => void
+}
+
+/** Facts are read-only; who is who is the user's call, hence merge and split. */
+function Card({ entity, projectId, others, onChanged, onError }: CardProps) {
   const { t } = useI18n()
+  const merge = (otherId: string) => {
+    const other = others.find((e) => e.id === otherId)
+    if (!other || !confirm(t('entities.merge.confirm', { other: other.name, name: entity.name }))) return
+    api.mergeEntities(entity.id, other.id).then(onChanged, onError)
+  }
+  const split = (alias: string) => {
+    if (!confirm(t('entities.split.confirm', { alias }))) return
+    api.splitEntity(entity.id, alias).then(onChanged, onError)
+  }
   const source = (fact: Fact) =>
     fact.quote && (
       <Link
@@ -147,12 +176,32 @@ function Card({ entity, projectId }: { entity: Entity; projectId: string }) {
   const stale = <span className="badge stale">{t('entities.stale')}</span>
   return (
     <>
-      <div>
-        <h1 className="entity-name">{entity.name}</h1>
+      <div className="stack">
+        <div className="row">
+          <h1 className="entity-name grow">{entity.name}</h1>
+          {others.length > 0 && (
+            <select className="input merge-select" value="" onChange={(e) => merge(e.target.value)}>
+              <option value="">{t('entities.merge')}</option>
+              {others.map((other) => (
+                <option key={other.id} value={other.id}>
+                  {other.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         {entity.aliases.length > 0 && (
-          <p className="muted">
-            {t('entities.aliases')}: {entity.aliases.join(', ')}
-          </p>
+          <div className="row wrap muted">
+            {t('entities.aliases')}:
+            {entity.aliases.map((alias) => (
+              <span key={alias} className="chip">
+                {alias}
+                <button title={t('entities.split')} onClick={() => split(alias)}>
+                  ⤴
+                </button>
+              </span>
+            ))}
+          </div>
         )}
       </div>
       <h4>{t('entities.permanent')}</h4>

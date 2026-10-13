@@ -29,7 +29,9 @@ with pgvector, and React.
 - [x] Connections, model list with a free-only filter, connection test
 - [x] Characters and locations on demand: chapter by chapter with LangGraph, resumable,
       with a cost estimate before the run, verified source quotes and a usage journal
-- [ ] Chat over the book with citations
+- [x] Chat over the book: local embeddings in pgvector, hybrid search (meaning + wording,
+      fused by reciprocal rank), answers only from retrieved passages, citations checked
+      against the text and linked to the paragraph
 - [ ] Images of characters and locations in one project style
 - [ ] Scenes, first frame, video prompt, reference archive
 - [ ] Docker and hosting
