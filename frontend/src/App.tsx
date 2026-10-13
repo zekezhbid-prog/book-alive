@@ -1,8 +1,10 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import { useI18n } from './i18n'
 import Book from './pages/Book'
+import Entities from './pages/Entities'
 import Projects from './pages/Projects'
 import Settings from './pages/Settings'
+import Usage from './pages/Usage'
 
 export default function App() {
   const { lang, setLang, t } = useI18n()
@@ -30,6 +32,22 @@ export default function App() {
         <Route path="/" element={<Projects />} />
         <Route path="/projects/:projectId" element={<Book />} />
         <Route path="/projects/:projectId/chapters/:chapterId" element={<Book />} />
+        {/* `key` gives each section its own state when switching between the two. */}
+        {['characters', 'characters/:entityId'].map((path) => (
+          <Route
+            key={path}
+            path={`/projects/:projectId/${path}`}
+            element={<Entities key="character" kind="character" />}
+          />
+        ))}
+        {['locations', 'locations/:entityId'].map((path) => (
+          <Route
+            key={path}
+            path={`/projects/:projectId/${path}`}
+            element={<Entities key="location" kind="location" />}
+          />
+        ))}
+        <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </>

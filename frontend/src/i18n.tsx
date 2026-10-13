@@ -12,6 +12,7 @@ const ru = {
   'app.save': 'Сохранить',
   'app.saved': 'Сохранено',
   'app.saving': 'Сохраняю…',
+  'app.unsaved': 'Не сохранено',
   'app.chars': '{n} зн.',
 
   'projects.title': 'Проекты',
@@ -79,6 +80,59 @@ const ru = {
   'versions.label.autosave': 'Автосохранение перед откатом',
   'versions.label.rollback': 'Откат к версии {n}',
 
+  'tabs.book': 'Книга',
+  'tabs.character': 'Персонажи',
+  'tabs.location': 'Локации',
+  'tabs.usage': 'Расход',
+
+  'entities.find.character': 'Найти персонажей',
+  'entities.find.location': 'Найти локации',
+  'entities.empty.character':
+    'Персонажи ещё не найдены. Поиск запускается только по кнопке: сервис читает выбранные главы и собирает карточки с цитатами.',
+  'entities.empty.location':
+    'Локации ещё не найдены. Поиск запускается только по кнопке: сервис читает выбранные главы и собирает карточки с цитатами.',
+  'entities.select': 'Выберите карточку слева.',
+  'entities.aliases': 'Также',
+  'entities.permanent': 'Постоянное',
+  'entities.permanent.none': 'В прочитанных главах постоянных черт не описано.',
+  'entities.timeline': 'По главам',
+  'entities.present': 'Участвует, новых деталей нет',
+  'entities.stale': 'устарело',
+  'entities.stale.hint': 'Текст главы изменился после чтения. Запустите поиск по этой главе заново.',
+  'entities.count': 'глав: {chapters} · фактов: {facts}',
+  'entities.source': 'Открыть в тексте',
+
+  'run.title': 'Какие главы читать',
+  'run.all': 'Все',
+  'run.none': 'Ни одной',
+  'run.estimate': 'Оценка расхода',
+  'run.estimate.loading': 'Считаю…',
+  'run.estimate.body': 'Запросов: {requests}. Примерно {input} токенов на вход и {output} на выход.',
+  'run.estimate.cached': 'Уже прочитано без изменений (бесплатно): {n}.',
+  'run.estimate.free': 'Все выбранные главы уже прочитаны, запросов к модели не будет.',
+  'run.estimate.note': 'Оценка грубая: точное число зависит от модели.',
+  'run.start': 'Запустить',
+  'run.progress': 'Читаю главы: {done} из {total}',
+  'run.cancel': 'Остановить',
+  'run.cancelling': 'Останавливаю после текущей главы…',
+  'run.failed':
+    'Поиск остановился на главе {done} из {total}: {error}. Прочитанное сохранено, повторный запуск продолжит с этого места.',
+  'run.cancelled': 'Поиск остановлен на главе {done} из {total}. Прочитанное сохранено.',
+  'run.interrupted': 'сервер был перезапущен',
+
+  'usage.title': 'Расход токенов',
+  'usage.empty': 'Запросов к моделям по этому проекту ещё не было.',
+  'usage.operation': 'Операция',
+  'usage.model': 'Модель',
+  'usage.calls': 'Запросов',
+  'usage.input': 'На вход',
+  'usage.output': 'На выход',
+  'usage.total': 'Всего',
+  'usage.op.find_characters': 'Поиск персонажей',
+  'usage.op.merge_characters': 'Сведение дублей персонажей',
+  'usage.op.find_locations': 'Поиск локаций',
+  'usage.op.merge_locations': 'Сведение дублей локаций',
+
   'settings.title': 'Настройки',
   'settings.connections': 'Подключения',
   'settings.connections.hint':
@@ -125,6 +179,18 @@ const ru = {
   'error.no_next_chapter': 'Это последняя глава.',
   'error.bad_base_url': 'Адрес должен начинаться с http:// или https://',
   'error.provider_error': 'Сервис ответил ошибкой: {detail}',
+  'error.text_model_not_configured':
+    'Не выбрана модель для текста. Откройте Настройки и выберите подключение и модель.',
+  'error.analysis_already_running': 'По этому проекту уже идёт поиск. Дождитесь его окончания.',
+  'error.no_chapters_selected': 'Не выбрано ни одной главы.',
+  'error.chapter_not_found': 'Такой главы больше нет.',
+  'error.project_not_found': 'Такого проекта нет.',
+  'error.entity_not_found': 'Такой карточки больше нет.',
+  'error.version_not_found': 'Такой версии нет.',
+  'error.connection_not_found': 'Такого подключения больше нет.',
+  'error.title_too_long': 'Название слишком длинное (до 300 знаков).',
+  'error.key_unreadable':
+    'Сохранённый ключ не удалось расшифровать. Удалите подключение и добавьте его заново.',
   'error.unknown': 'Что-то пошло не так: {detail}',
 }
 
@@ -137,6 +203,7 @@ const en: Record<keyof typeof ru, string> = {
   'app.save': 'Save',
   'app.saved': 'Saved',
   'app.saving': 'Saving…',
+  'app.unsaved': 'Not saved',
   'app.chars': '{n} chars',
 
   'projects.title': 'Projects',
@@ -204,6 +271,59 @@ const en: Record<keyof typeof ru, string> = {
   'versions.label.autosave': 'Autosave before rollback',
   'versions.label.rollback': 'Rollback to version {n}',
 
+  'tabs.book': 'Book',
+  'tabs.character': 'Characters',
+  'tabs.location': 'Locations',
+  'tabs.usage': 'Usage',
+
+  'entities.find.character': 'Find characters',
+  'entities.find.location': 'Find locations',
+  'entities.empty.character':
+    'No characters yet. The search runs only when you start it: the app reads the chapters you pick and builds cards with quotes.',
+  'entities.empty.location':
+    'No locations yet. The search runs only when you start it: the app reads the chapters you pick and builds cards with quotes.',
+  'entities.select': 'Pick a card on the left.',
+  'entities.aliases': 'Also',
+  'entities.permanent': 'Permanent',
+  'entities.permanent.none': 'The chapters read so far describe no permanent traits.',
+  'entities.timeline': 'By chapter',
+  'entities.present': 'Takes part, no new details',
+  'entities.stale': 'stale',
+  'entities.stale.hint': 'The chapter text changed after it was read. Run the search for this chapter again.',
+  'entities.count': 'chapters: {chapters} · facts: {facts}',
+  'entities.source': 'Open in the text',
+
+  'run.title': 'Chapters to read',
+  'run.all': 'All',
+  'run.none': 'None',
+  'run.estimate': 'Cost estimate',
+  'run.estimate.loading': 'Calculating…',
+  'run.estimate.body': 'Requests: {requests}. About {input} tokens in and {output} out.',
+  'run.estimate.cached': 'Already read and unchanged (free): {n}.',
+  'run.estimate.free': 'All selected chapters are already read; no model requests will be made.',
+  'run.estimate.note': 'A rough estimate: the exact number depends on the model.',
+  'run.start': 'Start',
+  'run.progress': 'Reading chapters: {done} of {total}',
+  'run.cancel': 'Stop',
+  'run.cancelling': 'Stopping after the current chapter…',
+  'run.failed':
+    'The search stopped at chapter {done} of {total}: {error}. What was read is saved; starting again continues from there.',
+  'run.cancelled': 'The search was stopped at chapter {done} of {total}. What was read is saved.',
+  'run.interrupted': 'the server was restarted',
+
+  'usage.title': 'Token usage',
+  'usage.empty': 'No model requests for this project yet.',
+  'usage.operation': 'Operation',
+  'usage.model': 'Model',
+  'usage.calls': 'Requests',
+  'usage.input': 'In',
+  'usage.output': 'Out',
+  'usage.total': 'Total',
+  'usage.op.find_characters': 'Finding characters',
+  'usage.op.merge_characters': 'Merging duplicate characters',
+  'usage.op.find_locations': 'Finding locations',
+  'usage.op.merge_locations': 'Merging duplicate locations',
+
   'settings.title': 'Settings',
   'settings.connections': 'Connections',
   'settings.connections.hint':
@@ -249,6 +369,18 @@ const en: Record<keyof typeof ru, string> = {
   'error.no_next_chapter': 'This is the last chapter.',
   'error.bad_base_url': 'The address must start with http:// or https://',
   'error.provider_error': 'The service returned an error: {detail}',
+  'error.text_model_not_configured':
+    'No text model is selected. Open Settings and choose a connection and a model.',
+  'error.analysis_already_running': 'A search is already running for this project. Wait for it to finish.',
+  'error.no_chapters_selected': 'No chapters are selected.',
+  'error.chapter_not_found': 'This chapter no longer exists.',
+  'error.project_not_found': 'This project does not exist.',
+  'error.entity_not_found': 'This card no longer exists.',
+  'error.version_not_found': 'This version does not exist.',
+  'error.connection_not_found': 'This connection no longer exists.',
+  'error.title_too_long': 'The title is too long (up to 300 characters).',
+  'error.key_unreadable':
+    'The stored key could not be decrypted. Delete the connection and add it again.',
   'error.unknown': 'Something went wrong: {detail}',
 }
 
@@ -258,9 +390,15 @@ export type Translate = (key: MessageKey, params?: Params) => string
 
 const dictionaries = { ru, en }
 
-const I18nContext = createContext<{ lang: Lang; setLang: (lang: Lang) => void; t: Translate }>(
-  null!,
-)
+const I18nContext = createContext<{
+  lang: Lang
+  setLang: (lang: Lang) => void
+  t: Translate
+  /** Whether a key built at runtime (an operation code, an error code) has a translation. */
+  has: (key: string) => key is MessageKey
+}>(null!)
+
+const hasMessage = (key: string): key is MessageKey => key in ru
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() =>
@@ -276,7 +414,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       dictionaries[lang][key].replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? '')),
     [lang],
   )
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t])
+  const value = useMemo(() => ({ lang, setLang, t, has: hasMessage }), [lang, setLang, t])
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }
 

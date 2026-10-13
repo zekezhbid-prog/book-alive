@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.crypto import decrypt, encrypt, mask
+from app.crypto import KeyUnreadable, decrypt, encrypt, mask
 from app.db import SessionDep
 from app.llm import registry
 from app.llm.claude_cli import cli_path
@@ -66,13 +66,20 @@ class SystemInfo(BaseModel):
     claude_cli: bool
 
 
+def _hint(connection: Connection) -> str:
+    try:
+        return mask(decrypt(connection.api_key_encrypted))
+    except KeyUnreadable:
+        return "?"
+
+
 def _out(connection: Connection) -> ConnectionOut:
     return ConnectionOut(
         id=connection.id,
         name=connection.name,
         kind=connection.kind,
         base_url=connection.base_url,
-        api_key_hint=mask(decrypt(connection.api_key_encrypted)),
+        api_key_hint=_hint(connection),
     )
 
 
@@ -152,6 +159,8 @@ def connection_models(connection_id: str, session: SessionDep) -> list[ModelOut]
         models = registry.list_models(connection)
     except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"provider_error: HTTP {exc.response.status_code}") from exc
+    except KeyUnreadable as exc:
+        raise HTTPException(409, str(exc)) from exc
     except (httpx.HTTPError, ValueError, RuntimeError) as exc:
         raise HTTPException(502, f"provider_error: {exc}") from exc
     return [ModelOut(**vars(m)) for m in models]
@@ -164,7 +173,9 @@ def test_connection(connection_id: str, body: TestRequest, session: SessionDep) 
     try:
         llm = registry.chat_model(connection, body.model)
         answer = llm.invoke([HumanMessage("Reply with the single word: ready")])
-    except Exception as exc:  # provider SDKs raise many unrelated types
+    except KeyUnreadable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
     usage = answer.usage_metadata or {}
     return TestResult(

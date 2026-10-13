@@ -32,6 +32,9 @@ backend/app/
   importing/         file -> paragraphs -> chapters, no AI
   services/versions.py  whole-book commits and rollback
   llm/registry.py    the only place that builds chat models and lists provider models
+  llm/calls.py       TextModel: the configured text model, JSON output, usage journal
+  analysis/          LangGraph loop that finds characters and locations, its prompts,
+                     the background runner
   llm/claude_cli.py  LangChain chat model over the local Claude Code CLI (subscription)
   api/               REST routes
 frontend/src/
@@ -54,6 +57,11 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
 - Derived data (characters, locations, scenes) is read-only for the user and records the
   `content_hash` of the chapter text it was computed from. Different hash means stale.
   Nothing is recomputed automatically.
+- Every model call goes through `TextModel` so it lands in the usage journal. Raw model
+  answers are stored per chapter (`chapter_extractions`) keyed by text hash and
+  `PROMPT_VERSION`; bump the version when the extraction prompt changes.
+- Quotes shown as sources are verified against the chapter text; an unverified quote is
+  dropped, never displayed.
 - Every UI string goes through `i18n.tsx` in both languages. The server returns error
   codes (`reader_mode_readonly`), the frontend translates them.
 - Book text and anything from `_private/` never goes into the repository.
@@ -61,7 +69,7 @@ _private/, _reference/  gitignored: the owner's test book and the earlier Node p
 ## Build order
 
 1. Projects, import, chapters, reader, connections - done
-2. Characters and locations on demand (LangGraph, per chapter, resumable), usage journal
+2. Characters and locations on demand (LangGraph, per chapter, resumable), usage journal - done
 3. Chat over the book with citations (RAG, pgvector)
 4. Project style, images of characters and locations, looks by chapter
 5. Scenes, first frame, video prompt, reference archive

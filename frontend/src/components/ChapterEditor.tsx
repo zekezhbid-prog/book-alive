@@ -6,37 +6,49 @@ import { enqueueSave, savesSettled } from '../saveQueue'
 interface Props {
   project: Project
   chapter: Chapter
-  onSaved: () => void
+  onSaved: (saved: Chapter) => void
   onStructureChange: (goTo?: string) => void
   onError: (error: unknown) => void
 }
 
 const AUTOSAVE_MS = 800
+const TITLE_MAX = 300
 
 /** Plain-text chapter editor. The draft saves itself; versions are committed separately. */
 export default function ChapterEditor({ project, chapter, onSaved, onStructureChange, onError }: Props) {
   const { t } = useI18n()
   const [title, setTitle] = useState(chapter.title)
   const [text, setText] = useState(chapter.text)
-  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const area = useRef<HTMLTextAreaElement>(null)
-  // What the server has; anything different is still to be saved.
+  // What the server is known to have; anything different is still to be saved.
   const saved = useRef({ title: chapter.title, text: chapter.text })
   const latest = useRef({ title, text })
   latest.current = { title, text }
 
   const flush = () => {
+    const sending = { ...latest.current }
+    const before = saved.current
     const patch: { title?: string; text?: string } = {}
-    if (latest.current.title !== saved.current.title) patch.title = latest.current.title
-    if (latest.current.text !== saved.current.text) patch.text = latest.current.text
+    if (sending.title !== before.title) patch.title = sending.title
+    if (sending.text !== before.text) patch.text = sending.text
     if (!Object.keys(patch).length) return savesSettled()
-    saved.current = { ...latest.current }
-    setSaving(true)
+    // Optimistic, so the next flush does not resend the same text while this one is in flight.
+    saved.current = sending
+    setStatus('saving')
     return enqueueSave(() =>
-      api
-        .updateChapter(chapter.id, patch)
-        .then(onSaved, onError)
-        .finally(() => setSaving(false)),
+      api.updateChapter(chapter.id, patch).then(
+        (result) => {
+          setStatus('saved')
+          onSaved(result)
+        },
+        (error) => {
+          // Not on the server after all: the next keystroke, blur or leaving the chapter retries.
+          if (saved.current === sending) saved.current = before
+          setStatus('unsaved')
+          onError(error)
+        },
+      ),
     )
   }
 
@@ -81,7 +93,8 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
   const remove = async () => {
     const name = title || t('book.untitled')
     if (!confirm(t('chapter.delete.confirm', { title: name }))) return
-    saved.current = { ...latest.current } // nothing left to save
+    saved.current = { ...latest.current } // the chapter is going away: nothing left to save
+    await savesSettled()
     await api.deleteChapter(chapter.id).then(() => onStructureChange(), onError)
   }
 
@@ -90,7 +103,8 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
       <div className="chapter-tools">
         <span className="faint small">
           {t('app.chars', { n: text.length.toLocaleString() })} ·{' '}
-          {saving ? t('app.saving') : t('app.saved')} · {t('chapter.format.hint')}
+          <span className={status === 'unsaved' ? 'error' : ''}>{t(`app.${status}`)}</span> ·{' '}
+          {t('chapter.format.hint')}
         </span>
         <span className="spacer" />
         <button className="btn ghost small" disabled={index <= 0} onClick={() => move(-1)}>
@@ -106,6 +120,7 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
       <input
         className="chapter-title"
         value={title}
+        maxLength={TITLE_MAX}
         placeholder={t('chapter.title.placeholder')}
         onChange={(e) => setTitle(e.target.value)}
         onBlur={flush}

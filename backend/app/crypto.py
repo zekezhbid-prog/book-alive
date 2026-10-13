@@ -4,7 +4,7 @@ import base64
 import hashlib
 from functools import lru_cache
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
 
@@ -25,8 +25,17 @@ def encrypt(value: str) -> str:
     return _fernet().encrypt(value.encode()).decode() if value else ""
 
 
+class KeyUnreadable(RuntimeError):
+    """The stored value was encrypted with a different secret."""
+
+
 def decrypt(value: str) -> str:
-    return _fernet().decrypt(value.encode()).decode() if value else ""
+    if not value:
+        return ""
+    try:
+        return _fernet().decrypt(value.encode()).decode()
+    except InvalidToken as exc:
+        raise KeyUnreadable("key_unreadable") from exc
 
 
 def mask(value: str) -> str:

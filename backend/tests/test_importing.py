@@ -1,8 +1,10 @@
 import io
 import zipfile
 
+import pytest
+
 from app.importing.chapters import detect_chapters, split_sections
-from app.importing.extract import Paragraph, extract
+from app.importing.extract import Paragraph, UnsupportedBook, extract
 
 PROSE = "Он шёл по дороге и думал о том, что ждёт его впереди. " * 8
 
@@ -139,4 +141,49 @@ def test_docx():
     assert [(p.text, p.heading) for p in book.paragraphs] == [
         ("Глава 1", True),
         ("Первая строка.", False),
+    ]
+
+
+def test_sentence_starting_with_a_heading_word_is_not_a_heading():
+    book = ["1. Начало", PROSE, "Книга лежала на столе.", PROSE, "2. Дорога", PROSE]
+    book += ["Часть пути они прошли молча.", PROSE, "3. Конец", PROSE]
+    method, chapters = detect_chapters(paragraphs(*book))
+    assert method == "pattern"
+    assert [c.title for c in chapters] == ["1. Начало", "2. Дорога", "3. Конец"]
+
+
+@pytest.mark.parametrize("name", ["book.epub", "book.docx", "book.pdf", "book.fb2"])
+def test_damaged_files_are_reported_as_unsupported(name):
+    data = b"PK\x03\x04 not really a zip" if name.endswith(("epub", "docx")) else b"%PDF-1.4 broken"
+    if name.endswith("fb2"):
+        data = b""
+    with pytest.raises(UnsupportedBook):
+        extract(data, name)
+
+
+def test_epub_with_url_encoded_file_names():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "META-INF/container.xml",
+            '<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>',
+        )
+        archive.writestr(
+            "OPS/book.opf",
+            """<package xmlns="http://www.idpf.org/2007/opf"
+                 xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <metadata><dc:title>Вий</dc:title><dc:creator>Гоголь</dc:creator></metadata>
+              <manifest><item id="c1" href="Text/Chapter%201.xhtml"/></manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>""",
+        )
+        archive.writestr(
+            "OPS/Text/Chapter 1.xhtml",
+            "<html><body><h1>Глава 1</h1><div><p>Первый абзац.</p></div></body></html>",
+        )
+    book = extract(buffer.getvalue(), "viy.epub")
+    assert (book.title, book.author) == ("Вий", "Гоголь")
+    assert [(p.text, p.heading) for p in book.paragraphs] == [
+        ("Глава 1", True),
+        ("Первый абзац.", False),
     ]

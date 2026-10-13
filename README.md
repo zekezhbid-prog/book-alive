@@ -27,7 +27,8 @@ with pgvector, and React.
 - [x] Projects, import (TXT, EPUB, FB2, DOCX, text PDF), chapter detection, manual fixes
 - [x] Reader with search; writer mode with autosave, versions and rollback
 - [x] Connections, model list with a free-only filter, connection test
-- [ ] Characters and locations on demand, with source quotes
+- [x] Characters and locations on demand: chapter by chapter with LangGraph, resumable,
+      with a cost estimate before the run, verified source quotes and a usage journal
 - [ ] Chat over the book with citations
 - [ ] Images of characters and locations in one project style
 - [ ] Scenes, first frame, video prompt, reference archive

@@ -10,6 +10,7 @@ import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import PurePath
+from urllib.parse import unquote
 
 from lxml import etree, html
 
@@ -34,6 +35,15 @@ class ExtractedBook:
 
 
 def extract(data: bytes, filename: str) -> ExtractedBook:
+    try:
+        return _extract(data, filename)
+    except UnsupportedBook:
+        raise
+    except Exception as exc:
+        raise UnsupportedBook(f"The file is damaged or not what its name says: {exc}") from exc
+
+
+def _extract(data: bytes, filename: str) -> ExtractedBook:
     ext = PurePath(filename).suffix.lower()
     if ext == ".pdf" or data[:5] == b"%PDF-":
         return _pdf(data)
@@ -110,9 +120,12 @@ _HEADINGS = {"h1", "h2", "h3"}
 
 
 def _html_paragraphs(markup: bytes) -> list[Paragraph]:
+    # Without a declared encoding lxml assumes Latin-1 and garbles Cyrillic; books are UTF-8.
+    declared = re.search(rb"(?:encoding|charset)=[\"']?([\w-]+)", markup[:1000])
+    encoding = declared.group(1).decode("ascii") if declared else "utf-8"
     try:
-        root = html.fromstring(markup)
-    except (etree.ParserError, ValueError):
+        root = html.fromstring(markup, parser=html.HTMLParser(encoding=encoding))
+    except (etree.ParserError, ValueError, LookupError):
         return []
     body = root.find(".//body")
     scope = body if body is not None else root
@@ -144,7 +157,7 @@ def _epub(archive: zipfile.ZipFile) -> ExtractedBook:
         href = manifest.get(ref.get("idref"))
         if not href:
             continue
-        path = posixpath.normpath(posixpath.join(base, href.split("#")[0]))
+        path = posixpath.normpath(posixpath.join(base, unquote(href.split("#")[0])))
         if path in names:
             paragraphs.extend(_html_paragraphs(archive.read(path)))
     return ExtractedBook(

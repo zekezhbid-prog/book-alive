@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, type Chapter, type Project, type SearchHit } from '../api'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { api, ApiError, type Chapter, type EntityBrief, type Project, type SearchHit } from '../api'
 import ChapterEditor from '../components/ChapterEditor'
-import ChapterReader from '../components/ChapterReader'
+import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
+import ProjectHeader from '../components/ProjectHeader'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
+import { savesSettled } from '../saveQueue'
 
 type View = 'writer' | 'illustrator'
 
@@ -16,6 +17,10 @@ export default function Book() {
   const navigate = useNavigate()
   const [project, setProject] = useState<Project | null>(null)
   const [chapter, setChapter] = useState<Chapter | null>(null)
+  // Bumped whenever chapter text may have changed on the server behind the editor's back
+  // (rollback, merge, split): the open chapter is refetched and its component remounted.
+  const [epoch, setEpoch] = useState(0)
+  const [names, setNames] = useState<NamedEntity[]>([])
   const [error, setError] = useState('')
   const [view, setViewState] = useState<View>(
     () => (localStorage.getItem(`view:${projectId}`) as View) || 'writer',
@@ -30,14 +35,36 @@ export default function Book() {
   )
   useEffect(() => {
     reloadProject()
-  }, [reloadProject])
+    const named = (kind: 'character' | 'location') => (list: EntityBrief[]) =>
+      list.map((e) => ({ id: e.id, kind, names: [e.name, ...e.aliases] }))
+    Promise.all([
+      api.entities(projectId, 'character').then(named('character')),
+      api.entities(projectId, 'location').then(named('location')),
+    ]).then((lists) => setNames(lists.flat()), fail)
+  }, [reloadProject, projectId, fail])
 
-  const activeId = chapterId ?? project?.chapters[0]?.id
-  const reloadChapter = useCallback(() => {
+  // The URL may name a chapter that no longer exists (deleted, merged, rolled back).
+  const activeId = project?.chapters.some((c) => c.id === chapterId)
+    ? chapterId
+    : project?.chapters[0]?.id
+  useEffect(() => {
+    if (!project) return
     if (!activeId) return setChapter(null)
-    api.chapter(activeId).then(setChapter).catch(fail)
-  }, [activeId, fail])
-  useEffect(reloadChapter, [reloadChapter])
+    let stale = false
+    api.chapter(activeId).then(
+      (loaded) => !stale && setChapter(loaded),
+      (e) => {
+        if (stale) return
+        if (e instanceof ApiError && e.code === 'chapter_not_found') reloadProject()
+        else fail(e)
+      },
+    )
+    return () => {
+      stale = true
+    }
+    // `project` itself is left out on purpose: autosave refreshes it on every pause in typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, epoch, project === null, fail, reloadProject])
 
   useEffect(() => {
     if (query.trim().length < 2) return setHits(null)
@@ -49,63 +76,44 @@ export default function Book() {
   if (!project) return <main className="page muted">{t('app.loading')}</main>
 
   const writing = project.mode === 'writer' && view === 'writer'
+  const shown = chapter?.id === activeId ? chapter : null
   const open = (id: string, paragraph?: number) =>
     navigate(`/projects/${projectId}/chapters/${id}${paragraph === undefined ? '' : `?p=${paragraph}`}`)
-  const setView = (next: View) => {
+  const setView = async (next: View) => {
+    // The other view is drawn from what the server has, so the draft must be there first.
+    await savesSettled()
     localStorage.setItem(`view:${projectId}`, next)
     setViewState(next)
   }
-  const changed = async () => {
+  const afterStructureChange = async (goTo?: string) => {
     setError('')
     await reloadProject()
-    reloadChapter()
-  }
-  // After a chapter disappears (delete, merge, rollback) the URL may point nowhere.
-  const afterStructureChange = async (goTo?: string) => {
-    await reloadProject()
     if (goTo) open(goTo)
-    else navigate(`/projects/${projectId}`)
-    reloadChapter()
+    setEpoch((n) => n + 1)
   }
   const addChapter = async () => {
     try {
       const created = await api.createChapter(projectId, '', activeId)
-      await reloadProject()
-      open(created.id)
+      await afterStructureChange(created.id)
     } catch (e) {
       fail(e)
     }
   }
-
-  const slot = document.getElementById('topbar-slot')
   const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
 
   return (
     <>
-      {slot &&
-        createPortal(
-          <>
-            <span className="crumb">
-              <Link to="/">{t('app.projects')}</Link> / <b>{project.title}</b>
-            </span>
-            <span className={`badge ${project.mode}`}>{t(`mode.${project.mode}`)}</span>
-            <span className="spacer" />
-            {project.mode === 'writer' && (
-              <div className="segmented">
-                {(['writer', 'illustrator'] as const).map((option) => (
-                  <button
-                    key={option}
-                    className={view === option ? 'active' : ''}
-                    onClick={() => setView(option)}
-                  >
-                    {t(`book.view.${option}`)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>,
-          slot,
+      <ProjectHeader project={project}>
+        {project.mode === 'writer' && (
+          <div className="segmented">
+            {(['writer', 'illustrator'] as const).map((option) => (
+              <button key={option} className={view === option ? 'active' : ''} onClick={() => setView(option)}>
+                {t(`book.view.${option}`)}
+              </button>
+            ))}
+          </div>
         )}
+      </ProjectHeader>
       <div className={`workspace ${project.mode === 'writer' ? 'with-side' : ''}`}>
         <aside className="chapters">
           <input
@@ -161,26 +169,28 @@ export default function Book() {
           {project.split_method === 'sections' && !writing && (
             <p className="notice">{t('book.split.sections')}</p>
           )}
-          {!chapter && (
-            <p className="muted">{t(writing ? 'book.empty.writer' : 'book.empty.reader')}</p>
-          )}
-          {chapter && writing && (
+          {!activeId && <p className="muted">{t(writing ? 'book.empty.writer' : 'book.empty.reader')}</p>}
+          {shown && writing && (
             <ChapterEditor
-              key={`${chapter.id}:${chapter.content_hash}`}
+              key={`${shown.id}:${epoch}`}
               project={project}
-              chapter={chapter}
-              onSaved={reloadProject}
+              chapter={shown}
+              // Keeps this page's copy current, so a later remount starts from the saved text.
+              onSaved={(saved) => {
+                setChapter(saved)
+                reloadProject()
+              }}
               onStructureChange={afterStructureChange}
               onError={fail}
             />
           )}
-          {chapter && !writing && (
+          {shown && !writing && (
             <ChapterReader
-              key={`${chapter.id}:${chapter.content_hash}`}
+              key={`${shown.id}:${epoch}`}
               project={project}
-              chapter={chapter}
+              chapter={shown}
+              names={names}
               highlighted={highlighted}
-              onChanged={changed}
               onStructureChange={afterStructureChange}
               onError={fail}
             />
@@ -189,7 +199,7 @@ export default function Book() {
 
         {project.mode === 'writer' && (
           <aside className="side">
-            <VersionsPanel project={project} onChanged={() => afterStructureChange(activeId)} onError={fail} />
+            <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
           </aside>
         )}
       </div>

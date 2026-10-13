@@ -1,0 +1,86 @@
+"""Runs the analysis graph in a background thread and records how it ended."""
+
+import threading
+
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.analysis.entities import GRAPH
+from app.db import get_engine
+from app.llm.calls import TextModel
+from app.models import (
+    RUN_CANCELLED,
+    RUN_DONE,
+    RUN_FAILED,
+    RUN_RUNNING,
+    AnalysisRun,
+    Entity,
+    Project,
+)
+
+
+def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
+    """Run to completion in the caller's thread. Chapters finished before a failure
+    stay finished; starting again continues from there."""
+    pending = [cid for cid in run.chapter_ids if cid not in run.done_chapter_ids]
+    project = session.get(Project, run.project_id)
+    if not run.done_chapter_ids and {c.id for c in project.chapters} <= set(run.chapter_ids):
+        # A run over the whole book rebuilds the cards from scratch, so other names
+        # collected by earlier runs must not carry over. Facts are rebuilt per chapter.
+        for entity in session.scalars(
+            select(Entity).where(Entity.project_id == project.id, Entity.kind == run.kind)
+        ):
+            entity.aliases = []
+        session.commit()
+    try:
+        GRAPH.invoke(
+            {"run_id": run.id, "pending": pending},
+            # Two steps per chapter plus the start, the final pass and some slack.
+            {
+                "configurable": {"session": session, "model": model, "run_id": run.id},
+                "recursion_limit": 2 * len(pending) + 10,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - the run must always end in a recorded state
+        session.rollback()
+        run.status = RUN_FAILED
+        run.error = str(exc)[:500]
+    else:
+        session.refresh(run)
+        run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
+    session.commit()
+
+
+def _work(run_id: str) -> None:
+    with sessionmaker(get_engine(), expire_on_commit=False)() as session:
+        run = session.get(AnalysisRun, run_id)
+        try:
+            model = TextModel(session, run.project_id)
+        except Exception as exc:  # noqa: BLE001 - same: report it on the run
+            run.status = RUN_FAILED
+            run.error = str(exc)[:500]
+            session.commit()
+            return
+        execute(session, run, model)
+
+
+def start(run_id: str) -> None:
+    threading.Thread(target=_work, args=(run_id,), daemon=True, name=f"analysis-{run_id}").start()
+
+
+def active_run(session: Session, project_id: str) -> AnalysisRun | None:
+    return session.scalars(
+        select(AnalysisRun).where(
+            AnalysisRun.project_id == project_id, AnalysisRun.status == RUN_RUNNING
+        )
+    ).first()
+
+
+def mark_interrupted(session: Session) -> None:
+    """Runs that were in flight when the server stopped cannot still be running."""
+    session.execute(
+        update(AnalysisRun)
+        .where(AnalysisRun.status == RUN_RUNNING)
+        .values(status=RUN_FAILED, error="interrupted")
+    )
+    session.commit()

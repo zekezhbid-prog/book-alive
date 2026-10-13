@@ -1,22 +1,32 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type Chapter, type Project } from '../api'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { api, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n } from '../i18n'
+
+export interface NamedEntity {
+  id: string
+  kind: EntityKind
+  names: string[]
+}
 
 interface Props {
   project: Project
   chapter: Chapter
+  /** Known characters and locations: their names in the text link to the cards. */
+  names: NamedEntity[]
   highlighted?: number
-  onChanged: () => void
   onStructureChange: (goTo?: string) => void
   onError: (error: unknown) => void
 }
+
+const TITLE_MAX = 300
 
 /** Read-only chapter with the tools for fixing chapter boundaries after import. */
 export default function ChapterReader({
   project,
   chapter,
+  names,
   highlighted,
-  onChanged,
   onStructureChange,
   onError,
 }: Props) {
@@ -25,6 +35,7 @@ export default function ChapterReader({
   const target = useRef<HTMLParagraphElement>(null)
   const paragraphs = chapter.text ? chapter.text.split('\n\n') : []
   const isLast = project.chapters.at(-1)?.id === chapter.id
+  const linker = useMemo(() => buildLinker(project.id, names), [project.id, names])
 
   useEffect(() => {
     target.current?.scrollIntoView({ block: 'center' })
@@ -32,7 +43,7 @@ export default function ChapterReader({
 
   const rename = async () => {
     if (title.trim() === chapter.title) return
-    await api.updateChapter(chapter.id, { title }).then(onChanged, onError)
+    await api.updateChapter(chapter.id, { title }).then(() => onStructureChange(chapter.id), onError)
   }
   const merge = async () => {
     if (!confirm(t('chapter.merge.confirm'))) return
@@ -71,6 +82,7 @@ export default function ChapterReader({
       <input
         className="chapter-title"
         value={title}
+        maxLength={TITLE_MAX}
         placeholder={t('chapter.title.placeholder')}
         onChange={(e) => setTitle(e.target.value)}
         onBlur={rename}
@@ -87,18 +99,65 @@ export default function ChapterReader({
               ✂
             </button>
           )}
-          {renderInline(paragraph)}
+          {renderInline(paragraph, linker)}
         </p>
       ))}
     </article>
   )
 }
 
-/** The editor's only formatting: **bold** and *italic*. */
-export function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*)/).map((part, i) => {
-    if (part.startsWith('**') && part.length > 4) return <b key={i}>{part.slice(2, -2)}</b>
-    if (part.startsWith('*') && part.length > 2) return <i key={i}>{part.slice(1, -1)}</i>
-    return part
+type Linker = (text: string, keyPrefix: string) => ReactNode[]
+
+/** The editor's only formatting, **bold** and *italic*, plus links on known names. */
+function renderInline(text: string, link: Linker): ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*)/).flatMap((part, i): ReactNode[] => {
+    if (part.startsWith('**') && part.length > 4) return [<b key={i}>{link(part.slice(2, -2), `${i}`)}</b>]
+    if (part.startsWith('*') && part.length > 2) return [<i key={i}>{link(part.slice(1, -1), `${i}`)}</i>]
+    return link(part, `${i}`)
   })
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Finds names without any AI. Slavic names change their endings ("Люта", "Люты", "Люту"),
+ * so a final vowel is dropped and up to three letters are allowed after the stem.
+ */
+function buildLinker(projectId: string, entities: NamedEntity[]): Linker {
+  const targets = new Map<string, NamedEntity>()
+  for (const entity of entities) {
+    for (const name of entity.names) {
+      const stem = name.trim().toLowerCase().replace(/(?<=.{3})[аяоеыиьйуюіaeo]$/, '')
+      if (stem.length >= 3 && !targets.has(stem)) targets.set(stem, entity)
+    }
+  }
+  if (!targets.size) return (text) => [text]
+  // Longest first, so "Нашчадак Кука" wins over "Кука".
+  const stems = [...targets.keys()].sort((a, b) => b.length - a.length)
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{N}])(${stems.map(escapeRegExp).join('|')})\\p{L}{0,3}(?![\\p{L}\\p{N}])`,
+    'giu',
+  )
+  return (text, keyPrefix) => {
+    const out: ReactNode[] = []
+    let last = 0
+    for (const match of text.matchAll(pattern)) {
+      const entity = targets.get(match[1].toLowerCase())
+      if (!entity) continue
+      out.push(text.slice(last, match.index))
+      const section = entity.kind === 'character' ? 'characters' : 'locations'
+      out.push(
+        <Link
+          key={`${keyPrefix}:${match.index}`}
+          className={`name ${entity.kind}`}
+          to={`/projects/${projectId}/${section}/${entity.id}`}
+        >
+          {match[0]}
+        </Link>,
+      )
+      last = match.index + match[0].length
+    }
+    out.push(text.slice(last))
+    return out
+  }
 }

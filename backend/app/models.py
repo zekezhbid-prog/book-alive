@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -122,3 +122,96 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+KIND_CHARACTER = "character"
+KIND_LOCATION = "location"
+
+FACT_PERMANENT = "permanent"  # face, build, age, scars: true for the whole book
+FACT_STATE = "state"  # clothes, wounds, carried objects: true in one chapter
+
+RUN_RUNNING = "running"
+RUN_DONE = "done"
+RUN_FAILED = "failed"
+RUN_CANCELLED = "cancelled"
+
+
+class Entity(Base):
+    """A character or a location. Everything known about it lives in `facts`."""
+
+    __tablename__ = "entities"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200))
+    aliases: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+    facts: Mapped[list["EntityFact"]] = relationship(
+        back_populates="entity", cascade="all, delete-orphan"
+    )
+
+
+class EntityFact(Base):
+    """One statement about an entity, tied to the chapter text it came from."""
+
+    __tablename__ = "entity_facts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    entity_id: Mapped[str] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    # Not a foreign key: facts outlive a deleted chapter until the user refreshes.
+    chapter_id: Mapped[str] = mapped_column(String(32))
+    # Hash of the chapter text the fact was read from; a different hash now means stale.
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    category: Mapped[str] = mapped_column(String(20))
+    text: Mapped[str] = mapped_column(Text)
+    # Verbatim quote and its paragraph; empty/None when the model's quote is not in the text.
+    quote: Mapped[str] = mapped_column(Text, default="")
+    paragraph: Mapped[int | None] = mapped_column(default=None)
+
+    entity: Mapped[Entity] = relationship(back_populates="facts")
+
+
+class ChapterExtraction(Base):
+    """Raw model output for one chapter. Makes runs resumable and re-runs free."""
+
+    __tablename__ = "chapter_extractions"
+    __table_args__ = (UniqueConstraint("chapter_id", "kind"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    chapter_id: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(20))
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict] = mapped_column(JSON)
+
+
+class AnalysisRun(Base):
+    __tablename__ = "analysis_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default=RUN_RUNNING)
+    chapter_ids: Mapped[list[str]] = mapped_column(JSON)
+    done_chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    cancel_requested: Mapped[bool] = mapped_column(default=False)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class UsageEvent(Base):
+    """One model call: the journal of where tokens went."""
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), default=None
+    )
+    operation: Mapped[str] = mapped_column(String(50))
+    connection_name: Mapped[str] = mapped_column(String(100))
+    model: Mapped[str] = mapped_column(String(200))
+    input_tokens: Mapped[int] = mapped_column(default=0)
+    output_tokens: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(default=now)

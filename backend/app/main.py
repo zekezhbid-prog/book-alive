@@ -3,21 +3,26 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
-from app.api import connections, projects
+from app.analysis import runner
+from app.api import analysis, connections, projects
 from app.config import settings
-from app.db import init_db
+from app.db import get_engine, init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    with Session(get_engine()) as session:
+        runner.mark_interrupted(session)
     yield
 
 
 app = FastAPI(title="Book Alive", lifespan=lifespan)
 app.include_router(projects.router)
 app.include_router(connections.router)
+app.include_router(analysis.router)
 
 # In production the API also serves the built frontend; in development Vite does.
 if settings.frontend_dist.is_dir():
@@ -27,4 +32,11 @@ if settings.frontend_dist.is_dir():
     def spa(path: str) -> FileResponse:
         if path.startswith("api/"):
             raise HTTPException(404)
+        static = settings.frontend_dist / path
+        if (
+            path
+            and static.is_file()
+            and static.resolve().is_relative_to(settings.frontend_dist.resolve())
+        ):
+            return FileResponse(static)
         return FileResponse(settings.frontend_dist / "index.html")

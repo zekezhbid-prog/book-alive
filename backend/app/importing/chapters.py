@@ -7,6 +7,7 @@
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass
 from statistics import median
 
@@ -57,7 +58,7 @@ def _patterned(paragraphs: list[Paragraph]) -> list[int]:
         t = p.text
         if len(t) > 80:
             continue
-        if _KEYWORD.match(t) and not t.endswith((",", ";")):
+        if _KEYWORD.match(t) and not _is_sentence(t):
             families["keyword"].append(i)
         elif _ROMAN.match(t):
             families["roman"].append(i)
@@ -65,7 +66,16 @@ def _patterned(paragraphs: list[Paragraph]) -> list[int]:
             families["numbered"].append(i)
         elif _NUMBER.match(t):
             families["number"].append(i)
-    return next((idx for idx in families.values() if len(idx) >= 2), [])
+    # Ties go to the earlier, more explicit family.
+    best = max(families.values(), key=len)
+    return best if len(best) >= 2 else []
+
+
+def _is_sentence(text: str) -> bool:
+    """ "Книга лежала на столе." starts with a heading word but is prose."""
+    return text.endswith((",", ";")) or (
+        len(text.split()) > 3 and text.endswith((".", "!", "?", "…"))
+    )
 
 
 def _titled(paragraphs: list[Paragraph]) -> list[int]:
@@ -84,7 +94,8 @@ def _titled(paragraphs: list[Paragraph]) -> list[int]:
     texts = [p.text for p in paragraphs]
     candidates = {i for i, t in enumerate(texts) if title_like(t)}
     # Refrains repeat, chapter titles do not.
-    candidates = {i for i in candidates if texts.count(texts[i]) == 1}
+    seen = Counter(texts)
+    candidates = {i for i in candidates if seen[texts[i]] == 1}
     starts = []
     for i in sorted(candidates):
         # A title sits between prose; a line of verse sits next to other short lines.

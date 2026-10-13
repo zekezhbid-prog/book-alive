@@ -1,0 +1,282 @@
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func, select
+
+from app.analysis import entities as analysis
+from app.analysis import runner
+from app.db import SessionDep
+from app.llm.calls import ModelNotConfigured, TextModel
+from app.models import (
+    FACT_PERMANENT,
+    FACT_STATE,
+    KIND_CHARACTER,
+    KIND_LOCATION,
+    AnalysisRun,
+    Chapter,
+    Entity,
+    Project,
+    UsageEvent,
+)
+
+router = APIRouter(prefix="/api", tags=["analysis"])
+
+
+class RunRequest(BaseModel):
+    kind: str
+    # Empty means the whole book.
+    chapter_ids: list[str] = []
+
+
+class RunOut(BaseModel):
+    id: str
+    kind: str
+    status: str
+    total: int
+    done: int
+    error: str
+    created_at: datetime
+
+
+class EntityBrief(BaseModel):
+    id: str
+    name: str
+    aliases: list[str]
+    chapters: int
+    facts: int
+    stale: bool
+
+
+class FactOut(BaseModel):
+    text: str
+    quote: str
+    chapter_id: str
+    paragraph: int | None
+    stale: bool
+
+
+class ChapterFacts(BaseModel):
+    chapter_id: str
+    chapter_title: str
+    position: int
+    stale: bool
+    facts: list[FactOut]
+
+
+class EntityOut(BaseModel):
+    id: str
+    kind: str
+    name: str
+    aliases: list[str]
+    permanent: list[FactOut]
+    timeline: list[ChapterFacts]
+
+
+class UsageRow(BaseModel):
+    operation: str
+    connection_name: str
+    model: str
+    calls: int
+    input_tokens: int
+    output_tokens: int
+
+
+class UsageOut(BaseModel):
+    rows: list[UsageRow]
+    input_tokens: int
+    output_tokens: int
+
+
+def _project(session: SessionDep, project_id: str) -> Project:
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(404, "project_not_found")
+    return project
+
+
+def _kind(kind: str) -> str:
+    if kind not in (KIND_CHARACTER, KIND_LOCATION):
+        raise HTTPException(422, "bad_kind")
+    return kind
+
+
+def _chapters(project: Project, chapter_ids: list[str]) -> list[Chapter]:
+    ordered = sorted(project.chapters, key=lambda c: c.position)
+    if not chapter_ids:
+        return ordered
+    wanted = set(chapter_ids)
+    return [c for c in ordered if c.id in wanted]
+
+
+def _run_out(run: AnalysisRun) -> RunOut:
+    return RunOut(
+        id=run.id,
+        kind=run.kind,
+        status=run.status,
+        total=len(run.chapter_ids),
+        done=len(run.done_chapter_ids),
+        error=run.error,
+        created_at=run.created_at,
+    )
+
+
+@router.post("/projects/{project_id}/analysis/estimate")
+def estimate(project_id: str, body: RunRequest, session: SessionDep) -> analysis.Estimate:
+    project = _project(session, project_id)
+    try:
+        overhead = TextModel(session, project.id).request_overhead
+    except ModelNotConfigured:
+        overhead = 0  # the estimate is still useful before a model is chosen
+    return analysis.estimate(
+        session, _chapters(project, body.chapter_ids), _kind(body.kind), overhead
+    )
+
+
+@router.post("/projects/{project_id}/analysis")
+def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
+    project = _project(session, project_id)
+    chapters = _chapters(project, body.chapter_ids)
+    if not chapters:
+        raise HTTPException(422, "no_chapters_selected")
+    # One run per project at a time: free models have tight rate limits.
+    if runner.active_run(session, project.id):
+        raise HTTPException(409, "analysis_already_running")
+    try:
+        TextModel(session, project.id)
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    run = AnalysisRun(
+        project_id=project.id, kind=_kind(body.kind), chapter_ids=[c.id for c in chapters]
+    )
+    session.add(run)
+    session.commit()
+    runner.start(run.id)
+    return _run_out(run)
+
+
+@router.get("/projects/{project_id}/analysis")
+def latest_run(project_id: str, kind: str, session: SessionDep) -> RunOut | None:
+    run = session.scalars(
+        select(AnalysisRun)
+        .where(AnalysisRun.project_id == project_id, AnalysisRun.kind == _kind(kind))
+        .order_by(AnalysisRun.created_at.desc())
+        .limit(1)
+    ).first()
+    return _run_out(run) if run else None
+
+
+@router.post("/analysis/{run_id}/cancel")
+def cancel_run(run_id: str, session: SessionDep) -> RunOut:
+    run = session.get(AnalysisRun, run_id)
+    if run is None:
+        raise HTTPException(404, "run_not_found")
+    # The worker stops after the chapter it is reading.
+    run.cancel_requested = True
+    session.commit()
+    return _run_out(run)
+
+
+@router.get("/projects/{project_id}/entities")
+def list_entities(project_id: str, kind: str, session: SessionDep) -> list[EntityBrief]:
+    project = _project(session, project_id)
+    hashes = {c.id: c.content_hash for c in project.chapters}
+    rows = session.scalars(
+        select(Entity).where(Entity.project_id == project_id, Entity.kind == _kind(kind))
+    ).all()
+    briefs = [
+        EntityBrief(
+            id=e.id,
+            name=e.name,
+            aliases=e.aliases,
+            chapters=len({f.chapter_id for f in e.facts}),
+            facts=sum(f.category != analysis.FACT_MENTION for f in e.facts),
+            stale=any(hashes.get(f.chapter_id) != f.chapter_hash for f in e.facts),
+        )
+        for e in rows
+    ]
+    # Main characters first: they appear in the most chapters.
+    return sorted(briefs, key=lambda b: (-b.chapters, b.name))
+
+
+@router.get("/entities/{entity_id}")
+def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    chapters = {c.id: c for c in _project(session, entity.project_id).chapters}
+
+    def stale(fact) -> bool:
+        chapter = chapters.get(fact.chapter_id)
+        return chapter is None or chapter.content_hash != fact.chapter_hash
+
+    def out(fact) -> FactOut:
+        return FactOut(
+            text=fact.text,
+            quote=fact.quote,
+            chapter_id=fact.chapter_id,
+            paragraph=fact.paragraph,
+            stale=stale(fact),
+        )
+
+    def position(fact) -> int:
+        chapter = chapters.get(fact.chapter_id)
+        return chapter.position if chapter else len(chapters)
+
+    facts = sorted(entity.facts, key=position)
+    timeline: dict[str, ChapterFacts] = {}
+    for fact in facts:
+        chapter = chapters.get(fact.chapter_id)
+        entry = timeline.setdefault(
+            fact.chapter_id,
+            ChapterFacts(
+                chapter_id=fact.chapter_id,
+                chapter_title=chapter.title if chapter else "",
+                position=position(fact),
+                stale=stale(fact),
+                facts=[],
+            ),
+        )
+        if fact.category == FACT_STATE:
+            entry.facts.append(out(fact))
+    return EntityOut(
+        id=entity.id,
+        kind=entity.kind,
+        name=entity.name,
+        aliases=entity.aliases,
+        permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
+        timeline=list(timeline.values()),
+    )
+
+
+@router.get("/projects/{project_id}/usage")
+def usage(project_id: str, session: SessionDep) -> UsageOut:
+    grouped = session.execute(
+        select(
+            UsageEvent.operation,
+            UsageEvent.connection_name,
+            UsageEvent.model,
+            func.count(),
+            func.sum(UsageEvent.input_tokens),
+            func.sum(UsageEvent.output_tokens),
+        )
+        .where(UsageEvent.project_id == project_id)
+        .group_by(UsageEvent.operation, UsageEvent.connection_name, UsageEvent.model)
+        .order_by(UsageEvent.operation)
+    ).all()
+    rows = [
+        UsageRow(
+            operation=operation,
+            connection_name=connection,
+            model=model,
+            calls=calls,
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+        )
+        for operation, connection, model, calls, tokens_in, tokens_out in grouped
+    ]
+    return UsageOut(
+        rows=rows,
+        input_tokens=sum(r.input_tokens for r in rows),
+        output_tokens=sum(r.output_tokens for r in rows),
+    )

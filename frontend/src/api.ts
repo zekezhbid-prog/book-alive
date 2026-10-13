@@ -89,6 +89,73 @@ export interface TestResult {
   output_tokens: number
 }
 
+export type EntityKind = 'character' | 'location'
+
+export interface Estimate {
+  chapters: number
+  cached: number
+  requests: number
+  input_tokens: number
+  output_tokens: number
+}
+
+export interface Run {
+  id: string
+  kind: EntityKind
+  status: 'running' | 'done' | 'failed' | 'cancelled'
+  total: number
+  done: number
+  error: string
+  created_at: string
+}
+
+export interface EntityBrief {
+  id: string
+  name: string
+  aliases: string[]
+  chapters: number
+  facts: number
+  stale: boolean
+}
+
+export interface Fact {
+  text: string
+  quote: string
+  chapter_id: string
+  paragraph: number | null
+  stale: boolean
+}
+
+export interface ChapterFacts {
+  chapter_id: string
+  chapter_title: string
+  position: number
+  stale: boolean
+  facts: Fact[]
+}
+
+export interface Entity {
+  id: string
+  kind: EntityKind
+  name: string
+  aliases: string[]
+  permanent: Fact[]
+  timeline: ChapterFacts[]
+}
+
+export interface Usage {
+  rows: {
+    operation: string
+    connection_name: string
+    model: string
+    calls: number
+    input_tokens: number
+    output_tokens: number
+  }[]
+  input_tokens: number
+  output_tokens: number
+}
+
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
 export class ApiError extends Error {
   code: string
@@ -156,6 +223,21 @@ export const api = {
     request<Project>('POST', `/projects/${projectId}/versions`, { label }),
   rollback: (projectId: string, versionId: string) =>
     request<Project>('POST', `/projects/${projectId}/versions/${versionId}/rollback`),
+
+  estimate: (projectId: string, kind: EntityKind, chapterIds: string[]) =>
+    request<Estimate>('POST', `/projects/${projectId}/analysis/estimate`, {
+      kind,
+      chapter_ids: chapterIds,
+    }),
+  startRun: (projectId: string, kind: EntityKind, chapterIds: string[]) =>
+    request<Run>('POST', `/projects/${projectId}/analysis`, { kind, chapter_ids: chapterIds }),
+  latestRun: (projectId: string, kind: EntityKind) =>
+    request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
+  cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),
+  entities: (projectId: string, kind: EntityKind) =>
+    request<EntityBrief[]>('GET', `/projects/${projectId}/entities?kind=${kind}`),
+  entity: (id: string) => request<Entity>('GET', `/entities/${id}`),
+  usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 
   system: () => request<{ claude_cli: boolean }>('GET', '/system'),
   connections: () => request<Connection[]>('GET', '/connections'),

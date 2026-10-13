@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -26,6 +26,7 @@ from app.services import versions
 router = APIRouter(prefix="/api", tags=["projects"])
 
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+TITLE_MAX = 300  # matches the column size
 
 
 # ---------- schemas ----------
@@ -150,6 +151,13 @@ def _set_text(chapter: Chapter, text: str) -> None:
     chapter.content_hash = text_hash(text)
 
 
+def _title(value: str) -> str:
+    value = value.strip()
+    if len(value) > TITLE_MAX:
+        raise HTTPException(422, "title_too_long")
+    return value
+
+
 def _renumber(project: Project, ordered: list[Chapter]) -> None:
     for position, chapter in enumerate(ordered):
         chapter.position = position
@@ -207,6 +215,15 @@ def _project_out(session: Session, project: Project) -> ProjectOut:
 
 @router.get("/projects")
 def list_projects(session: SessionDep) -> list[ProjectBrief]:
+    # Sizes are computed in the database: loading every chapter's text for a list is wasteful.
+    sizes = {
+        project_id: (count, chars)
+        for project_id, count, chars in session.execute(
+            select(Chapter.project_id, func.count(), func.sum(func.length(Chapter.text))).group_by(
+                Chapter.project_id
+            )
+        )
+    }
     projects = session.scalars(select(Project).order_by(Project.created_at.desc())).all()
     return [
         ProjectBrief(
@@ -215,8 +232,8 @@ def list_projects(session: SessionDep) -> list[ProjectBrief]:
             author=p.author,
             mode=p.mode,
             created_at=p.created_at,
-            chapters=len(p.chapters),
-            chars=sum(len(c.text) for c in p.chapters),
+            chapters=sizes.get(p.id, (0, 0))[0],
+            chars=sizes.get(p.id, (0, 0))[1] or 0,
         )
         for p in projects
     ]
@@ -234,12 +251,12 @@ def create_project(
     if mode == MODE_READER and file is None:
         raise HTTPException(422, "book_file_required")
 
-    project = Project(title=title.strip(), mode=mode)
+    project = Project(title=_title(title), mode=mode)
     if file is not None:
         data = file.file.read(MAX_UPLOAD_BYTES + 1)
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "file_too_large")
-        filename = PurePath(file.filename or "book").name
+        filename = PurePath(file.filename or "book").name[-TITLE_MAX:]
         try:
             book = extract(data, filename)
         except UnsupportedBook as exc:
@@ -248,13 +265,13 @@ def create_project(
             raise HTTPException(422, "empty_book")
         project.split_method, detected = detect_chapters(book.paragraphs)
         project.source_filename = filename
-        project.author = book.author
-        project.title = project.title or book.title or PurePath(filename).stem
+        project.author = book.author[:TITLE_MAX]
+        project.title = project.title or book.title[:TITLE_MAX] or PurePath(filename).stem
         for position, chapter in enumerate(detected):
             project.chapters.append(
                 Chapter(
                     position=position,
-                    title=chapter.title,
+                    title=chapter.title[:TITLE_MAX],
                     text=chapter.text,
                     content_hash=text_hash(chapter.text),
                 )
@@ -283,9 +300,9 @@ def get_project(project_id: str, session: SessionDep) -> ProjectOut:
 def update_project(project_id: str, patch: ProjectPatch, session: SessionDep) -> ProjectOut:
     project = _project(session, project_id)
     if patch.title is not None and patch.title.strip():
-        project.title = patch.title.strip()
+        project.title = _title(patch.title)
     if patch.author is not None:
-        project.author = patch.author.strip()
+        project.author = _title(patch.author)
     session.commit()
     return _project_out(session, project)
 
@@ -339,7 +356,7 @@ def update_chapter(chapter_id: str, patch: ChapterPatch, session: SessionDep) ->
         _writer_only(chapter.project)
         _set_text(chapter, patch.text)
     if patch.title is not None:
-        chapter.title = patch.title.strip()
+        chapter.title = _title(patch.title)
     session.commit()
     return _full(chapter)
 
@@ -352,7 +369,7 @@ def create_chapter(project_id: str, body: ChapterCreate, session: SessionDep) ->
     index = len(ordered)
     if body.after_id:
         index = next((i + 1 for i, c in enumerate(ordered) if c.id == body.after_id), index)
-    chapter = Chapter(title=body.title.strip(), text="", content_hash=text_hash(""), position=index)
+    chapter = Chapter(title=_title(body.title), text="", content_hash=text_hash(""), position=index)
     project.chapters.append(chapter)
     ordered.insert(index, chapter)
     _renumber(project, ordered)
@@ -396,7 +413,7 @@ def split_chapter(chapter_id: str, body: SplitRequest, session: SessionDep) -> l
     if not 0 < body.paragraph < len(paragraphs):
         raise HTTPException(422, "bad_split_point")
     ordered = _ordered(project)
-    tail = Chapter(title=body.title.strip(), position=0, content_hash="")
+    tail = Chapter(title=_title(body.title), position=0, content_hash="")
     _set_text(tail, "\n\n".join(paragraphs[body.paragraph + body.drop_heading :]))
     _set_text(chapter, "\n\n".join(paragraphs[: body.paragraph]))
     project.chapters.append(tail)

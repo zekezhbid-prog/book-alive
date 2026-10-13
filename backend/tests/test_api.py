@@ -128,3 +128,27 @@ def test_delete_project(client):
     project = create(client)
     assert client.delete(f"/api/projects/{project['id']}").status_code == 204
     assert client.get(f"/api/projects/{project['id']}").status_code == 404
+
+
+def test_damaged_upload_is_a_clean_error(client):
+    response = client.post(
+        "/api/projects",
+        data={"mode": "reader"},
+        files={"file": ("book.epub", b"PK\x03\x04 broken", "application/epub+zip")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("unsupported_book")
+
+
+def test_title_longer_than_the_column_is_rejected(client):
+    project = create(client)
+    chapter = project["chapters"][0]["id"]
+    response = client.patch(f"/api/chapters/{chapter}", json={"title": "я" * 301})
+    assert (response.status_code, response.json()["detail"]) == (422, "title_too_long")
+
+
+def test_project_list_reports_sizes(client):
+    project = create(client, chapters=2)
+    listed = next(p for p in client.get("/api/projects").json() if p["id"] == project["id"])
+    assert listed["chapters"] == 2
+    assert listed["chars"] == sum(c["chars"] for c in project["chapters"])
