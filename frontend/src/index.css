@@ -210,6 +210,9 @@ details summary { cursor: pointer; margin-bottom: 8px; }
   .page { padding: 32px 16px 64px; }
   h1 { font-size: 28px; }
   .reading { padding: 24px 16px 96px; }
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar .btn { padding: 8px 10px; }
+  .page-head { flex-wrap: wrap; }
 }
 
 /* Messages inside the reading column use the interface size, not the reading size. */
