@@ -52,4 +52,8 @@ if settings.frontend_dist.is_dir():
             and static.resolve().is_relative_to(settings.frontend_dist.resolve())
         ):
             return FileResponse(static)
-        return FileResponse(settings.frontend_dist / "index.html")
+        # Asset names carry a content hash; the page itself must be revalidated so a
+        # rebuilt frontend reaches the browser without a hard reload.
+        return FileResponse(
+            settings.frontend_dist / "index.html", headers={"Cache-Control": "no-cache"}
+        )
