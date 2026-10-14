@@ -72,15 +72,23 @@ def test_style_labels_decide_which_pictures_are_current(client, project):
     assert second["is_main"] is True  # the first picture in the new style leads it
 
 
-def test_one_main_picture_per_card(client, project):
+def test_a_card_keeps_several_main_pictures_with_views(client, project):
     client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
     first, second = upload(client, project, project.hero_id, count=2)
     assert (first["is_main"], second["is_main"]) == (True, False)
-    client.patch(f"/api/images/{second['id']}", json={"is_main": True, "look_label": "в кольчуге"})
+    changed = client.patch(
+        f"/api/images/{second['id']}", json={"is_main": True, "angle": "face_profile"}
+    ).json()
+    assert (changed["is_main"], changed["angle"]) == (True, "face_profile")
     listed = client.get(
         f"/api/projects/{project.id}/images", params={"entity_id": project.hero_id}
     ).json()
-    assert {i["id"]: i["is_main"] for i in listed} == {first["id"]: False, second["id"]: True}
+    assert {i["id"]: i["is_main"] for i in listed} == {first["id"]: True, second["id"]: True}
+
+    bad = client.patch(f"/api/images/{first['id']}", json={"angle": "upside_down"})
+    assert (bad.status_code, bad.json()["detail"]) == (422, "bad_angle")
+    unmarked = client.patch(f"/api/images/{first['id']}", json={"is_main": False}).json()
+    assert unmarked["is_main"] is False
 
 
 def test_project_level_references_and_file_serving(client, project):
@@ -137,6 +145,10 @@ def test_look_prompt_uses_the_state_of_its_chapters(session, project):
     # The base picture: permanent traits only.
     build_image_prompt(model, project, hero, None, "", has_reference=False)
     assert "кольчуга" not in model.facts and "рыжие волосы" in model.facts
+
+    # A main picture in a chosen view is framed for that view.
+    build_image_prompt(model, project, hero, None, "", has_reference=True, angle="full_back")
+    assert "seen from behind" in model.system and "must match the references" in model.system
 
 
 def image_model(session, project, handler):

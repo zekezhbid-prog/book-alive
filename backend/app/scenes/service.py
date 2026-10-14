@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.entities import norm
 from app.config import settings
+from app.images import angles
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import TextModel
 from app.models import (
@@ -183,12 +184,12 @@ class Reference:
 
 
 def pick_images(project: Project, entity: Entity, chapter: Chapter) -> list[tuple[Image, str]]:
-    """The main picture, and the look whose chapter range covers this chapter. Only
-    pictures in the project's current style count."""
+    """The best main pictures (a face and a full-length view), and the look whose chapter
+    range covers this chapter. Only pictures in the project's current style count."""
     key = style_key(project)
     positions = {c.id: c.position for c in project.chapters}
     current = [i for i in entity.images if i.style_key == key]
-    picked = [(i, "main") for i in current if i.is_main][:1]
+    picked = [(i, "main") for i in angles.for_scene(current, key)]
 
     def span(image: Image) -> tuple[int, int]:
         return (
@@ -251,7 +252,11 @@ def scene_context(
         if entity is None:
             continue
         permanent, state = _facts_at(project, entity, chapter)
-        numbers = [f"reference {r.number} ({r.role})" for r in refs if r.entity.id == entity.id]
+        numbers = [
+            f"reference {r.number} ({', '.join(filter(None, [r.role, r.image.angle]))})"
+            for r in refs
+            if r.entity.id == entity.id
+        ]
         kind = "Character" if entity.kind == KIND_CHARACTER else "Location"
         lines.append(f"{kind}: {entity.name} - {', '.join(numbers) or 'no reference picture'}")
         lines += [f"  permanent: {t}" for t in permanent]
@@ -361,7 +366,11 @@ def archive(session: Session, project: Project, scene: Scene) -> bytes:
             bundle.write(settings.files_dir / frame.path, name)
             notes.append(f"{name}: first frame of the scene (use as the start image)")
         for ref in refs:
-            label = slug(ref.image.look_label) if ref.role == "look" else "main"
+            label = (
+                slug(ref.image.look_label)
+                if ref.role == "look"
+                else "_".join(filter(None, ["main", ref.image.angle]))
+            )
             name = f"ref{ref.number:02d}_{slug(ref.entity.name)}_{label}{_extension(ref.image)}"
             bundle.write(settings.files_dir / ref.image.path, name)
             detail = (

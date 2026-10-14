@@ -275,8 +275,9 @@ class Image(Base):
     origin: Mapped[str] = mapped_column(String(20))  # upload | generated
     # The project style the picture was made in; see app/images/styles.py.
     style_key: Mapped[str] = mapped_column(String(40), default="")
-    # The main picture defines face and build; the others are looks drawn from it.
+    # Main pictures define face and build, one view each; the others are looks drawn from them.
     is_main: Mapped[bool] = mapped_column(default=False)
+    angle: Mapped[str] = mapped_column(String(20), default="")  # see app/images/angles.py
     look_label: Mapped[str] = mapped_column(String(200), default="")
     # Part of the story the look belongs to; empty means an open end.
     chapter_from_id: Mapped[str] = mapped_column(String(32), default="")

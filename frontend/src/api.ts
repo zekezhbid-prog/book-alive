@@ -174,6 +174,54 @@ export interface ChatMessage {
   created_at: string
 }
 
+/** A step the chat agent has started: shown while the user waits for the answer. */
+export interface ChatStatus {
+  code: 'index' | 'search' | 'read' | 'think'
+  detail: string
+}
+
+type ChatStreamLine =
+  | ({ type: 'status' } & ChatStatus)
+  | { type: 'done'; messages: ChatMessage[] }
+  | { type: 'error'; detail: string }
+
+/** Asks a question and reports the agent's steps as they come; resolves with the
+ * question and the answer as stored. */
+async function askStream(
+  projectId: string,
+  question: string,
+  chapterId: string,
+  onStatus: (status: ChatStatus) => void,
+): Promise<ChatMessage[]> {
+  const response = await fetch(`/api/projects/${projectId}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, chapter_id: chapterId }),
+  })
+  if (response.status === 401) window.dispatchEvent(new Event('login-required'))
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(response.status, typeof payload?.detail === 'string' ? payload.detail : '')
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const text of lines) {
+      if (!text.trim()) continue
+      const line = JSON.parse(text) as ChatStreamLine
+      if (line.type === 'status') onStatus({ code: line.code, detail: line.detail })
+      else if (line.type === 'done') return line.messages
+      else throw new ApiError(502, line.detail)
+    }
+  }
+  throw new ApiError(502, 'provider_error: the answer was cut off')
+}
+
 export interface StylePreset {
   id: string
   prompt: string
@@ -186,6 +234,8 @@ export interface ImageInfo {
   style_key: string
   current_style: boolean
   is_main: boolean
+  /** The view a main picture shows; empty when not set. */
+  angle: Angle | ''
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
@@ -194,7 +244,19 @@ export interface ImageInfo {
   created_at: string
 }
 
+/** Views of a character's main pictures, most useful first (as on the server). */
+export const ANGLES = [
+  'face_front',
+  'full_front',
+  'face_profile',
+  'full_side',
+  'full_back',
+] as const
+export type Angle = (typeof ANGLES)[number]
+
+/** Empty label and chapters: a main picture in `angle` (empty: the server picks one). */
 export interface LookRequest {
+  angle: Angle | ''
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
@@ -224,6 +286,7 @@ export interface Scene extends SceneBrief {
     entity_id: string
     entity_name: string
     role: 'main' | 'look'
+    angle: Angle | ''
     look_label: string
     url: string
   }[]
@@ -333,11 +396,12 @@ export const api = {
   splitEntity: (id: string, name: string) =>
     request<Entity>('POST', `/entities/${id}/split`, { name }),
   chat: (projectId: string) => request<ChatMessage[]>('GET', `/projects/${projectId}/chat`),
-  ask: (projectId: string, question: string, chapterId?: string) =>
-    request<ChatMessage[]>('POST', `/projects/${projectId}/chat`, {
-      question,
-      chapter_id: chapterId ?? '',
-    }),
+  ask: (
+    projectId: string,
+    question: string,
+    chapterId: string | undefined,
+    onStatus: (status: ChatStatus) => void,
+  ) => askStream(projectId, question, chapterId ?? '', onStatus),
   suggest: (projectId: string, label: string, chapterId?: string) =>
     request<ChatMessage[]>('POST', `/projects/${projectId}/chat/suggest`, {
       question: label,
@@ -360,11 +424,17 @@ export const api = {
   },
   updateImage: (
     id: string,
-    patch: Partial<Pick<ImageInfo, 'is_main' | 'look_label' | 'chapter_from_id' | 'chapter_to_id'>>,
+    patch: Partial<
+      Pick<ImageInfo, 'is_main' | 'angle' | 'look_label' | 'chapter_from_id' | 'chapter_to_id'>
+    >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
   imagePrompt: (entityId: string, look: LookRequest) =>
-    request<{ prompt: string }>('POST', `/entities/${entityId}/image-prompt`, look),
+    request<{ prompt: string; angle: Angle | '' }>(
+      'POST',
+      `/entities/${entityId}/image-prompt`,
+      look,
+    ),
   generateImage: (entityId: string, body: LookRequest & { prompt: string }) =>
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
@@ -403,7 +473,8 @@ export const api = {
     api_key: string
   }) => request<Connection>('POST', '/connections', body),
   deleteConnection: (id: string) => request<void>('DELETE', `/connections/${id}`),
-  models: (connectionId: string) => request<ModelInfo[]>('GET', `/connections/${connectionId}/models`),
+  models: (connectionId: string) =>
+    request<ModelInfo[]>('GET', `/connections/${connectionId}/models`),
   testModel: (connectionId: string, model: string) =>
     request<TestResult>('POST', `/connections/${connectionId}/test`, { model }),
   settings: () => request<ModelSettings>('GET', '/settings'),

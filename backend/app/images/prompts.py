@@ -2,6 +2,7 @@
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.images.angles import ANGLES
 from app.images.styles import style_prompt
 from app.llm.calls import TextModel
 from app.models import FACT_PERMANENT, FACT_STATE, KIND_CHARACTER, Chapter, Entity, Project
@@ -43,9 +44,10 @@ def build_image_prompt(
     chapters: list[Chapter] | None,
     look_label: str,
     has_reference: bool,
+    angle: str = "",
 ) -> str:
     """`chapters` given: a look at that point of the story (its state facts are used).
-    None: the base image, from permanent traits only."""
+    None: a main picture, from permanent traits only, in the given view."""
     permanent = [f.text for f in entity.facts if f.category == FACT_PERMANENT]
     state: list[str] = []
     if chapters is not None:
@@ -61,14 +63,14 @@ def build_image_prompt(
         ]
     )
     continuity = (
-        "A reference picture of the same one is supplied with the prompt: say that the face, "
-        "build and identity must match the reference exactly, and describe only what differs."
+        "Reference pictures of the same one are supplied with the prompt: say that the face, "
+        "build and identity must match the references exactly, and describe only what differs."
         if has_reference
         else "No reference picture exists yet: describe the appearance completely."
     )
     system = SYSTEM.format(
         subject="character" if entity.kind == KIND_CHARACTER else "location",
-        framing=FRAMING[entity.kind],
+        framing=ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,
         style=style_prompt(project) or "(no style chosen: omit this part)",
     )

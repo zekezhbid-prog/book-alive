@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ChatMessage, type Citation } from '../api'
+import { api, type ChatMessage, type ChatStatus, type Citation } from '../api'
 import { errorText, useI18n } from '../i18n'
 
 interface Props {
@@ -17,8 +17,12 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [question, setQuestion] = useState('')
   const [waiting, setWaiting] = useState(false)
+  // What the agent is doing right now, so a long answer does not look like a hang.
+  const [status, setStatus] = useState<ChatStatus | null>(null)
   const [error, setError] = useState('')
   const end = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
+  const asked = useRef(false)
 
   useEffect(() => {
     api.chat(projectId).then(setMessages, (e) => setError(errorText(t, e)))
@@ -26,21 +30,27 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
   }, [messages, waiting])
+  useEffect(() => {
+    // The field was disabled while the agent worked: give it back for the next question.
+    if (!waiting && asked.current) input.current?.focus()
+  }, [waiting])
 
   const send = async (event: FormEvent) => {
     event.preventDefault()
     const text = question.trim()
     if (!text || waiting) return
+    asked.current = true
     setWaiting(true)
     setError('')
     try {
-      const added = await api.ask(projectId, text, chapterId)
+      const added = await api.ask(projectId, text, chapterId, setStatus)
       setMessages((list) => [...list, ...added])
       setQuestion('')
     } catch (e) {
       setError(errorText(t, e))
     } finally {
       setWaiting(false)
+      setStatus(null)
     }
   }
   const suggest = async () => {
@@ -84,7 +94,7 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
             )}
           </div>
         ))}
-        {waiting && <div className="bubble assistant faint">{t('chat.waiting')}</div>}
+        {waiting && <Waiting status={status} />}
         <div ref={end} />
       </div>
       {error && <p className="error small">{error}</p>}
@@ -100,15 +110,47 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
           value={question}
           placeholder={t('chat.placeholder')}
           maxLength={4000}
+          // No typing while the agent works: the next question waits for this answer.
+          disabled={waiting}
+          ref={input}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) send(e)
           }}
         />
-        <button className="btn primary" disabled={waiting || !question.trim()}>
+        {/* Stays bright with an empty field too: a dim button reads as broken. */}
+        <button className="btn primary" disabled={waiting}>
           {t('chat.send')}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** The agent's current step and the seconds since the question was sent. */
+function Waiting({ status }: { status: ChatStatus | null }) {
+  const { t } = useI18n()
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const started = Date.now()
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const text = status
+    ? t(`chat.status.${status.code}`, { detail: status.detail })
+    : t('chat.waiting')
+  return (
+    <div className="bubble assistant faint chat-status">
+      <span className="pulse" />
+      <span>
+        {text}
+        <span className="dots" aria-hidden="true">
+          <span>.</span>
+          <span>.</span>
+          <span>.</span>
+        </span>
+      </span>
+      {seconds > 0 && <span className="small">{t('chat.status.seconds', { n: seconds })}</span>}
     </div>
   )
 }

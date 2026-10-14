@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   api,
@@ -76,7 +76,8 @@ export default function Entities({ kind }: { kind: EntityKind }) {
       fail(e)
     }
   }
-  const cancel = () => run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
+  const cancel = () =>
+    run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
   const runError = run?.error === 'interrupted' ? t('run.interrupted') : run?.error
 
   return (
@@ -136,7 +137,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {run?.status === 'cancelled' && (
               <p className="notice">{t('run.cancelled', { done: run.done, total: run.total })}</p>
             )}
-            {list?.length === 0 && !running && <p className="muted">{t(`entities.empty.${kind}`)}</p>}
+            {list?.length === 0 && !running && (
+              <p className="muted">{t(`entities.empty.${kind}`)}</p>
+            )}
             {list && list.length > 0 && !entity && <p className="muted">{t('entities.select')}</p>}
             {entity && (
               <Card
@@ -148,15 +151,16 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   navigate(`/projects/${projectId}/${section}/${next.id}`)
                 }}
                 onError={fail}
-              />
-            )}
-            {entity && (
-              <Gallery
-                key={entity.id}
-                projectId={projectId}
-                entityId={entity.id}
-                chapters={project.chapters}
-                hasStyle={Boolean(project.style_id)}
+                gallery={
+                  <Gallery
+                    key={entity.id}
+                    projectId={projectId}
+                    entityId={entity.id}
+                    kind={entity.kind}
+                    chapters={project.chapters}
+                    hasStyle={Boolean(project.style_id)}
+                  />
+                }
               />
             )}
           </div>
@@ -185,14 +189,18 @@ interface CardProps {
   others: EntityBrief[]
   onChanged: (shown: Entity) => void
   onError: (error: unknown) => void
+  /** The card's references, shown between the name and the description. */
+  gallery: ReactNode
 }
 
-/** Facts are read-only; who is who is the user's call, hence merge and split. */
-function Card({ entity, projectId, others, onChanged, onError }: CardProps) {
+/** Facts are read-only; who is who is the user's call, hence merge and split.
+ *  Top to bottom: name, references, description, mentions by chapter. */
+function Card({ entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   const merge = (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
-    if (!other || !confirm(t('entities.merge.confirm', { other: other.name, name: entity.name }))) return
+    if (!other || !confirm(t('entities.merge.confirm', { other: other.name, name: entity.name })))
+      return
     api.mergeEntities(entity.id, other.id).then(onChanged, onError)
   }
   const split = (alias: string) => {
@@ -240,6 +248,7 @@ function Card({ entity, projectId, others, onChanged, onError }: CardProps) {
           </div>
         )}
       </div>
+      {gallery}
       <h4>{t('entities.permanent')}</h4>
       {entity.permanent.length === 0 && <p className="faint">{t('entities.permanent.none')}</p>}
       <ul className="facts">
@@ -331,7 +340,10 @@ function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) 
         <div className="row">
           <h4>{t('run.title')}</h4>
           <span className="spacer" />
-          <button className="btn ghost small" onClick={() => setSelected(new Set(project.chapters.map((c) => c.id)))}>
+          <button
+            className="btn ghost small"
+            onClick={() => setSelected(new Set(project.chapters.map((c) => c.id)))}
+          >
             {t('run.all')}
           </button>
           <button className="btn ghost small" onClick={() => setSelected(new Set())}>
@@ -341,7 +353,11 @@ function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) 
         <div className="chapter-picker">
           {project.chapters.map((chapter) => (
             <label key={chapter.id} className="row">
-              <input type="checkbox" checked={selected.has(chapter.id)} onChange={() => toggle(chapter.id)} />
+              <input
+                type="checkbox"
+                checked={selected.has(chapter.id)}
+                onChange={() => toggle(chapter.id)}
+              />
               <span className="grow">{chapter.title || t('book.untitled')}</span>
               <span className="faint small">{number(chapter.chars)}</span>
             </label>

@@ -59,7 +59,11 @@ export default function Scenes() {
                   onClick={() => navigate(`/projects/${projectId}/scenes/${item.id}`)}
                 >
                   <span>
-                    {item.vivid && <span className="vivid" title={t('scenes.vivid')}>★ </span>}
+                    {item.vivid && (
+                      <span className="vivid" title={t('scenes.vivid')}>
+                        ★{' '}
+                      </span>
+                    )}
                     {item.title || t('book.untitled')}
                   </span>
                   {item.stale && <span className="dot" title={t('scene.stale')} />}
@@ -154,9 +158,17 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
         <Link to={`/projects/${projectId}/chapters/${scene.chapter_id}?p=${scene.paragraph_from}`}>
           {scene.chapter_title || t('book.untitled')} ↗
         </Link>
-        {scene.stale && <span className="badge stale" title={t('scene.stale.hint')}>{t('entities.stale')}</span>}
+        {scene.stale && (
+          <span className="badge stale" title={t('scene.stale.hint')}>
+            {t('entities.stale')}
+          </span>
+        )}
         {scene.participants.map((who) => (
-          <Link key={who.id} className="chip plain" to={`/projects/${projectId}/${section(who.kind)}/${who.id}`}>
+          <Link
+            key={who.id}
+            className="chip plain"
+            to={`/projects/${projectId}/${section(who.kind)}/${who.id}`}
+          >
             {who.name}
           </Link>
         ))}
@@ -171,7 +183,9 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
 
       <h4>{t('scene.references')}</h4>
       {scene.references.length === 0 ? (
-        <p className="faint small">{t(hasStyle ? 'scene.references.none' : 'scene.references.no_style')}</p>
+        <p className="faint small">
+          {t(hasStyle ? 'scene.references.none' : 'scene.references.no_style')}
+        </p>
       ) : (
         <div className="refs">
           {scene.references.map((ref) => (
@@ -180,7 +194,11 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
               <figcaption>
                 <b>{ref.number}</b> {ref.entity_name}
                 <div className="faint small">
-                  {ref.role === 'main' ? t('gallery.main') : ref.look_label || t('scene.look')}
+                  {ref.role === 'main'
+                    ? [t('gallery.main'), ref.angle && t(`angle.${ref.angle}`)]
+                        .filter(Boolean)
+                        .join(', ')
+                    : ref.look_label || t('scene.look')}
                 </div>
               </figcaption>
             </figure>
@@ -216,7 +234,9 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
               placeholder={t('scene.refine.placeholder')}
               onChange={(e) => setChange(e.target.value)}
               onKeyDown={(e) =>
-                e.key === 'Enter' && change.trim() && run('refine', () => api.refineScenePrompt(scene.id, change))
+                e.key === 'Enter' &&
+                change.trim() &&
+                run('refine', () => api.refineScenePrompt(scene.id, change))
               }
             />
             <button
@@ -235,7 +255,9 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
           disabled={busy !== ''}
           onClick={() => run('prompt', () => api.buildScenePrompt(scene.id, note))}
         >
-          {busy === 'prompt' ? t('scene.build.busy') : t(scene.prompt ? 'scene.rebuild' : 'scene.build')}
+          {busy === 'prompt'
+            ? t('scene.build.busy')
+            : t(scene.prompt ? 'scene.rebuild' : 'scene.build')}
         </button>
         {scene.prompt && (
           <>
@@ -265,7 +287,9 @@ function SceneView({ projectId, scene, hasStyle, onChange, onDelete }: ViewProps
                 <a href={frame.url} target="_blank" rel="noreferrer">
                   <img src={frame.url} alt="" loading="lazy" />
                 </a>
-                {i === 0 && <figcaption className="faint small">{t('scene.frame.latest')}</figcaption>}
+                {i === 0 && (
+                  <figcaption className="faint small">{t('scene.frame.latest')}</figcaption>
+                )}
               </figure>
             ))}
           </div>

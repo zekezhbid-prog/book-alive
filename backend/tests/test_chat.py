@@ -1,9 +1,14 @@
+import json
+
 import pytest
 from sqlalchemy.orm import Session
 
+from app.api.chat import _text_model
 from app.db import get_engine
+from app.llm.calls import BadModelOutput
+from app.main import app
 from app.models import Chapter, Chunk, Project, text_hash
-from app.rag import chat
+from app.rag import agent, chat
 from app.rag.index import index_project, search, split_chunks
 
 MILL = (
@@ -18,13 +23,16 @@ ROAD = (
 
 
 class FakeModel:
-    def __init__(self, reply: dict):
-        self.reply = reply
+    """Replies in turn; the last one repeats. Records each prompt as one text."""
+
+    def __init__(self, *replies: dict):
+        self.replies = list(replies)
         self.prompts: list[str] = []
 
     def invoke_json(self, operation, messages, schema):
-        self.prompts.append(messages[0].content)
-        return schema.model_validate(self.reply)
+        self.prompts.append("\n\n".join(str(m.content) for m in messages))
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return schema.model_validate(reply)
 
 
 @pytest.fixture
@@ -92,7 +100,7 @@ def test_answer_keeps_only_citations_that_check_out(session, project):
     )
     asked, reply = chat.ask(session, project, model, "Что было в руках у Люты?")
     assert asked.role == "user"
-    assert "[1] (Дорога)" in model.prompts[0]
+    assert "[1] (Дорога, passage)" in model.prompts[0]
     assert [c["n"] for c in reply.citations] == [1]
     only = reply.citations[0]
     assert (only["chapter_title"], only["paragraph"], only["quote"]) == (
@@ -127,8 +135,104 @@ def test_follow_up_question_is_searched_with_the_previous_one(session, project):
     chat.ask(session, project, FakeModel(answer), "Что мельник достал из сундука?")
     model = FakeModel(answer)
     chat.ask(session, project, model, "А куда он это спрятал?")
+    # The earlier exchange is in the prompt too, before the new question.
+    assert "Что мельник достал из сундука?" in model.prompts[0]
     # The follow-up alone shares no words with the mill chapter; the previous question does.
-    assert "(Мельница)" in model.prompts[0]
+    assert "(Мельница, passage)" in model.prompts[0]
+
+
+def test_agent_searches_and_reads_a_whole_chapter(session, project):
+    model = FakeModel(
+        {"action": "search", "query": "серебряный ключ"},
+        {"action": "read", "chapter": 1},
+        {
+            "found": True,
+            "answer": "Мельник спрятал ключ за пазуху [3].",
+            "citations": [{"source": 3, "quote": "спрятал его за пазуху"}],
+        },
+    )
+    statuses = []
+    for event in chat.ask_events(session, project, model, "Куда делся ключ?"):
+        if isinstance(event, chat.Status):
+            statuses.append((event.code, event.detail))
+        else:
+            reply = event.reply
+    assert [code for code, _ in statuses] == [
+        "index",
+        "search",
+        "think",
+        "search",
+        "think",
+        "read",
+        "think",
+    ]
+    assert ("read", "Мельница") in statuses
+    # The table of contents is in every prompt; the whole chapter reaches the last one.
+    assert "1. Мельница" in model.prompts[0]
+    assert "whole chapter" in model.prompts[2]
+    assert MILL in model.prompts[2]
+    (only,) = reply.citations
+    assert (only["n"], only["chapter_title"], only["paragraph"]) == (3, "Мельница", 2)
+
+
+def test_agent_must_answer_within_its_steps(session, project):
+    model = FakeModel({"action": "search", "query": "ключ"})
+    with pytest.raises(BadModelOutput):
+        chat.ask(session, project, model, "Куда делся ключ?")
+    assert len(model.prompts) == agent.MAX_STEPS
+    assert agent.FORCE_ANSWER in model.prompts[-1]
+
+
+def test_reading_a_missing_chapter_is_reported_to_the_agent(session, project):
+    model = FakeModel(
+        {"action": "read", "chapter": 7},
+        {"found": False, "answer": "В книге нет седьмой главы.", "citations": []},
+    )
+    chat.ask(session, project, model, "Что в седьмой главе?")
+    assert "read chapter 7: there is no such chapter" in model.prompts[1]
+
+
+@pytest.fixture
+def stream_model():
+    """Puts a fake model behind `/chat/stream`; the test sets its replies."""
+    holder: dict = {}
+    app.dependency_overrides[_text_model] = lambda: holder["model"]
+    yield holder
+    app.dependency_overrides.pop(_text_model, None)
+
+
+def _stream(client, project_id: str, question: str) -> list[dict]:
+    response = client.post(f"/api/projects/{project_id}/chat/stream", json={"question": question})
+    assert response.status_code == 200
+    return [json.loads(line) for line in response.text.splitlines()]
+
+
+def test_chat_stream_reports_steps_then_messages(client, project, stream_model):
+    stream_model["model"] = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
+    lines = _stream(client, project.id, "Что несла Люта?")
+    assert [(line["type"], line["code"]) for line in lines[:3]] == [
+        ("status", "index"),
+        ("status", "search"),
+        ("status", "think"),
+    ]
+    assert lines[-1]["type"] == "done"
+    assert [m["role"] for m in lines[-1]["messages"]] == ["user", "assistant"]
+
+
+def test_chat_stream_reports_a_model_failure_as_its_last_line(client, project, stream_model):
+    class BrokenModel:
+        def invoke_json(self, operation, messages, schema):
+            raise RuntimeError("rate limit")
+
+    stream_model["model"] = BrokenModel()
+    lines = _stream(client, project.id, "Что несла Люта?")
+    assert lines[0]["type"] == "status"  # the response had already begun
+    assert (lines[-1]["type"], lines[-1]["detail"]) == ("error", "provider_error: rate limit")
+
+
+def test_chat_stream_without_a_model_fails_before_streaming(client, project):
+    response = client.post(f"/api/projects/{project.id}/chat/stream", json={"question": "Кто?"})
+    assert (response.status_code, response.json()["detail"]) == (409, "text_model_not_configured")
 
 
 def test_chat_api_history_and_clear(client, project):

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePath
 from typing import Annotated
@@ -10,11 +11,12 @@ from sqlalchemy import select
 from app.analysis.entities import norm
 from app.config import settings
 from app.db import SessionDep
+from app.images import angles
 from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.prompts import build_image_prompt, chapters_between
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
-from app.models import KIND_CHARACTER, KIND_LOCATION, Entity, Image, Project, new_id
+from app.models import KIND_CHARACTER, KIND_LOCATION, Chapter, Entity, Image, Project, new_id
 
 router = APIRouter(prefix="/api", tags=["images"])
 
@@ -40,6 +42,7 @@ class ImageOut(BaseModel):
     # Offered as a reference only while it matches the project's current style.
     current_style: bool
     is_main: bool
+    angle: str
     look_label: str
     chapter_from_id: str
     chapter_to_id: str
@@ -50,14 +53,17 @@ class ImageOut(BaseModel):
 
 class ImagePatch(BaseModel):
     is_main: bool | None = None
+    angle: str | None = None
     look_label: str | None = Field(default=None, max_length=200)
     chapter_from_id: str | None = None
     chapter_to_id: str | None = None
 
 
 class LookRequest(BaseModel):
-    """Empty label and chapters: the base image. Otherwise a look for part of the story."""
+    """Empty label and chapters: a main picture, in the given view (empty: the service
+    picks one still missing). Otherwise a look for part of the story."""
 
+    angle: str = ""
     look_label: str = Field(default="", max_length=200)
     chapter_from_id: str = ""
     chapter_to_id: str = ""
@@ -69,6 +75,8 @@ class GenerateRequest(LookRequest):
 
 class PromptOut(BaseModel):
     prompt: str
+    # The view the prompt was written for; send it back with the prompt to draw it.
+    angle: str
 
 
 class EntityCreate(BaseModel):
@@ -105,6 +113,7 @@ def _out(image: Image, project: Project) -> ImageOut:
         style_key=image.style_key,
         current_style=image.style_key == style_key(project),
         is_main=image.is_main,
+        angle=image.angle,
         look_label=image.look_label,
         chapter_from_id=image.chapter_from_id,
         chapter_to_id=image.chapter_to_id,
@@ -124,9 +133,8 @@ def _store(project: Project, data: bytes, mime: str) -> tuple[str, str]:
     return image_id, relative
 
 
-def _main(session: SessionDep, entity: Entity, key: str) -> Image | None:
-    """The picture that defines the face and build, in the given style."""
-    return next((i for i in entity.images if i.is_main and i.style_key == key), None)
+def _has_main(entity: Entity, key: str) -> bool:
+    return bool(angles.mains(entity.images, key))
 
 
 # ---------- style ----------
@@ -203,7 +211,7 @@ def upload_images(
             origin="upload",
             # An upload is taken to be in the style the project has now.
             style_key=key,
-            is_main=entity is not None and _main(session, entity, key) is None and not created,
+            is_main=entity is not None and not _has_main(entity, key) and not created,
             filename=PurePath(file.filename or "image").name[:300],
             path=relative,
             mime=mime,
@@ -240,12 +248,12 @@ def update_image(image_id: str, patch: ImagePatch, session: SessionDep) -> Image
     image = _image(session, image_id)
     project = _project(session, image.project_id)
     if patch.is_main is not None:
-        if patch.is_main and image.entity_id:
-            # One main picture per card and style.
-            for other in session.get(Entity, image.entity_id).images:
-                if other.style_key == image.style_key:
-                    other.is_main = False
+        # A card may have any number of main pictures: each one shows another view.
         image.is_main = patch.is_main and image.entity_id is not None
+    if patch.angle is not None:
+        if patch.angle not in ("", *angles.ANGLES):
+            raise HTTPException(422, "bad_angle")
+        image.angle = patch.angle
     if patch.look_label is not None:
         image.look_label = patch.look_label.strip()
     if patch.chapter_from_id is not None:
@@ -270,46 +278,67 @@ def delete_image(image_id: str, session: SessionDep) -> None:
 # ---------- generation ----------
 
 
-def _look(session: SessionDep, entity: Entity, body: LookRequest):
+@dataclass
+class Drawing:
+    project: Project
+    chapters: list[Chapter] | None  # None: a main picture
+    angle: str
+    references: list[Image]
+
+
+def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
     project = _project(session, entity.project_id)
+    key = style_key(project)
     is_look = bool(body.look_label or body.chapter_from_id or body.chapter_to_id)
     chapters = (
         chapters_between(project, body.chapter_from_id, body.chapter_to_id) if is_look else None
     )
-    # A look is drawn from the main picture; the main picture itself starts from nothing.
-    reference = _main(session, entity, style_key(project)) if is_look else None
-    return project, chapters, reference
+    angle = ""
+    if not is_look and entity.kind == KIND_CHARACTER:
+        if body.angle and body.angle not in angles.ANGLES:
+            raise HTTPException(422, "bad_angle")
+        angle = body.angle or angles.next_angle(entity.images, key)
+    # Every new picture is drawn from the main ones, so the face stays the same;
+    # the very first main picture starts from nothing.
+    return Drawing(project, chapters, angle, angles.for_drawing(entity.images, key))
 
 
 @router.post("/entities/{entity_id}/image-prompt")
 def image_prompt(entity_id: str, body: LookRequest, session: SessionDep) -> PromptOut:
     """Text model only. The prompt is shown for editing; nothing is drawn yet."""
     entity = _entity(session, entity_id)
-    project, chapters, reference = _look(session, entity, body)
+    drawing = _drawing(session, entity, body)
     try:
-        model = TextModel(session, project.id)
+        model = TextModel(session, drawing.project.id)
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     try:
         prompt = build_image_prompt(
-            model, project, entity, chapters, body.look_label, reference is not None
+            model,
+            drawing.project,
+            entity,
+            drawing.chapters,
+            body.look_label,
+            bool(drawing.references),
+            drawing.angle,
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
-    return PromptOut(prompt=prompt)
+    return PromptOut(prompt=prompt, angle=drawing.angle)
 
 
 @router.post("/entities/{entity_id}/images/generate")
 def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -> ImageOut:
     entity = _entity(session, entity_id)
-    project, _, reference = _look(session, entity, body)
+    drawing = _drawing(session, entity, body)
+    project = drawing.project
     if not style_prompt(project):
         raise HTTPException(409, "style_not_chosen")
     try:
         model = ImageModel(session, project.id)
     except ImageModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
-    references = [settings.files_dir / reference.path] if reference else []
+    references = [settings.files_dir / image.path for image in drawing.references]
     try:
         result = model.generate(body.prompt, references)
     except ImageGenerationFailed as exc:
@@ -317,14 +346,15 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
     mime = result.mime if result.mime in EXTENSIONS else "image/png"
     image_id, relative = _store(project, result.data, mime)
     key = style_key(project)
-    is_look = bool(body.look_label or body.chapter_from_id or body.chapter_to_id)
+    is_look = drawing.chapters is not None
     image = Image(
         id=image_id,
         project_id=project.id,
         entity_id=entity.id,
         origin="generated",
         style_key=key,
-        is_main=not is_look and _main(session, entity, key) is None,
+        is_main=not is_look,
+        angle=drawing.angle,
         look_label=body.look_label.strip(),
         chapter_from_id=body.chapter_from_id,
         chapter_to_id=body.chapter_to_id,

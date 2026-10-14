@@ -42,6 +42,7 @@ class ReferenceOut(BaseModel):
     entity_id: str
     entity_name: str
     role: str
+    angle: str
     look_label: str
     url: str
 
@@ -134,6 +135,7 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
                 entity_id=r.entity.id,
                 entity_name=r.entity.name,
                 role=r.role,
+                angle=r.image.angle,
                 look_label=r.image.look_label,
                 url=f"/api/images/{r.image.id}/file",
             )

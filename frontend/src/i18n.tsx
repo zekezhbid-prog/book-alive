@@ -13,6 +13,7 @@ const ru = {
   'login.logout': 'Выйти',
   'app.cancel': 'Отмена',
   'app.delete': 'Удалить',
+  'app.close': 'Закрыть',
   'app.save': 'Сохранить',
   'app.saved': 'Сохранено',
   'app.saving': 'Сохраняю…',
@@ -21,14 +22,18 @@ const ru = {
 
   'projects.title': 'Проекты',
   'projects.new': 'Новый проект',
-  'projects.empty': 'Проектов пока нет. Создайте первый: загрузите готовую книгу или начните писать свою.',
+  'projects.empty':
+    'Проектов пока нет. Создайте первый: загрузите готовую книгу или начните писать свою.',
   'projects.chapters': 'глав: {n}',
-  'projects.delete.confirm': 'Удалить проект «{title}» со всеми главами и версиями? Отменить это нельзя.',
+  'projects.delete.confirm':
+    'Удалить проект «{title}» со всеми главами и версиями? Отменить это нельзя.',
 
   'mode.reader': 'Готовая книга',
   'mode.writer': 'Пишу книгу',
-  'mode.reader.hint': 'Загружаете готовый текст. Он только читается; вы находите персонажей, локации и сцены и готовите их к оживлению.',
-  'mode.writer.hint': 'Пишете и правите главы прямо здесь, сохраняете версии и можете откатиться. Инструменты иллюстратора тоже доступны.',
+  'mode.reader.hint':
+    'Загружаете готовый текст. Он только читается; вы находите персонажей, локации и сцены и готовите их к оживлению.',
+  'mode.writer.hint':
+    'Пишете и правите главы прямо здесь, сохраняете версии и можете откатиться. Инструменты иллюстратора тоже доступны.',
 
   'new.title': 'Новый проект',
   'new.name': 'Название',
@@ -57,7 +62,8 @@ const ru = {
   'chapter.up': 'Выше',
   'chapter.down': 'Ниже',
   'chapter.merge': 'Объединить со следующей',
-  'chapter.merge.confirm': 'Присоединить следующую главу к этой? Её название останется строкой в тексте.',
+  'chapter.merge.confirm':
+    'Присоединить следующую главу к этой? Её название останется строкой в тексте.',
   'chapter.delete': 'Удалить главу',
   'chapter.delete.confirm': 'Удалить главу «{title}» из проекта?',
   'chapter.split.here': 'Начать новую главу отсюда',
@@ -102,10 +108,10 @@ const ru = {
   'entities.timeline': 'По главам',
   'entities.present': 'Участвует, новых деталей нет',
   'entities.stale': 'устарело',
-  'entities.stale.hint': 'Текст главы изменился после чтения. Запустите поиск по этой главе заново.',
+  'entities.stale.hint':
+    'Текст главы изменился после чтения. Запустите поиск по этой главе заново.',
   'entities.count': 'глав: {chapters} · фактов: {facts}',
-  'entities.refresh':
-    'Текст изменился в главах: {n}. Карточки по ним устарели.',
+  'entities.refresh': 'Текст изменился в главах: {n}. Карточки по ним устарели.',
   'entities.refresh.button': 'Обновить устаревшее',
   'entities.source': 'Открыть в тексте',
   'entities.merge': 'Объединить с…',
@@ -120,7 +126,8 @@ const ru = {
   'run.none': 'Ни одной',
   'run.estimate': 'Оценка расхода',
   'run.estimate.loading': 'Считаю…',
-  'run.estimate.body': 'Запросов: {requests}. Примерно {input} токенов на вход и {output} на выход.',
+  'run.estimate.body':
+    'Запросов: {requests}. Примерно {input} токенов на вход и {output} на выход.',
   'run.estimate.cached': 'Уже прочитано без изменений (бесплатно): {n}.',
   'run.estimate.free': 'Все выбранные главы уже прочитаны, запросов к модели не будет.',
   'run.estimate.note': 'Оценка грубая: точное число зависит от модели.',
@@ -158,7 +165,12 @@ const ru = {
     'Спросите о книге: как выглядит персонаж, что он собирался сделать, в какой главе что случилось. Ответ строится только по тексту и ссылается на место в книге. Первый вопрос дольше обычного: готовится поиск по книге.',
   'chat.placeholder': 'Вопрос по книге…',
   'chat.send': 'Спросить',
-  'chat.waiting': 'Ищу в книге и отвечаю…',
+  'chat.waiting': 'Ищу в книге и отвечаю',
+  'chat.status.index': 'Листаю книгу',
+  'chat.status.search': 'Ищу в книге: «{detail}»',
+  'chat.status.read': 'Читаю: «{detail}»',
+  'chat.status.think': 'Обдумываю прочитанное',
+  'chat.status.seconds': '{n} с',
   'chat.suggest': 'Предложить развитие событий',
   'chat.suggest.question': 'Предложи три варианта, как может продолжиться эта глава.',
   'chat.suggest.empty': 'В открытой главе пока нет текста, продолжать нечего.',
@@ -182,33 +194,48 @@ const ru = {
   'style.change.confirm':
     'Сменить стиль проекта? Картинки, сделанные в прежнем стиле, останутся, но перестанут предлагаться как референсы: их нужно будет создать заново.',
 
-  'gallery.title': 'Картинки',
+  'gallery.title': 'Референсы',
   'gallery.general': 'Общие референсы проекта',
-  'gallery.empty': 'Картинок пока нет. Загрузите свои или сгенерируйте ниже.',
+  'gallery.empty': 'Картинок пока нет. Загрузите свои или сгенерируйте.',
   'gallery.general.empty':
     'Сюда можно сложить картинки, которые задают настроение и стиль всей книги и не относятся к одному персонажу.',
   'gallery.upload': 'Загрузить картинки',
   'gallery.uploading': 'Загружаю…',
   'gallery.main': 'основная',
   'gallery.make_main': 'Сделать основной',
+  'gallery.unmake_main': 'Убрать из основных',
+  'gallery.angle.none': 'ракурс не указан',
+  'angle.face_front': 'лицо анфас',
+  'angle.full_front': 'рост спереди',
+  'angle.face_profile': 'лицо в профиль',
+  'angle.full_side': 'рост сбоку',
+  'angle.full_back': 'рост сзади',
+  'gallery.main.hint':
+    'Основные картинки задают лицо и фигуру, их может быть сколько угодно: лицо анфас и в профиль, рост спереди, сбоку, сзади. От них рисуются все новые картинки, а в сцену сервис сам берёт лучшее лицо и лучший рост. Остальные картинки — облики для отдельных глав, например «в кольчуге» с 3-й по 5-ю.',
   'gallery.origin.upload': 'загружена',
   'gallery.origin.generated': 'сгенерирована',
   'gallery.other_style': 'другой стиль',
-  'gallery.other_style.hint': 'Сделана в другом стиле проекта и как референс сейчас не предлагается.',
+  'gallery.other_style.hint':
+    'Сделана в другом стиле проекта и как референс сейчас не предлагается.',
   'gallery.look.placeholder': 'Облик: например, «в кольчуге»',
   'gallery.from.start': 'с начала',
   'gallery.to.end': 'до конца',
   'gallery.delete.confirm': 'Удалить эту картинку? Файл будет стёрт.',
 
   'generate.title': 'Сгенерировать',
+  'generate.angle.auto': 'Ракурс: выберет сервис',
+  'generate.main': 'Основная картинка',
+  'generate.other': 'Другое: облик для глав',
+  'generate.prompt.label': 'Промпт',
+  'generate.prompt.placeholder': 'Нажмите «Собрать промпт» или напишите свой.',
+  'generate.made': 'Картинка сохранена в референсах.',
   'generate.hint.main':
-    'Основная картинка задаёт лицо и фигуру. Промпт собирается из постоянных черт карточки, его можно поправить.',
+    'Основная картинка показывает лицо или фигуру с одного ракурса. Первая рисуется с нуля по постоянным чертам карточки, следующие — от уже готовых основных, чтобы лицо совпадало. Промпт можно поправить.',
   'generate.hint.look':
-    'Облик рисуется от основной картинки. Укажите, какой это облик и к каким главам он относится: в промпт попадут детали из этих глав. Пустые поля означают ещё один вариант основной картинки.',
+    'Облик рисуется от основных картинок. Укажите, какой это облик и к каким главам он относится: в промпт попадут детали из этих глав.',
   'generate.prompt': 'Собрать промпт',
   'generate.prompt.busy': 'Собираю…',
-  'generate.image': 'Сгенерировать картинку',
-  'generate.look': 'Сгенерировать облик',
+  'generate.image': 'Сгенерировать',
   'generate.image.busy': 'Рисую…',
   'generate.copy': 'Скопировать промпт',
   'generate.no_style': 'Стиль проекта не выбран: промпт будет без стиля, а рисовать нельзя.',
@@ -224,17 +251,20 @@ const ru = {
   'scenes.split.busy': 'Делю главу на сцены…',
   'scenes.split.confirm':
     'Разбить главу на сцены? Примерно {input} токенов на вход и {output} на выход.',
-  'scenes.split.replace': ' Прежняя автоматическая разбивка этой главы ({n}) будет заменена; сцены, отмеченные вручную, останутся.',
+  'scenes.split.replace':
+    ' Прежняя автоматическая разбивка этой главы ({n}) будет заменена; сцены, отмеченные вручную, останутся.',
   'scenes.mark': 'Сделать сценой: абзацы {from}–{to}',
   'scene.delete': 'Удалить сцену',
   'scene.delete.confirm': 'Удалить эту сцену вместе с её промптом? Кадры останутся.',
   'scene.stale': 'Текст главы изменился',
-  'scene.stale.hint': 'Текст главы изменился после создания сцены, её границы могли сместиться. Создайте сцену заново.',
+  'scene.stale.hint':
+    'Текст главы изменился после создания сцены, её границы могли сместиться. Создайте сцену заново.',
   'scene.text': 'Текст сцены',
   'scene.references': 'Референсы',
   'scene.references.none':
     'У участников сцены нет картинок в стиле проекта. Загрузите или сгенерируйте их в карточках, и они подставятся сюда сами.',
-  'scene.references.no_style': 'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его на вкладке «Стиль».',
+  'scene.references.no_style':
+    'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его на вкладке «Стиль».',
   'scene.look': 'облик',
   'scene.prompt': 'Промпт для видео',
   'scene.note.placeholder': 'Пожелания к сцене (необязательно): что показать, откуда камера',
@@ -336,6 +366,7 @@ const en: Record<keyof typeof ru, string> = {
   'login.logout': 'Sign out',
   'app.cancel': 'Cancel',
   'app.delete': 'Delete',
+  'app.close': 'Close',
   'app.save': 'Save',
   'app.saved': 'Saved',
   'app.saving': 'Saving…',
@@ -344,14 +375,18 @@ const en: Record<keyof typeof ru, string> = {
 
   'projects.title': 'Projects',
   'projects.new': 'New project',
-  'projects.empty': 'No projects yet. Create the first one: upload a finished book or start writing your own.',
+  'projects.empty':
+    'No projects yet. Create the first one: upload a finished book or start writing your own.',
   'projects.chapters': 'chapters: {n}',
-  'projects.delete.confirm': 'Delete “{title}” with all its chapters and versions? This cannot be undone.',
+  'projects.delete.confirm':
+    'Delete “{title}” with all its chapters and versions? This cannot be undone.',
 
   'mode.reader': 'Finished book',
   'mode.writer': 'Writing a book',
-  'mode.reader.hint': 'Upload a finished text. It is read-only; you find characters, locations and scenes and prepare them for animation.',
-  'mode.writer.hint': 'Write and edit chapters right here, save versions and roll back. Illustrator tools are available too.',
+  'mode.reader.hint':
+    'Upload a finished text. It is read-only; you find characters, locations and scenes and prepare them for animation.',
+  'mode.writer.hint':
+    'Write and edit chapters right here, save versions and roll back. Illustrator tools are available too.',
 
   'new.title': 'New project',
   'new.name': 'Title',
@@ -380,7 +415,8 @@ const en: Record<keyof typeof ru, string> = {
   'chapter.up': 'Up',
   'chapter.down': 'Down',
   'chapter.merge': 'Merge with next',
-  'chapter.merge.confirm': 'Append the next chapter to this one? Its title stays as a line of text.',
+  'chapter.merge.confirm':
+    'Append the next chapter to this one? Its title stays as a line of text.',
   'chapter.delete': 'Delete chapter',
   'chapter.delete.confirm': 'Delete chapter “{title}” from the project?',
   'chapter.split.here': 'Start a new chapter here',
@@ -425,7 +461,8 @@ const en: Record<keyof typeof ru, string> = {
   'entities.timeline': 'By chapter',
   'entities.present': 'Takes part, no new details',
   'entities.stale': 'stale',
-  'entities.stale.hint': 'The chapter text changed after it was read. Run the search for this chapter again.',
+  'entities.stale.hint':
+    'The chapter text changed after it was read. Run the search for this chapter again.',
   'entities.count': 'chapters: {chapters} · facts: {facts}',
   'entities.refresh': 'The text changed in {n} chapter(s). Their cards are stale.',
   'entities.refresh.button': 'Refresh what is stale',
@@ -480,7 +517,12 @@ const en: Record<keyof typeof ru, string> = {
     'Ask about the book: what a character looks like, what they meant to do, in which chapter something happened. Answers come only from the text and link to the place in the book. The first question takes longer: search over the book is being prepared.',
   'chat.placeholder': 'A question about the book…',
   'chat.send': 'Ask',
-  'chat.waiting': 'Searching the book and answering…',
+  'chat.waiting': 'Searching the book and answering',
+  'chat.status.index': 'Leafing through the book',
+  'chat.status.search': 'Searching the book: “{detail}”',
+  'chat.status.read': 'Reading “{detail}”',
+  'chat.status.think': 'Thinking over what I have read',
+  'chat.status.seconds': '{n} s',
   'chat.suggest': 'Suggest what happens next',
   'chat.suggest.question': 'Suggest three ways this chapter could go on.',
   'chat.suggest.empty': 'The open chapter has no text yet, so there is nothing to continue.',
@@ -504,36 +546,52 @@ const en: Record<keyof typeof ru, string> = {
   'style.change.confirm':
     'Change the project style? Pictures made in the previous style stay, but are no longer offered as references: they will have to be made again.',
 
-  'gallery.title': 'Pictures',
+  'gallery.title': 'References',
   'gallery.general': 'General project references',
-  'gallery.empty': 'No pictures yet. Upload your own or generate below.',
+  'gallery.empty': 'No pictures yet. Upload your own or generate one.',
   'gallery.general.empty':
     'Pictures that set the mood and style of the whole book and belong to no single character go here.',
   'gallery.upload': 'Upload pictures',
   'gallery.uploading': 'Uploading…',
   'gallery.main': 'main',
   'gallery.make_main': 'Make main',
+  'gallery.unmake_main': 'Remove from main',
+  'gallery.angle.none': 'no view set',
+  'angle.face_front': 'face, front',
+  'angle.full_front': 'full length, front',
+  'angle.face_profile': 'face, profile',
+  'angle.full_side': 'full length, side',
+  'angle.full_back': 'full length, back',
+  'gallery.main.hint':
+    'Main pictures define the face and build, and there can be any number of them: face from the front and in profile, full length from the front, side and back. Every new picture is drawn from them, and a scene gets the best face and the best full-length view. The rest are looks for particular chapters, for example “in chain mail” from chapter 3 to 5.',
   'gallery.origin.upload': 'uploaded',
   'gallery.origin.generated': 'generated',
   'gallery.other_style': 'other style',
-  'gallery.other_style.hint': 'Made in a different project style and not offered as a reference now.',
+  'gallery.other_style.hint':
+    'Made in a different project style and not offered as a reference now.',
   'gallery.look.placeholder': 'Look: for example, “in chain mail”',
   'gallery.from.start': 'from the start',
   'gallery.to.end': 'to the end',
   'gallery.delete.confirm': 'Delete this picture? The file will be erased.',
 
   'generate.title': 'Generate',
+  'generate.angle.auto': 'View: the service picks',
+  'generate.main': 'Main picture',
+  'generate.other': 'Other: a look for chapters',
+  'generate.prompt.label': 'Prompt',
+  'generate.prompt.placeholder': 'Press “Build prompt” or write your own.',
+  'generate.made': 'The picture is saved to the references.',
   'generate.hint.main':
-    'The main picture defines the face and build. The prompt is built from the permanent traits on the card and can be edited.',
+    'A main picture shows the face or the figure from one view. The first is drawn from scratch from the card’s permanent traits, the next ones from the main pictures already there, so the face matches. The prompt can be edited.',
   'generate.hint.look':
-    'A look is drawn from the main picture. Say what look it is and which chapters it belongs to: details from those chapters go into the prompt. Empty fields mean another variant of the main picture.',
+    'A look is drawn from the main pictures. Say what look it is and which chapters it belongs to: details from those chapters go into the prompt.',
   'generate.prompt': 'Build prompt',
   'generate.prompt.busy': 'Building…',
-  'generate.image': 'Generate picture',
-  'generate.look': 'Generate look',
+  'generate.image': 'Generate',
   'generate.image.busy': 'Drawing…',
   'generate.copy': 'Copy prompt',
-  'generate.no_style': 'No project style is chosen: the prompt will have no style, and drawing is disabled.',
+  'generate.no_style':
+    'No project style is chosen: the prompt will have no style, and drawing is disabled.',
   'entities.add': 'Add a card',
   'entities.add.prompt': 'Name, as in the book:',
 
@@ -544,18 +602,22 @@ const en: Record<keyof typeof ru, string> = {
   'scenes.vivid': 'A vivid scene',
   'scenes.split': 'Split into scenes',
   'scenes.split.busy': 'Splitting the chapter…',
-  'scenes.split.confirm': 'Split the chapter into scenes? About {input} tokens in and {output} out.',
-  'scenes.split.replace': ' The earlier automatic split of this chapter ({n}) will be replaced; scenes marked by hand stay.',
+  'scenes.split.confirm':
+    'Split the chapter into scenes? About {input} tokens in and {output} out.',
+  'scenes.split.replace':
+    ' The earlier automatic split of this chapter ({n}) will be replaced; scenes marked by hand stay.',
   'scenes.mark': 'Make a scene: paragraphs {from}–{to}',
   'scene.delete': 'Delete scene',
   'scene.delete.confirm': 'Delete this scene and its prompt? Frames stay.',
   'scene.stale': 'The chapter text has changed',
-  'scene.stale.hint': 'The chapter text changed after the scene was made, so its boundaries may have moved. Make the scene again.',
+  'scene.stale.hint':
+    'The chapter text changed after the scene was made, so its boundaries may have moved. Make the scene again.',
   'scene.text': 'Scene text',
   'scene.references': 'References',
   'scene.references.none':
     'Nobody in this scene has pictures in the project style. Upload or generate them on the cards and they will appear here.',
-  'scene.references.no_style': 'No project style is chosen, so references are not picked. Choose one on the Style tab.',
+  'scene.references.no_style':
+    'No project style is chosen, so references are not picked. Choose one on the Style tab.',
   'scene.look': 'look',
   'scene.prompt': 'Video prompt',
   'scene.note.placeholder': 'Wishes for the scene (optional): what to show, where the camera is',
@@ -619,7 +681,8 @@ const en: Record<keyof typeof ru, string> = {
   'error.provider_error': 'The service returned an error: {detail}',
   'error.text_model_not_configured':
     'No text model is selected. Open Settings and choose a connection and a model.',
-  'error.analysis_already_running': 'A search is already running for this project. Wait for it to finish.',
+  'error.analysis_already_running':
+    'A search is already running for this project. Wait for it to finish.',
   'error.no_chapters_selected': 'No chapters are selected.',
   'error.chapter_not_found': 'This chapter no longer exists.',
   'error.project_not_found': 'This project does not exist.',
