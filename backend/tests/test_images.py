@@ -192,6 +192,22 @@ def test_generation_falls_back_to_the_images_endpoint(session, project):
     assert image_model(session, project, handler).generate("a castle").data == PNG
 
 
+def test_generation_passes_the_chosen_size_to_both_endpoints(session, project):
+    bodies = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies[request.url.path.rsplit("/", 1)[-1]] = json.loads(request.content)
+        if request.url.path.endswith("/completions"):
+            return httpx.Response(404, json={"error": "no such route"})
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(PNG).decode()}]})
+
+    image_model(session, project, handler).generate("a castle", size="16:9")
+    assert bodies["completions"]["image_config"] == {"aspect_ratio": "16:9"}
+    assert bodies["generations"]["size"] == "1792x1024"
+    with pytest.raises(ValueError):
+        image_model(session, project, handler).generate("a castle", size="7:3")
+
+
 def test_generation_reports_a_provider_error(session, project, tmp_path):
     reference = tmp_path / "main.png"
     reference.write_bytes(PNG)

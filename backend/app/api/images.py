@@ -5,14 +5,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.analysis.entities import norm
 from app.config import settings
 from app.db import SessionDep
 from app.images import angles
-from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
+from app.images.generate import (
+    SIZES,
+    ImageGenerationFailed,
+    ImageModel,
+    ImageModelNotConfigured,
+)
 from app.images.prompts import build_image_prompt, chapters_between
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
@@ -71,6 +76,15 @@ class LookRequest(BaseModel):
 
 class GenerateRequest(LookRequest):
     prompt: str = Field(min_length=1, max_length=4000)
+    # A key of SIZES; empty leaves the shape to the model.
+    size: str = ""
+
+    @field_validator("size")
+    @classmethod
+    def known_size(cls, value: str) -> str:
+        if value and value not in SIZES:
+            raise ValueError("unknown size")
+        return value
 
 
 class PromptOut(BaseModel):
@@ -340,7 +354,7 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
         raise HTTPException(409, str(exc)) from exc
     references = [settings.files_dir / image.path for image in drawing.references]
     try:
-        result = model.generate(body.prompt, references)
+        result = model.generate(body.prompt, references, body.size)
     except ImageGenerationFailed as exc:
         raise HTTPException(502, f"provider_error: {exc}") from exc
     mime = result.mime if result.mime in EXTENSIONS else "image/png"

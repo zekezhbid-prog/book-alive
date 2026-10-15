@@ -23,6 +23,16 @@ from app.models import AppSetting, Connection, UsageEvent
 
 TIMEOUT = httpx.Timeout(300, connect=20)
 
+# Picture shapes offered in the UI. Chat-style image models take an aspect ratio, the
+# classic endpoint a size in pixels; empty means the model's own default.
+SIZES = {
+    "1:1": "1024x1024",
+    "2:3": "1024x1536",
+    "3:2": "1536x1024",
+    "9:16": "1024x1792",
+    "16:9": "1792x1024",
+}
+
 
 class ImageModelNotConfigured(RuntimeError):
     pass
@@ -61,12 +71,16 @@ class ImageModel:
             transport=transport,
         )
 
-    def generate(self, prompt: str, references: list[Path] | None = None) -> GeneratedImage:
+    def generate(
+        self, prompt: str, references: list[Path] | None = None, size: str = ""
+    ) -> GeneratedImage:
         references = references or []
+        if size and size not in SIZES:
+            raise ValueError(f"unknown size {size!r}")
         try:
-            image, usage = self._via_chat(prompt, references)
+            image, usage = self._via_chat(prompt, references, size)
             if image is None and not references:
-                image, usage = self._via_images(prompt)
+                image, usage = self._via_images(prompt, size)
         except httpx.HTTPError as exc:
             raise ImageGenerationFailed(str(exc)[:300]) from exc
         if image is None:
@@ -85,7 +99,9 @@ class ImageModel:
             journal.commit()
         return image
 
-    def _via_chat(self, prompt: str, references: list[Path]) -> tuple[GeneratedImage | None, dict]:
+    def _via_chat(
+        self, prompt: str, references: list[Path], size: str
+    ) -> tuple[GeneratedImage | None, dict]:
         content: list[dict] = [{"type": "text", "text": prompt}]
         for path in references:
             mime = mimetypes.guess_type(path.name)[0] or "image/png"
@@ -93,14 +109,14 @@ class ImageModel:
             content.append(
                 {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}}
             )
-        response = self.client.post(
-            "/chat/completions",
-            json={
-                "model": self.model_name,
-                "messages": [{"role": "user", "content": content}],
-                "modalities": ["image", "text"],
-            },
-        )
+        body: dict = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": content}],
+            "modalities": ["image", "text"],
+        }
+        if size:
+            body["image_config"] = {"aspect_ratio": size}
+        response = self.client.post("/chat/completions", json=body)
         if response.status_code >= 400:
             if references:
                 raise ImageGenerationFailed(f"HTTP {response.status_code}: {response.text[:200]}")
@@ -113,10 +129,11 @@ class ImageModel:
                 return self._from_url(url), payload.get("usage") or {}
         return None, payload.get("usage") or {}
 
-    def _via_images(self, prompt: str) -> tuple[GeneratedImage | None, dict]:
-        response = self.client.post(
-            "/images/generations", json={"model": self.model_name, "prompt": prompt, "n": 1}
-        )
+    def _via_images(self, prompt: str, size: str) -> tuple[GeneratedImage | None, dict]:
+        body: dict = {"model": self.model_name, "prompt": prompt, "n": 1}
+        if size:
+            body["size"] = SIZES[size]
+        response = self.client.post("/images/generations", json=body)
         if response.status_code >= 400:
             raise ImageGenerationFailed(f"HTTP {response.status_code}: {response.text[:200]}")
         payload = response.json()

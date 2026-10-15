@@ -7,6 +7,7 @@ import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
+import { markMatches } from '../markMatches'
 import { savesSettled } from '../saveQueue'
 
 type View = 'writer' | 'illustrator'
@@ -82,8 +83,12 @@ export default function Book() {
   const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
   const writing = project.mode === 'writer' && view === 'writer' && highlighted === undefined
   const shown = chapter?.id === activeId ? chapter : null
-  const open = (id: string, paragraph?: number) =>
-    navigate(`/projects/${projectId}/chapters/${id}${paragraph === undefined ? '' : `?p=${paragraph}`}`)
+  const open = (id: string, paragraph?: number, found?: string) => {
+    const params = new URLSearchParams()
+    if (paragraph !== undefined) params.set('p', String(paragraph))
+    if (found) params.set('q', found)
+    navigate(`/projects/${projectId}/chapters/${id}${params.size ? `?${params}` : ''}`)
+  }
   const setView = async (next: View) => {
     // The other view is drawn from what the server has, so the draft must be there first.
     await savesSettled()
@@ -136,9 +141,9 @@ export default function Book() {
               <h4>{hits.length ? t('book.search.results', { n: hits.length }) : t('book.search.none')}</h4>
               <nav>
                 {hits.map((hit, i) => (
-                  <button key={i} className="hit" onClick={() => open(hit.chapter_id, hit.paragraph)}>
+                  <button key={i} className="hit" onClick={() => open(hit.chapter_id, hit.paragraph, query.trim())}>
                     <span className="faint small">{hit.chapter_title || t('book.untitled')}</span>
-                    <span>…{hit.snippet}…</span>
+                    <span>…{markMatches(hit.snippet, query, (text) => [text])}…</span>
                   </button>
                 ))}
               </nav>
@@ -149,12 +154,14 @@ export default function Book() {
                 {t('book.chapters')} · {project.chapters.length}
               </h4>
               <nav>
-                {project.chapters.map((item) => (
+                {project.chapters.map((item, index) => (
                   <button
                     key={item.id}
                     className={`chapter-link ${item.id === activeId ? 'active' : ''}`}
                     onClick={() => open(item.id)}
                   >
+                    {/* A title like "Глава 3" or "III" already carries its number. */}
+                    {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
                     <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
                     {project.changes?.edited.includes(item.id) ||
                     project.changes?.added.includes(item.id) ? (
@@ -199,6 +206,7 @@ export default function Book() {
               chapter={shown}
               names={names}
               highlighted={highlighted}
+              found={searchParams.get('q') ?? undefined}
               onStructureChange={afterStructureChange}
               onError={fail}
             />

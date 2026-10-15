@@ -11,6 +11,7 @@ import {
   type Run,
 } from '../api'
 import Gallery from '../components/Gallery'
+import { PlusIcon, SparklesIcon } from '../components/icons'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n } from '../i18n'
 
@@ -85,12 +86,25 @@ export default function Entities({ kind }: { kind: EntityKind }) {
       <ProjectHeader project={project} />
       <div className="workspace">
         <aside className="chapters">
-          <button className="btn primary" disabled={running} onClick={() => setChoosing([])}>
-            {t(`entities.find.${kind}`)}
-          </button>
-          <button className="btn small" onClick={addCard}>
-            + {t('entities.add')}
-          </button>
+          <div className="row">
+            <button
+              className="btn primary small"
+              disabled={running}
+              title={t(`entities.search.hint.${kind}`)}
+              onClick={() => setChoosing([])}
+            >
+              <SparklesIcon />
+              {t('entities.search')}
+            </button>
+            <button
+              className="btn small icon"
+              title={t('entities.add')}
+              aria-label={t('entities.add')}
+              onClick={addCard}
+            >
+              <PlusIcon />
+            </button>
+          </div>
           <nav>
             {list?.map((item) => (
               <button

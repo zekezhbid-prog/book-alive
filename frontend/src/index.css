@@ -60,6 +60,8 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .btn.small { padding: 6px 12px; font-size: 13px; border-radius: 10px; }
 .btn.danger:hover { border-color: var(--err); color: var(--err); }
 .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; transform: none; }
+.btn.icon { padding: 6px; width: 32px; height: 32px; }
+.btn.icon.on { color: var(--accent); }
 /* A primary button that cannot be pressed (the chat while the agent works) is plain grey. */
 .btn.primary:disabled { opacity: 1; background: var(--line-2); color: var(--faint); border-color: transparent; }
 .input { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 11px 14px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
@@ -79,7 +81,7 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; height: var(--topbar); padding: 0 20px; background: rgba(12, 11, 8, 0.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .topbar-slot { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; }
-.brand-mark { width: 14px; height: 19px; border-radius: 3px 6px 6px 3px; background: var(--gradient); box-shadow: 0 0 16px rgba(250, 204, 21, 0.45); }
+.brand-mark { width: 38px; height: 38px; border-radius: 10px; box-shadow: 0 0 22px rgba(250, 204, 21, 0.45); }
 .crumb { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumb a:hover { color: var(--text); }
 .crumb b { color: var(--text); font-weight: 700; }
@@ -114,7 +116,7 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .chapter-link, .hit { display: flex; align-items: center; gap: 8px; text-align: left; background: transparent; border: 0; border-radius: 10px; padding: 8px 12px; cursor: pointer; color: var(--muted); font-size: 15px; transition: background 0.15s, color 0.15s; }
 .chapter-link:hover, .hit:hover { background: var(--panel-2); color: var(--text); }
 .chapter-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
-.chapter-link span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-link span:first-child:not(.chapter-num), .chapter-num + span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hit { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 14px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(250, 204, 21, 0.6); flex: none; }
 .side { padding: 18px; border-left: 1px solid var(--line); background: var(--panel); }
@@ -244,4 +246,25 @@ details summary { cursor: pointer; margin-bottom: 8px; }
 
 /* The picture generator opens over the page and scrolls on its own when it grows. */
 .dialog.generator { max-height: calc(100vh - 40px); overflow-y: auto; }
-.generated img { display: block; max-width: 100%; max-height: 50vh; margin: 0 auto; border-radius: var(--radius-sm); }
+.chapter-num { flex: none; min-width: 1.6em; color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+.chapter-link.active .chapter-num { color: var(--accent); }
+/* Matches of the book search, in the result list and in the opened chapter. */
+mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; padding: 0 2px; box-shadow: 0 0 10px rgba(250, 204, 21, 0.45); }
+/* Picture settings: the picture beside its fields, stacked on a narrow screen. */
+.dialog.image-dialog { width: min(880px, 100%); display: flex; flex-direction: column; gap: 18px; }
+.dialog-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 22px; align-items: start; }
+.picture-slot { display: grid; place-items: center; min-height: 260px; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); background: var(--panel-2); text-align: center; padding: 12px; }
+.picture-slot:has(img) { border: 0; padding: 0; background: transparent; }
+.picture-slot img { display: block; width: 100%; max-height: 64vh; object-fit: contain; border-radius: var(--radius-sm); }
+.dialog-body .field { gap: 4px; }
+.btn.toggle { align-self: flex-start; }
+.btn.toggle.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+@media (max-width: 640px) { .dialog-body { grid-template-columns: 1fr; } }
+.mode-fields { display: grid; }
+.mode-fields > * { grid-area: 1 / 1; }
+/* The toggle keeps one width for both labels. */
+.btn.toggle { min-width: 140px; justify-content: flex-start; }
+.mark-icon { display: inline-flex; color: var(--faint); }
+.slot-picture { width: 100%; gap: 8px; }
+.slot-note { display: inline-flex; align-items: center; gap: 6px; }
+.size-select { width: auto; flex: 1; min-width: 0; }

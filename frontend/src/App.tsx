@@ -33,7 +33,7 @@ export default function App() {
       <>
         <header className="topbar">
           <span className="brand">
-            <span className="brand-mark" />
+            <img className="brand-mark" src="/favicon.svg" alt="" />
             Book Alive
           </span>
           <span className="spacer" />
@@ -47,7 +47,7 @@ export default function App() {
     <>
       <header className="topbar">
         <Link to="/" className="brand">
-          <span className="brand-mark" />
+          <img className="brand-mark" src="/favicon.svg" alt="" />
           Book Alive
         </Link>
         {/* Pages put their own breadcrumb and controls here. */}

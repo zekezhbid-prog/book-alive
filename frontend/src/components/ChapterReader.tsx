@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n } from '../i18n'
+import { markMatches } from '../markMatches'
 
 export interface NamedEntity {
   id: string
@@ -15,6 +16,8 @@ interface Props {
   /** Known characters and locations: their names in the text link to the cards. */
   names: NamedEntity[]
   highlighted?: number
+  /** The search that led here: its matches are marked in the text. */
+  found?: string
   onStructureChange: (goTo?: string) => void
   onError: (error: unknown) => void
 }
@@ -27,6 +30,7 @@ export default function ChapterReader({
   chapter,
   names,
   highlighted,
+  found,
   onStructureChange,
   onError,
 }: Props) {
@@ -39,7 +43,10 @@ export default function ChapterReader({
   const target = useRef<HTMLParagraphElement>(null)
   const paragraphs = chapter.text ? chapter.text.split('\n\n') : []
   const isLast = project.chapters.at(-1)?.id === chapter.id
-  const linker = useMemo(() => buildLinker(project.id, names), [project.id, names])
+  const linker = useMemo<Linker>(() => {
+    const link = buildLinker(project.id, names)
+    return (text, key) => markMatches(text, found, (part, sub) => link(part, `${key}${sub}`))
+  }, [project.id, names, found])
 
   useEffect(() => {
     target.current?.scrollIntoView({ block: 'center' })

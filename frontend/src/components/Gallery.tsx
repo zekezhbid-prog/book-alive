@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ANGLES, api, type Angle, type ChapterBrief, type EntityKind, type ImageInfo } from '../api'
+import {
+  ANGLES,
+  api,
+  IMAGE_SIZES,
+  type Angle,
+  type ChapterBrief,
+  type EntityKind,
+  type ImageInfo,
+  type ImageSize,
+} from '../api'
 import { errorText, useI18n } from '../i18n'
+import { CopyIcon, GearIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
 
 interface Props {
   projectId: string
@@ -48,8 +58,9 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
   // A card's references start folded so the description is in view; the project's
   // general gallery is the whole point of its page and stays open.
   const [open, setOpen] = useState(!entityId)
-  const [generating, setGenerating] = useState(false)
-  const closeGenerator = useCallback(() => setGenerating(false), [])
+  // The picture window: empty for a new picture, or open on an existing one.
+  const [dialog, setDialog] = useState<ImageInfo | 'new' | null>(null)
+  const closeDialog = useCallback(() => setDialog(null), [])
 
   return (
     <div className="stack">
@@ -73,7 +84,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
           onChange={(e) => upload(e.target.files)}
         />
         {entityId && (
-          <button className="btn small" onClick={() => setGenerating(true)}>
+          <button className="btn small" onClick={() => setDialog('new')}>
             {t('generate.title')}
           </button>
         )}
@@ -82,17 +93,18 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
         </button>
       </div>
       {error && <p className="error">{error}</p>}
-      {entityId && generating && (
-        <Generator
+      {entityId && dialog && (
+        <ImageDialog
           entityId={entityId}
+          image={dialog === 'new' ? null : dialog}
           withAngles={kind === 'character'}
           chapters={chapters}
           hasStyle={hasStyle}
-          onCreated={() => {
+          onChanged={() => {
             load()
-            setOpen(true) // the new picture is in view once the window closes
+            setOpen(true) // a new picture is in view once the window closes
           }}
-          onClose={closeGenerator}
+          onClose={closeDialog}
         />
       )}
       {open && images?.length === 0 && (
@@ -109,64 +121,47 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
               <a href={image.url} target="_blank" rel="noreferrer">
                 <img src={image.url} alt="" loading="lazy" />
               </a>
-              <figcaption className="stack">
-                <div className="row wrap">
-                  {image.is_main && <span className="badge writer">{t('gallery.main')}</span>}
-                  <span className="badge">{t(`gallery.origin.${image.origin}`)}</span>
+              <figcaption>
+                <div className="row">
+                  {entityId && (
+                    <button
+                      className={`btn ghost small icon ${image.is_main ? 'on' : ''}`}
+                      aria-pressed={image.is_main}
+                      title={t(image.is_main ? 'gallery.unmake_main' : 'gallery.make_main')}
+                      aria-label={t(image.is_main ? 'gallery.unmake_main' : 'gallery.make_main')}
+                      onClick={() => patch(image, { is_main: !image.is_main })}
+                    >
+                      <StarIcon on={image.is_main} />
+                    </button>
+                  )}
+                  {image.origin === 'upload' && (
+                    <span className="mark-icon" title={t('gallery.uploaded')}>
+                      <UploadIcon />
+                    </span>
+                  )}
                   {!image.current_style && (
                     <span className="badge stale" title={t('gallery.other_style.hint')}>
                       {t('gallery.other_style')}
                     </span>
                   )}
-                </div>
-                {entityId && image.is_main && kind === 'character' && (
-                  <AngleSelect
-                    value={image.angle}
-                    empty={t('gallery.angle.none')}
-                    onChange={(angle) => patch(image, { angle })}
-                  />
-                )}
-                {entityId && !image.is_main && (
-                  <>
-                    <input
-                      className="input small"
-                      defaultValue={image.look_label}
-                      maxLength={200}
-                      placeholder={t('gallery.look.placeholder')}
-                      onBlur={(e) =>
-                        e.target.value.trim() !== image.look_label &&
-                        patch(image, { look_label: e.target.value })
-                      }
-                    />
-                    <div className="row small muted">
-                      <ChapterSelect
-                        value={image.chapter_from_id}
-                        chapters={chapters}
-                        empty={t('gallery.from.start')}
-                        onChange={(id) => patch(image, { chapter_from_id: id })}
-                      />
-                      —
-                      <ChapterSelect
-                        value={image.chapter_to_id}
-                        chapters={chapters}
-                        empty={t('gallery.to.end')}
-                        onChange={(id) => patch(image, { chapter_to_id: id })}
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="row wrap">
+                  <span className="spacer" />
                   {entityId && (
                     <button
-                      className="btn ghost small"
-                      onClick={() => patch(image, { is_main: !image.is_main })}
+                      className="btn ghost small icon"
+                      title={t('gallery.settings')}
+                      aria-label={t('gallery.settings')}
+                      onClick={() => setDialog(image)}
                     >
-                      {t(image.is_main ? 'gallery.unmake_main' : 'gallery.make_main')}
+                      <GearIcon />
                     </button>
                   )}
-                  <span className="spacer" />
-                  <button className="btn ghost small danger" onClick={() => remove(image)}>
-                    {t('app.delete')}
+                  <button
+                    className="btn ghost small icon danger"
+                    title={t('app.delete')}
+                    aria-label={t('app.delete')}
+                    onClick={() => remove(image)}
+                  >
+                    <TrashIcon />
                   </button>
                 </div>
               </figcaption>
@@ -225,44 +220,51 @@ function AngleSelect({
   )
 }
 
-interface GeneratorProps {
+interface DialogProps {
   entityId: string
+  /** The picture whose settings are open; without it, the window starts empty for a new one. */
+  image: ImageInfo | null
   withAngles: boolean
   chapters: ChapterBrief[]
   hasStyle: boolean
-  onCreated: () => void
+  /** A picture was drawn or its settings were saved: the gallery reloads. */
+  onChanged: () => void
   onClose: () => void
 }
 
-/** A view of a main picture, or "other": a look for part of the story. */
-type Choice = Angle | '' | 'other'
+type Change = Parameters<typeof api.updateImage>[1]
 
-/** A window over the page. Two separate steps, each started by the user: the text model
- *  writes the prompt, then the image model draws it. The prompt can be edited, or copied
- *  to draw elsewhere. A drawn picture is stored at once; OK closes the window. */
-function Generator({
+/**
+ * One window for a picture: drawing a new one and changing an existing one's settings.
+ * Two separate steps, each started by the user: the text model writes the prompt, then the
+ * image model draws it. A drawn picture is stored at once as a new reference (an earlier one
+ * stays); the settings are a draft until "Apply".
+ */
+function ImageDialog({
   entityId,
+  image,
   withAngles,
   chapters,
   hasStyle,
-  onCreated,
+  onChanged,
   onClose,
-}: GeneratorProps) {
+}: DialogProps) {
   const { t } = useI18n()
-  const [choice, setChoice] = useState<Choice>('')
-  const isLook = choice === 'other'
-  const [look, setLook] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [prompt, setPrompt] = useState('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'image'>('')
+  const [current, setCurrent] = useState(image)
+  const [isMain, setIsMain] = useState(image?.is_main ?? true)
+  const [angle, setAngle] = useState<Angle | ''>(image?.angle ?? '')
+  const [look, setLook] = useState(image?.look_label ?? '')
+  const [chapter, setChapter] = useState(image ? image.chapter_from_id || image.chapter_to_id : '')
+  const [prompt, setPrompt] = useState(image?.prompt ?? '')
+  const [size, setSize] = useState<ImageSize | ''>('')
+  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'save'>('')
   const [error, setError] = useState('')
-  const [made, setMade] = useState<ImageInfo | null>(null)
-  const request = isLook
-    ? { angle: '' as const, look_label: look, chapter_from_id: from, chapter_to_id: to }
-    : { angle: choice as Angle | '', look_label: '', chapter_from_id: '', chapter_to_id: '' }
-  // The server tells a look by its label or chapters: without them it would draw a main picture.
-  const ready = !isLook || Boolean(look || from || to)
+  // A look belongs to one chapter: the range is stored with both ends on it.
+  const request = isMain
+    ? { angle: withAngles ? angle : ('' as const), look_label: '', chapter_from_id: '', chapter_to_id: '' }
+    : { angle: '' as const, look_label: look.trim(), chapter_from_id: chapter, chapter_to_id: chapter }
+  // The server tells a look by its label or chapter: without them it would draw a main picture.
+  const ready = isMain || Boolean(look.trim() || chapter)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -278,10 +280,12 @@ function Generator({
         const written = await api.imagePrompt(entityId, request)
         setPrompt(written.prompt)
         // The view the service picked stays chosen, so the picture is drawn as written.
-        if (!isLook) setChoice(written.angle)
+        if (isMain) setAngle(written.angle)
       } else {
-        setMade(await api.generateImage(entityId, { ...request, prompt }))
-        onCreated()
+        const made = await api.generateImage(entityId, { ...request, prompt, size })
+        setCurrent(made)
+        setAngle(made.angle)
+        onChanged()
       }
     } catch (e) {
       setError(errorText(t, e))
@@ -289,136 +293,176 @@ function Generator({
     setBusy('')
   }
 
+  const apply = async () => {
+    if (!current) return onClose()
+    const change: Change = {}
+    if (isMain !== current.is_main) change.is_main = isMain
+    if (isMain && request.angle !== current.angle) change.angle = request.angle
+    if (!isMain && request.look_label !== current.look_label) change.look_label = request.look_label
+    if (!isMain && (chapter !== current.chapter_from_id || chapter !== current.chapter_to_id)) {
+      change.chapter_from_id = chapter
+      change.chapter_to_id = chapter
+    }
+    if (!Object.keys(change).length) return onClose()
+    setBusy('save')
+    try {
+      await api.updateImage(current.id, change)
+      onChanged()
+      onClose()
+    } catch (e) {
+      setError(errorText(t, e))
+      setBusy('')
+    }
+  }
+
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog stack generator">
+      <div className="dialog generator image-dialog">
         <div className="row">
-          <h2>{t('generate.title')}</h2>
+          <h2>{t(image ? 'gallery.settings' : 'generate.title')}</h2>
           <span className="spacer" />
           <button className="btn ghost small" aria-label={t('app.close')} onClick={onClose}>
             ✕
           </button>
         </div>
-        <p className="muted small">{t(isLook ? 'generate.hint.look' : 'generate.hint.main')}</p>
-        <select
-          className="input"
-          value={choice}
-          onChange={(e) => setChoice(e.target.value as Choice)}
-        >
-          <option value="">{t(withAngles ? 'generate.angle.auto' : 'generate.main')}</option>
-          {withAngles &&
-            ANGLES.map((angle) => (
-              <option key={angle} value={angle}>
-                {t(`angle.${angle}`)}
-              </option>
-            ))}
-          <option value="other">{t('generate.other')}</option>
-        </select>
-        {isLook && (
-          <div className="row wrap">
-            <input
-              className="input grow"
-              value={look}
-              maxLength={200}
-              placeholder={t('gallery.look.placeholder')}
-              onChange={(e) => setLook(e.target.value)}
-            />
-            <ChapterSelect
-              value={from}
-              chapters={chapters}
-              empty={t('gallery.from.start')}
-              onChange={setFrom}
-            />
-            —
-            <ChapterSelect
-              value={to}
-              chapters={chapters}
-              empty={t('gallery.to.end')}
-              onChange={setTo}
-            />
+        <div className="dialog-body">
+          <div className="picture-slot">
+            {current ? (
+              <div className="stack slot-picture">
+                <a href={current.url} target="_blank" rel="noreferrer">
+                  <img src={current.url} alt="" />
+                </a>
+                {current.origin === 'upload' && (
+                  <span className="muted small slot-note">
+                    <UploadIcon />
+                    {t('gallery.uploaded')}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="faint small">
+                {busy === 'image' ? t('generate.image.busy') : t('generate.slot')}
+              </span>
+            )}
           </div>
-        )}
-        <div className="row">
-          <h4>{t('generate.prompt.label')}</h4>
-          <span className="spacer" />
-          <button
-            className="btn small"
-            disabled={busy !== '' || !ready}
-            onClick={() => run('prompt')}
-          >
-            <SparklesIcon />
-            {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
-          </button>
-          <button
-            className="btn small"
-            disabled={!prompt}
-            onClick={() => navigator.clipboard.writeText(prompt)}
-          >
-            <CopyIcon />
-            {t('generate.copy')}
-          </button>
-        </div>
-        <textarea
-          className="input prompt"
-          rows={5}
-          value={prompt}
-          maxLength={4000}
-          placeholder={t('generate.prompt.placeholder')}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-        <div className="row wrap">
-          <button
-            className="btn primary"
-            disabled={busy !== '' || !hasStyle || !prompt.trim() || !ready}
-            onClick={() => run('image')}
-          >
-            {busy === 'image' ? t('generate.image.busy') : t('generate.image')}
-          </button>
-          {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+          <div className="stack">
+            <button
+              className={`btn small toggle ${isMain ? 'on' : ''}`}
+              aria-pressed={isMain}
+              onClick={() => setIsMain(!isMain)}
+            >
+              <StarIcon on={isMain} />
+              {t(isMain ? 'gallery.is_main' : 'gallery.is_look')}
+            </button>
+            {/* Both sets of fields sit in one grid cell, the hidden one keeping its space:
+                switching never changes the window's size or moves the buttons. */}
+            <div className="mode-fields">
+              <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
+                <p className="muted small">{t('generate.hint.main')}</p>
+                {withAngles && (
+                  <label className="stack field">
+                    <span className="small muted">{t('gallery.angle')}</span>
+                    <AngleSelect
+                      value={angle}
+                      empty={t(current ? 'gallery.angle.none' : 'generate.angle.auto')}
+                      onChange={setAngle}
+                    />
+                  </label>
+                )}
+              </div>
+              <div className="stack" inert={isMain} style={{ visibility: isMain ? 'hidden' : 'visible' }}>
+                <p className="muted small">{t('generate.hint.look')}</p>
+                <label className="stack field">
+                  <span className="small muted">{t('gallery.look')}</span>
+                  <input
+                    className="input small"
+                    value={look}
+                    maxLength={200}
+                    placeholder={t('gallery.look.placeholder')}
+                    onChange={(e) => setLook(e.target.value)}
+                  />
+                </label>
+                <label className="stack field">
+                  <span className="small muted">{t('gallery.chapter')}</span>
+                  <ChapterSelect
+                    value={chapter}
+                    chapters={chapters}
+                    empty={t('gallery.chapter.none')}
+                    onChange={setChapter}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="stack field">
+              <div className="row">
+                <span className="small muted">{t('generate.prompt.label')}</span>
+                <span className="spacer" />
+                <button
+                  className="btn ghost small"
+                  disabled={busy !== '' || !ready}
+                  onClick={() => run('prompt')}
+                >
+                  <SparklesIcon />
+                  {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
+                </button>
+                <button
+                  className="btn ghost small icon"
+                  disabled={!prompt}
+                  title={t('generate.copy')}
+                  aria-label={t('generate.copy')}
+                  onClick={() => navigator.clipboard.writeText(prompt)}
+                >
+                  <CopyIcon />
+                </button>
+              </div>
+              <textarea
+                className="input prompt"
+                rows={6}
+                value={prompt}
+                maxLength={4000}
+                placeholder={t('generate.prompt.placeholder')}
+                onChange={(e) => setPrompt(e.target.value)}
+              />
+            </div>
+            <div className="row wrap">
+              <select
+                className="input small size-select"
+                value={size}
+                aria-label={t('generate.size')}
+                onChange={(e) => setSize(e.target.value as ImageSize | '')}
+              >
+                <option value="">{t('generate.size.auto')}</option>
+                {IMAGE_SIZES.map((option) => (
+                  <option key={option} value={option}>
+                    {t(`generate.size.${option}`)}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn small"
+                disabled={busy !== '' || !hasStyle || !prompt.trim() || !ready}
+                onClick={() => run('image')}
+              >
+                {busy === 'image' ? t('generate.image.busy') : t('generate.image')}
+              </button>
+              {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+            </div>
+            {current && current.id !== image?.id && (
+              <p className="muted small">{t('generate.made')}</p>
+            )}
+          </div>
         </div>
         {error && <p className="error">{error}</p>}
-        {made && (
-          <div className="stack generated">
-            <img src={made.url} alt="" />
-            <div className="row">
-              <span className="muted small">{t('generate.made')}</span>
-              <span className="spacer" />
-              <button className="btn primary" onClick={onClose}>
-                OK
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="row">
+          <span className="spacer" />
+          <button className="btn ghost" onClick={onClose}>
+            {t('app.cancel')}
+          </button>
+          <button className="btn primary" disabled={busy !== '' || !current} onClick={apply}>
+            {t('gallery.apply')}
+          </button>
+        </div>
       </div>
     </div>
-  )
-}
-
-function SparklesIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M10 2l1.9 5.6L17.5 9.5l-5.6 1.9L10 17l-1.9-5.6L2.5 9.5l5.6-1.9z" />
-      <path d="M18.5 13l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" />
-      <path d="M18 2l.6 1.9 1.9.6-1.9.6L18 7l-.6-1.9-1.9-.6 1.9-.6z" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="9" y="9" width="12" height="12" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
   )
 }

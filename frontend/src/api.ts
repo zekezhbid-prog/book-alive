@@ -254,6 +254,10 @@ export const ANGLES = [
 ] as const
 export type Angle = (typeof ANGLES)[number]
 
+/** Picture shapes the server knows (`SIZES` there); empty leaves it to the model. */
+export const IMAGE_SIZES = ['1:1', '2:3', '3:2', '9:16', '16:9'] as const
+export type ImageSize = (typeof IMAGE_SIZES)[number]
+
 /** Empty label and chapters: a main picture in `angle` (empty: the server picks one). */
 export interface LookRequest {
   angle: Angle | ''
@@ -435,7 +439,7 @@ export const api = {
       `/entities/${entityId}/image-prompt`,
       look,
     ),
-  generateImage: (entityId: string, body: LookRequest & { prompt: string }) =>
+  generateImage: (entityId: string, body: LookRequest & { prompt: string; size: ImageSize | '' }) =>
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
