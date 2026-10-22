@@ -173,7 +173,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
           </button>
         ))}
         <button className="nav-add" onClick={() => addCard(section)}>
-          <PlusIcon /> {t('entities.add')}
+          <PlusIcon /> {t(`nav.add.${section}`)}
         </button>
         {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
         <button

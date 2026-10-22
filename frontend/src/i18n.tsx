@@ -96,6 +96,8 @@ const ru = {
   'nav.characters': 'Персонажи',
   'nav.locations': 'Локации',
   'nav.scenes': 'Сцены',
+  'nav.add.characters': 'Добавить персонажа вручную',
+  'nav.add.locations': 'Добавить локацию вручную',
   'nav.find.characters': 'Выгрузить персонажей из книги',
   'nav.find.locations': 'Выгрузить локации из книги',
   'tabs.character': 'Персонажи',
@@ -260,7 +262,6 @@ const ru = {
   'generate.image.busy': 'Рисую…',
   'generate.copy': 'Скопировать промпт',
   'generate.no_style': 'Стиль проекта не выбран: промпт будет без стиля, а рисовать нельзя.',
-  'entities.add': 'Добавить карточку',
   'entities.add.prompt': 'Имя, как в книге:',
 
   'tabs.scenes': 'Сцены',
@@ -471,6 +472,8 @@ const en: Record<keyof typeof ru, string> = {
   'nav.characters': 'Characters',
   'nav.locations': 'Locations',
   'nav.scenes': 'Scenes',
+  'nav.add.characters': 'Add a character by hand',
+  'nav.add.locations': 'Add a location by hand',
   'nav.find.characters': 'Extract characters from the book',
   'nav.find.locations': 'Extract locations from the book',
   'tabs.character': 'Characters',
@@ -635,7 +638,6 @@ const en: Record<keyof typeof ru, string> = {
   'generate.copy': 'Copy prompt',
   'generate.no_style':
     'No project style is chosen: the prompt will have no style, and drawing is disabled.',
-  'entities.add': 'Add a card',
   'entities.add.prompt': 'Name, as in the book:',
 
   'tabs.scenes': 'Scenes',
