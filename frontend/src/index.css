@@ -146,7 +146,8 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .history li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .reading { padding: 32px 40px 120px; background: rgba(12, 11, 8, 0.9); }
-.chapter { max-width: 720px; margin: 0 auto; }
+/* Content starts at the left edge, right after the menu, so zooming never slides it sideways. */
+.chapter { max-width: 720px; margin: 0; }
 .chapter-tools { display: flex; align-items: center; gap: 4px; min-height: 34px; }
 .chapter-title { width: 100%; background: transparent; border: 0; border-bottom: 1px solid transparent; outline: none; font: 800 34px/1.15 var(--serif); letter-spacing: -0.5px; padding: 8px 0; margin-bottom: 24px; }
 .chapter-title:hover, .chapter-title:focus { border-bottom-color: var(--line-2); }
@@ -323,3 +324,4 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
   .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
 }
 .project-nav .entity-link > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-list .chapter-link { width: 100%; }
