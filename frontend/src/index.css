@@ -295,21 +295,31 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .topbar .tab { padding: 0 11px; }
 .topbar .segmented { flex: none; }
 
-/* ---------- left menu of a project: folding sections, find buttons at the bottom ---------- */
-.project-nav { gap: 10px; }
+/* ---------- left menu of a project: parts of the book, the chosen part's list beside them ---------- */
+.workspace:has(> .project-nav) { grid-template-columns: auto minmax(0, 1fr); }
+.workspace.with-side:has(> .project-nav) { grid-template-columns: auto minmax(0, 1fr) 380px; }
+.workspace > .project-nav { display: flex; overflow: hidden; }
+.nav-rail { width: 220px; display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(10px); }
+.nav-list { width: 270px; display: flex; flex-direction: column; gap: 10px; padding: 18px 12px 16px; overflow-y: auto; border-right: 1px solid var(--line); background: rgba(16, 14, 9, 0.88); backdrop-filter: blur(10px); animation: unfold 0.18s ease-out; }
+.nav-list h4 { margin: 0 0 2px 12px; }
+.nav-list nav { display: flex; flex-direction: column; gap: 2px; }
+@keyframes unfold { from { opacity: 0; transform: translateX(-12px); } }
+@media (prefers-reduced-motion: reduce) { .nav-list { animation: none; } }
 .nav-sections { display: flex; flex-direction: column; gap: 4px; }
-.nav-section { display: flex; flex-direction: column; gap: 2px; }
-.nav-section > nav { padding: 2px 0 8px 10px; border-left: 1px solid rgba(250, 204, 21, 0.15); margin-left: 12px; }
-.nav-head { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; color: var(--muted); font-family: var(--book); font-size: 16px; font-weight: 700; text-align: left; transition: color 0.15s, background 0.15s, border-color 0.15s; }
+.nav-head { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 9px 10px 9px 12px; cursor: pointer; color: var(--muted); font-family: var(--book); font-size: 16px; font-weight: 700; text-align: left; transition: color 0.15s, background 0.15s, border-color 0.15s; }
 .nav-head:hover { color: #ffe7a0; background: rgba(250, 204, 21, 0.06); }
-.nav-section.current > .nav-head { color: #ffe7a0; background: linear-gradient(180deg, rgba(250, 204, 21, 0.14), rgba(250, 204, 21, 0.04)); border-color: rgba(250, 204, 21, 0.25); }
-.nav-chevron { width: 1em; color: var(--accent); font-size: 13px; }
+.nav-head.current { color: #ffe7a0; background: linear-gradient(180deg, rgba(250, 204, 21, 0.16), rgba(250, 204, 21, 0.05)); border-color: rgba(250, 204, 21, 0.28); }
+.nav-chevron { width: 1em; color: var(--accent); font-size: 18px; line-height: 1; text-align: center; }
 .nav-count { min-width: 24px; padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--faint); font: 600 12px/20px var(--sans); text-align: center; }
-.nav-group { margin: 8px 0 2px 12px; color: var(--faint); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+.nav-group { margin: 10px 0 2px 12px; color: var(--faint); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
 .nav-empty { padding: 4px 12px; }
 .nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }
-/* The find buttons stay at the bottom of the menu, however long the lists get. */
-.nav-actions { position: sticky; bottom: -16px; margin: auto -16px -16px; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px; background: linear-gradient(180deg, transparent, rgba(16, 14, 9, 0.95) 30%); }
+/* The find buttons stay at the bottom of the narrow column. */
+.nav-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 .nav-actions .btn { width: 100%; }
+@media (max-width: 900px) {
+  .workspace > .project-nav { flex-direction: column; }
+  .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+}
 .project-nav .entity-link > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

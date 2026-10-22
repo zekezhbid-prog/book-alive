@@ -22,8 +22,9 @@ interface Props {
 }
 
 /**
- * The left menu of a project: the book search and one folding section per part of the
- * book. Opening a section also goes to its page, so the tab above lights up with it.
+ * The left menu of a project: the book search and the parts of the book in a narrow
+ * column, the list of the chosen part beside it. Choosing a part goes to its page, so the
+ * tab above lights up with it.
  */
 export default function ProjectNav({ project, activeChapter, onAddChapter, ...given }: Props) {
   const { t } = useI18n()
@@ -50,20 +51,17 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   const locations = given.locations ?? fetched.locations
   const scenes = given.scenes ?? fetched.scenes
 
-  // Which sections are unfolded is remembered per project; the current one starts open.
-  const storageKey = `nav:${project.id}`
-  const [open, setOpen] = useState<Section[]>(() => {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? '[]') as Section[]
-    return saved.includes(current) ? saved : [...saved, current]
-  })
-  const remember = (next: Section[]) => {
+  // The current section's list unfolds to the right as a second column. Another section
+  // goes to its page with the list open; the current one folds the list away and back.
+  const [open, setOpen] = useState(() => localStorage.getItem('nav:folded') !== '1')
+  const remember = (next: boolean) => {
     setOpen(next)
-    localStorage.setItem(storageKey, JSON.stringify(next))
+    localStorage.setItem('nav:folded', next ? '0' : '1')
   }
-  const toggle = (section: Section) => {
-    if (open.includes(section)) return remember(open.filter((s) => s !== section))
-    remember([...open, section])
-    if (section !== current) navigate(section === 'chapters' ? base : `${base}/${section}`)
+  const choose = (section: Section) => {
+    if (section === current) return remember(!open)
+    remember(true)
+    navigate(section === 'chapters' ? base : `${base}/${section}`)
   }
 
   const [query, setQuery] = useState('')
@@ -181,57 +179,67 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   }
 
   return (
-    <aside className="chapters project-nav">
-      <input
-        className="input"
-        type="search"
-        placeholder={t('book.search')}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      {error && <p className="error small">{error}</p>}
-      {hits ? (
-        <>
-          <h4>{hits.length ? t('book.search.results', { n: hits.length }) : t('book.search.none')}</h4>
-          <nav>
-            {hits.map((hit, i) => (
-              <button key={i} className="hit" onClick={() => openHit(hit)}>
-                <span className="faint small">{hit.chapter_title || t('book.untitled')}</span>
-                <span>…{markMatches(hit.snippet, query, (text) => [text])}…</span>
-              </button>
-            ))}
-          </nav>
-        </>
-      ) : (
-        <div className="nav-sections">
-          {SECTIONS.map((section) => {
-            const unfolded = open.includes(section)
-            return (
-              <section key={section} className={`nav-section ${section === current ? 'current' : ''}`}>
-                <button className="nav-head" aria-expanded={unfolded} onClick={() => toggle(section)}>
-                  <span className="nav-chevron">{unfolded ? '▾' : '▸'}</span>
-                  <span className="grow">{t(`nav.${section}`)}</span>
-                  {count(section) !== undefined && <span className="nav-count">{count(section)}</span>}
-                </button>
-                {unfolded && <nav>{body[section]}</nav>}
-              </section>
-            )
-          })}
+    <aside className="project-nav">
+      <div className="nav-rail">
+        <input
+          className="input"
+          type="search"
+          placeholder={t('book.search')}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <nav className="nav-sections">
+          {SECTIONS.map((section) => (
+            <button
+              key={section}
+              className={`nav-head ${section === current ? 'current' : ''}`}
+              aria-expanded={section === current && open}
+              onClick={() => choose(section)}
+            >
+              <span className="grow">{t(`nav.${section}`)}</span>
+              {count(section) !== undefined && <span className="nav-count">{count(section)}</span>}
+              <span className="nav-chevron">{section === current && open ? '‹' : '›'}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="nav-actions">
+          {(['characters', 'locations'] as const).map((section) => (
+            <button
+              key={section}
+              className="btn primary small"
+              title={t(`entities.search.hint.${KIND[section]}`)}
+              onClick={() => navigate(`${base}/${section}?find=1`)}
+            >
+              <SparklesIcon />
+              {t(`nav.find.${section}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Search results take the list's place while there is a query. */}
+      {(hits || open) && (
+        <div className="nav-list">
+          {error && <p className="error small">{error}</p>}
+          {hits ? (
+            <>
+              <h4>{hits.length ? t('book.search.results', { n: hits.length }) : t('book.search.none')}</h4>
+              <nav>
+                {hits.map((hit, i) => (
+                  <button key={i} className="hit" onClick={() => openHit(hit)}>
+                    <span className="faint small">{hit.chapter_title || t('book.untitled')}</span>
+                    <span>…{markMatches(hit.snippet, query, (text) => [text])}…</span>
+                  </button>
+                ))}
+              </nav>
+            </>
+          ) : (
+            <>
+              <h4>{t(`nav.${current}`)}</h4>
+              <nav>{body[current]}</nav>
+            </>
+          )}
         </div>
       )}
-      <div className="nav-actions">
-        {(['characters', 'locations'] as const).map((section) => (
-          <button
-            key={section}
-            className="btn primary small"
-            title={t(`entities.search.hint.${KIND[section]}`)}
-            onClick={() => navigate(`${base}/${section}?find=1`)}
-          >
-            <SparklesIcon />
-            {t(`nav.find.${section}`)}
-          </button>
-        ))}
-      </div>
     </aside>
   )
 }
