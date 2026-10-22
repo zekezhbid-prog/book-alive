@@ -4,7 +4,8 @@ import { Link, NavLink } from 'react-router-dom'
 import type { Project } from '../api'
 import { useI18n } from '../i18n'
 
-/** Project title and section tabs, rendered into the app's top bar. */
+/** Project title, the tabs of the book's parts and the project's own settings, rendered
+ * into the app's top bar. */
 export default function ProjectHeader({ project, children }: { project: Project; children?: ReactNode }) {
   const { t } = useI18n()
   const slot = document.getElementById('topbar-slot')
@@ -30,15 +31,16 @@ export default function ProjectHeader({ project, children }: { project: Project;
         <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
           {t('tabs.scenes')}
         </NavLink>
-        <NavLink to={`${base}/style`} className={({ isActive }) => tabClass(isActive)}>
-          {t('tabs.style')}
-        </NavLink>
-        <NavLink to={`${base}/usage`} className={({ isActive }) => tabClass(isActive)}>
-          {t('tabs.usage')}
-        </NavLink>
       </nav>
       <span className="spacer" />
       {children}
+      {/* Project-wide settings sit on the right, next to the app's own settings. */}
+      <NavLink to={`${base}/style`} className="btn ghost">
+        {t('tabs.style')}
+      </NavLink>
+      <NavLink to={`${base}/usage`} className="btn ghost">
+        {t('tabs.usage')}
+      </NavLink>
     </>,
     slot,
   )

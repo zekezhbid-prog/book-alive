@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, ApiError, type Chapter, type EntityBrief, type Project, type SearchHit } from '../api'
+import { api, ApiError, type Chapter, type EntityBrief, type Project } from '../api'
 import ChapterEditor from '../components/ChapterEditor'
 import ChatPanel from '../components/ChatPanel'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
+import ProjectNav from '../components/ProjectNav'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
-import { markMatches } from '../markMatches'
 import { savesSettled } from '../saveQueue'
 
 type View = 'writer' | 'illustrator'
@@ -28,8 +28,6 @@ export default function Book() {
     () => (localStorage.getItem(`view:${projectId}`) as View) || 'writer',
   )
   const [side, setSide] = useState<'chat' | 'versions'>('chat')
-  const [query, setQuery] = useState('')
-  const [hits, setHits] = useState<SearchHit[] | null>(null)
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const reloadProject = useCallback(
@@ -69,12 +67,6 @@ export default function Book() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, epoch, project === null, fail, reloadProject])
 
-  useEffect(() => {
-    if (query.trim().length < 2) return setHits(null)
-    const timer = setTimeout(() => api.search(projectId, query).then(setHits).catch(fail), 250)
-    return () => clearTimeout(timer)
-  }, [query, projectId, fail])
-
   if (error && !project) return <main className="page error">{error}</main>
   if (!project) return <main className="page muted">{t('app.loading')}</main>
 
@@ -83,12 +75,7 @@ export default function Book() {
   const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
   const writing = project.mode === 'writer' && view === 'writer' && highlighted === undefined
   const shown = chapter?.id === activeId ? chapter : null
-  const open = (id: string, paragraph?: number, found?: string) => {
-    const params = new URLSearchParams()
-    if (paragraph !== undefined) params.set('p', String(paragraph))
-    if (found) params.set('q', found)
-    navigate(`/projects/${projectId}/chapters/${id}${params.size ? `?${params}` : ''}`)
-  }
+  const open = (id: string) => navigate(`/projects/${projectId}/chapters/${id}`)
   const setView = async (next: View) => {
     // The other view is drawn from what the server has, so the draft must be there first.
     await savesSettled()
@@ -128,56 +115,7 @@ export default function Book() {
         )}
       </ProjectHeader>
       <div className="workspace with-side">
-        <aside className="chapters">
-          <input
-            className="input"
-            type="search"
-            placeholder={t('book.search')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {hits ? (
-            <>
-              <h4>{hits.length ? t('book.search.results', { n: hits.length }) : t('book.search.none')}</h4>
-              <nav>
-                {hits.map((hit, i) => (
-                  <button key={i} className="hit" onClick={() => open(hit.chapter_id, hit.paragraph, query.trim())}>
-                    <span className="faint small">{hit.chapter_title || t('book.untitled')}</span>
-                    <span>…{markMatches(hit.snippet, query, (text) => [text])}…</span>
-                  </button>
-                ))}
-              </nav>
-            </>
-          ) : (
-            <>
-              <h4>
-                {t('book.chapters')} · {project.chapters.length}
-              </h4>
-              <nav>
-                {project.chapters.map((item, index) => (
-                  <button
-                    key={item.id}
-                    className={`chapter-link ${item.id === activeId ? 'active' : ''}`}
-                    onClick={() => open(item.id)}
-                  >
-                    {/* A title like "Глава 3" or "III" already carries its number. */}
-                    {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
-                    <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
-                    {project.changes?.edited.includes(item.id) ||
-                    project.changes?.added.includes(item.id) ? (
-                      <span className="dot" title={t('versions.dirty')} />
-                    ) : null}
-                  </button>
-                ))}
-              </nav>
-              {writing && (
-                <button className="btn small" onClick={addChapter}>
-                  + {t('chapter.add')}
-                </button>
-              )}
-            </>
-          )}
-        </aside>
+        <ProjectNav project={project} activeChapter={activeId} onAddChapter={writing ? addChapter : undefined} />
 
         <section className="reading">
           {error && <p className="error">{error}</p>}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type Project, type Scene, type SceneBrief } from '../api'
 import ProjectHeader from '../components/ProjectHeader'
+import ProjectNav from '../components/ProjectNav'
 import { errorText, useI18n } from '../i18n'
 
 /** Scenes of the book and, for the open one, everything needed to animate it elsewhere. */
@@ -35,44 +36,11 @@ export default function Scenes() {
     await api.deleteScene(scene.id).then(loadList, fail)
     navigate(`/projects/${projectId}/scenes`)
   }
-  // Group the flat list by chapter, in book order.
-  const groups: { title: string; scenes: SceneBrief[] }[] = []
-  for (const item of list ?? []) {
-    const last = groups.at(-1)
-    if (last && last.scenes[0].chapter_id === item.chapter_id) last.scenes.push(item)
-    else groups.push({ title: item.chapter_title, scenes: [item] })
-  }
-
   return (
     <>
       <ProjectHeader project={project} />
       <div className="workspace">
-        <aside className="chapters">
-          {list?.length === 0 && <p className="faint small">{t('scenes.empty')}</p>}
-          {groups.map((group) => (
-            <nav key={group.scenes[0].chapter_id}>
-              <h4>{group.title || t('book.untitled')}</h4>
-              {group.scenes.map((item) => (
-                <button
-                  key={item.id}
-                  className={`chapter-link entity-link ${item.id === activeId ? 'active' : ''}`}
-                  onClick={() => navigate(`/projects/${projectId}/scenes/${item.id}`)}
-                >
-                  <span>
-                    {item.vivid && (
-                      <span className="vivid" title={t('scenes.vivid')}>
-                        ★{' '}
-                      </span>
-                    )}
-                    {item.title || t('book.untitled')}
-                  </span>
-                  {item.stale && <span className="dot" title={t('scene.stale')} />}
-                  {item.has_prompt && <span className="faint small">✓</span>}
-                </button>
-              ))}
-            </nav>
-          ))}
-        </aside>
+        <ProjectNav project={project} scenes={list} />
         <section className="reading">
           <div className="chapter stack">
             {error && <p className="error">{error}</p>}

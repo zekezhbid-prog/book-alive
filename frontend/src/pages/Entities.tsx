@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   api,
   type Entity,
@@ -11,8 +11,8 @@ import {
   type Run,
 } from '../api'
 import Gallery from '../components/Gallery'
-import { PlusIcon, SparklesIcon } from '../components/icons'
 import ProjectHeader from '../components/ProjectHeader'
+import ProjectNav from '../components/ProjectNav'
 import { errorText, useI18n } from '../i18n'
 
 const POLL_MS = 2000
@@ -22,6 +22,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const { t } = useI18n()
   const { projectId = '', entityId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const section = kind === 'character' ? 'characters' : 'locations'
   const [project, setProject] = useState<Project | null>(null)
   const [list, setList] = useState<EntityBrief[] | null>(null)
@@ -56,6 +57,21 @@ export default function Entities({ kind }: { kind: EntityKind }) {
     return () => clearInterval(timer)
   }, [running, projectId, kind, loadList, fail])
 
+  // A card just added in the left menu is not in this page's list yet.
+  const missing = Boolean(list && entityId && !list.some((e) => e.id === entityId))
+  useEffect(() => {
+    if (missing) loadList()
+  }, [missing, loadList])
+
+  // "Find characters / locations" at the bottom of the left menu opens the run dialog here.
+  const find = searchParams.has('find')
+  const loaded = list !== null
+  useEffect(() => {
+    if (!find || !loaded) return
+    setSearchParams({}, { replace: true })
+    if (!running) setChoosing([])
+  }, [find, loaded, running, setSearchParams])
+
   const activeId = list?.some((e) => e.id === entityId) ? entityId : undefined
   useEffect(() => {
     if (!activeId) return setEntity(null)
@@ -65,18 +81,6 @@ export default function Entities({ kind }: { kind: EntityKind }) {
 
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
 
-  // A card for someone the search has not reached yet, so pictures can be attached now.
-  const addCard = async () => {
-    const name = prompt(t('entities.add.prompt'))?.trim()
-    if (!name) return
-    try {
-      const created = await api.createEntity(projectId, kind, name)
-      await loadList()
-      navigate(`/projects/${projectId}/${section}/${created.id}`)
-    } catch (e) {
-      fail(e)
-    }
-  }
   const cancel = () =>
     run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
   const runError = run?.error === 'interrupted' ? t('run.interrupted') : run?.error
@@ -85,40 +89,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
     <>
       <ProjectHeader project={project} />
       <div className="workspace">
-        <aside className="chapters">
-          <div className="row">
-            <button
-              className="btn primary small"
-              disabled={running}
-              title={t(`entities.search.hint.${kind}`)}
-              onClick={() => setChoosing([])}
-            >
-              <SparklesIcon />
-              {t('entities.search')}
-            </button>
-            <button
-              className="btn small icon"
-              title={t('entities.add')}
-              aria-label={t('entities.add')}
-              onClick={addCard}
-            >
-              <PlusIcon />
-            </button>
-          </div>
-          <nav>
-            {list?.map((item) => (
-              <button
-                key={item.id}
-                className={`chapter-link entity-link ${item.id === activeId ? 'active' : ''}`}
-                onClick={() => navigate(`/projects/${projectId}/${section}/${item.id}`)}
-              >
-                <span>{item.name}</span>
-                {item.stale && <span className="dot" title={t('entities.stale.hint')} />}
-                <span className="faint small">{item.chapters}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
+        <ProjectNav project={project} {...{ [section]: list }} />
 
         <section className="reading">
           <div className="chapter stack">
