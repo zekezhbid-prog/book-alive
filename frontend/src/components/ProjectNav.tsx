@@ -175,6 +175,14 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
         <button className="nav-add" onClick={() => addCard(section)}>
           <PlusIcon /> {t('entities.add')}
         </button>
+        {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
+        <button
+          className="nav-add"
+          title={t(`entities.search.hint.${KIND[section]}`)}
+          onClick={() => navigate(`${base}/${section}?find=1`)}
+        >
+          <SparklesIcon /> {t(`nav.find.${section}`)}
+        </button>
       </>
     )
   }
@@ -203,19 +211,6 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
             </button>
           ))}
         </nav>
-        <div className="nav-actions">
-          {(['characters', 'locations'] as const).map((section) => (
-            <button
-              key={section}
-              className="btn primary small"
-              title={t(`entities.search.hint.${KIND[section]}`)}
-              onClick={() => navigate(`${base}/${section}?find=1`)}
-            >
-              <SparklesIcon />
-              {t(`nav.find.${section}`)}
-            </button>
-          ))}
-        </div>
       </div>
       {/* Search results take the list's place while there is a query. */}
       {(hits || open) && (

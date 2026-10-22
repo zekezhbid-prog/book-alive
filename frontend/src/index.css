@@ -314,11 +314,8 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .nav-count { min-width: 24px; padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--faint); font: 600 12px/20px var(--sans); text-align: center; }
 .nav-group { margin: 10px 0 2px 12px; color: var(--faint); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
 .nav-empty { padding: 4px 12px; }
-.nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; }
+.nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; text-align: left; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }
-/* The find buttons stay at the bottom of the narrow column. */
-.nav-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
-.nav-actions .btn { width: 100%; }
 @media (max-width: 900px) {
   .workspace > .project-nav { flex-direction: column; }
   .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
