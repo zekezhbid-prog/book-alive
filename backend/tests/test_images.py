@@ -235,3 +235,40 @@ def test_pictures_uploaded_before_a_style_adopt_the_first_one(client, project):
     assert [(i["style_key"], i["current_style"], i["is_main"]) for i in listed] == [
         ("cinematic", True, True)
     ]
+
+
+def test_a_base_set_shares_one_prompt_and_adds_each_view(client, session, project, monkeypatch):
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.system = messages[0].content
+            return "A red-haired woman."
+
+    hero = session.get(Entity, project.hero_id)
+    model = Recorder()
+    build_image_prompt(model, project, hero, None, "", has_reference=False, view_free=True)
+    assert "appearance only" in model.system and "Head-and-shoulders" not in model.system
+
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append((prompt, len(references)))
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.images.ImageModel", Painter)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    for angle in ("face_front", "face_three_quarter"):
+        made = client.post(
+            url, json={"prompt": "A red-haired woman.", "angle": angle, "add_view": True}
+        )
+        assert made.status_code == 200, made.text
+        assert (made.json()["is_main"], made.json()["angle"]) == (True, angle)
+    # Each picture gets its own view in front; the second one is drawn from the first.
+    assert drawn[0][0].startswith("Head-and-shoulders portrait, face turned straight")
+    assert drawn[1][0].startswith("Head-and-shoulders portrait, face turned three-quarters")
+    assert drawn[0][0].endswith("A red-haired woman.")
+    assert [references for _, references in drawn] == [0, 1]

@@ -325,3 +325,10 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 /* The site's own question and text-entry windows, in place of the browser's. */
 .dialog.ask { width: min(460px, 100%); padding: 28px; gap: 18px; }
 .ask-message { font-size: 17px; line-height: 1.55; white-space: pre-line; }
+/* Base or in context: one of the two is always pressed. */
+.mode-switch { align-self: flex-start; }
+.mode-switch button { display: inline-flex; align-items: center; gap: 6px; }
+.mode-switch button:disabled { opacity: 0.4; cursor: not-allowed; }
+.view-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.view-choice label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); }
+.view-choice input { accent-color: var(--accent); }

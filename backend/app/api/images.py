@@ -74,8 +74,15 @@ class LookRequest(BaseModel):
     chapter_to_id: str = ""
 
 
+class PromptRequest(LookRequest):
+    # A prompt for a set of base pictures: the appearance only, no view.
+    view_free: bool = False
+
+
 class GenerateRequest(LookRequest):
     prompt: str = Field(min_length=1, max_length=4000)
+    # One picture of a base set: the view's own framing goes in front of the shared prompt.
+    add_view: bool = False
     # A key of SIZES; empty leaves the shape to the model.
     size: str = ""
 
@@ -318,10 +325,11 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
 
 
 @router.post("/entities/{entity_id}/image-prompt")
-def image_prompt(entity_id: str, body: LookRequest, session: SessionDep) -> PromptOut:
+def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> PromptOut:
     """Text model only. The prompt is shown for editing; nothing is drawn yet."""
     entity = _entity(session, entity_id)
     drawing = _drawing(session, entity, body)
+    view_free = body.view_free and drawing.chapters is None
     try:
         model = TextModel(session, drawing.project.id)
     except ModelNotConfigured as exc:
@@ -334,11 +342,12 @@ def image_prompt(entity_id: str, body: LookRequest, session: SessionDep) -> Prom
             drawing.chapters,
             body.look_label,
             bool(drawing.references),
-            drawing.angle,
+            "" if view_free else drawing.angle,
+            view_free,
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
-    return PromptOut(prompt=prompt, angle=drawing.angle)
+    return PromptOut(prompt=prompt, angle="" if view_free else drawing.angle)
 
 
 @router.post("/entities/{entity_id}/images/generate")
@@ -353,8 +362,11 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
     except ImageModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     references = [settings.files_dir / image.path for image in drawing.references]
+    prompt = body.prompt.strip()
+    if body.add_view and drawing.angle:
+        prompt = f"{angles.ANGLES[drawing.angle]} {prompt}"
     try:
-        result = model.generate(body.prompt, references, body.size)
+        result = model.generate(prompt, references, body.size)
     except ImageGenerationFailed as exc:
         raise HTTPException(502, f"provider_error: {exc}") from exc
     mime = result.mime if result.mime in EXTENSIONS else "image/png"
@@ -372,7 +384,7 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
         look_label=body.look_label.strip(),
         chapter_from_id=body.chapter_from_id,
         chapter_to_id=body.chapter_to_id,
-        prompt=body.prompt,
+        prompt=prompt,
         filename="",
         path=relative,
         mime=mime,

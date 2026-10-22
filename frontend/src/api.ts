@@ -249,6 +249,7 @@ export const ANGLES = [
   'face_front',
   'full_front',
   'face_profile',
+  'face_three_quarter',
   'full_side',
   'full_back',
 ] as const
@@ -433,13 +434,16 @@ export const api = {
     >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
-  imagePrompt: (entityId: string, look: LookRequest) =>
+  imagePrompt: (entityId: string, look: LookRequest & { view_free?: boolean }) =>
     request<{ prompt: string; angle: Angle | '' }>(
       'POST',
       `/entities/${entityId}/image-prompt`,
       look,
     ),
-  generateImage: (entityId: string, body: LookRequest & { prompt: string; size: ImageSize | '' }) =>
+  generateImage: (
+    entityId: string,
+    body: LookRequest & { prompt: string; size: ImageSize | ''; add_view?: boolean },
+  ) =>
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),

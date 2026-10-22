@@ -13,12 +13,14 @@ ANGLES = {
     "pose, plain uncluttered background, even light, face clearly visible.",
     "face_profile": "Head-and-shoulders portrait in strict side profile, neutral expression, "
     "plain uncluttered background, even light.",
+    "face_three_quarter": "Head-and-shoulders portrait, face turned three-quarters away from "
+    "the camera, neutral expression, plain uncluttered background, even light.",
     "full_side": "Full-body view of the character alone, standing in side profile, neutral "
     "pose, plain uncluttered background, even light.",
     "full_back": "Full-body view of the character alone, standing, seen from behind, neutral "
     "pose, plain uncluttered background, even light.",
 }
-FACES = ("face_front", "face_profile")
+FACES = ("face_front", "face_profile", "face_three_quarter")
 FIGURES = ("full_front", "full_side", "full_back")
 
 # Image models take only a few pictures, and each one costs input tokens.

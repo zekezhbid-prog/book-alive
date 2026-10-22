@@ -20,6 +20,12 @@ Where the facts are silent, stay neutral rather than inventing striking details.
 
 Reply with the prompt only."""
 
+# A set of base pictures shares one prompt; each picture gets its view put in front of it.
+VIEW_FREE = (
+    "Describe the appearance only. Do not mention the view, pose, framing, background or "
+    "light: they are added to each picture of the set separately."
+)
+
 FRAMING = {
     "character": "Full-body view of the character alone, standing, neutral pose, plain "
     "uncluttered background, even light, face clearly visible.",
@@ -45,9 +51,11 @@ def build_image_prompt(
     look_label: str,
     has_reference: bool,
     angle: str = "",
+    view_free: bool = False,
 ) -> str:
     """`chapters` given: a look at that point of the story (its state facts are used).
-    None: a main picture, from permanent traits only, in the given view."""
+    None: a main picture, from permanent traits only, in the given view, or with
+    `view_free` in none, for a set of views drawn from one prompt."""
     permanent = [f.text for f in entity.facts if f.category == FACT_PERMANENT]
     state: list[str] = []
     if chapters is not None:
@@ -70,7 +78,7 @@ def build_image_prompt(
     )
     system = SYSTEM.format(
         subject="character" if entity.kind == KIND_CHARACTER else "location",
-        framing=ANGLES.get(angle) or FRAMING[entity.kind],
+        framing=VIEW_FREE if view_free else ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,
         style=style_prompt(project) or "(no style chosen: omit this part)",
     )

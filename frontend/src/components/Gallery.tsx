@@ -10,7 +10,7 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { CopyIcon, GearIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
+import { CopyIcon, GearIcon, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 
 interface Props {
@@ -84,20 +84,25 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
           hidden
           onChange={(e) => upload(e.target.files)}
         />
-        {entityId && (
+        {/* On a card everything starts from one window: drawing and uploading alike. */}
+        {entityId ? (
           <button className="btn small" onClick={() => setDialog('new')}>
-            {t('generate.title')}
+            <PlusIcon />
+            {t('gallery.add')}
+          </button>
+        ) : (
+          <button className="btn small" disabled={busy} onClick={() => picker.current?.click()}>
+            {busy ? t('gallery.uploading') : t('gallery.upload')}
           </button>
         )}
-        <button className="btn small" disabled={busy} onClick={() => picker.current?.click()}>
-          {busy ? t('gallery.uploading') : t('gallery.upload')}
-        </button>
       </div>
       {error && <p className="error">{error}</p>}
       {entityId && dialog && (
         <ImageDialog
+          projectId={projectId}
           entityId={entityId}
           image={dialog === 'new' ? null : dialog}
+          bases={(images ?? []).filter((i) => i.is_main && i.current_style)}
           withAngles={kind === 'character'}
           chapters={chapters}
           hasStyle={hasStyle}
@@ -222,28 +227,46 @@ function AngleSelect({
 }
 
 interface DialogProps {
+  projectId: string
   entityId: string
   /** The picture whose settings are open; without it, the window starts empty for a new one. */
   image: ImageInfo | null
+  /** The card's base pictures in the current style: pictures in context are drawn from them. */
+  bases: ImageInfo[]
   withAngles: boolean
   chapters: ChapterBrief[]
   hasStyle: boolean
-  /** A picture was drawn or its settings were saved: the gallery reloads. */
+  /** A picture was drawn, uploaded or its settings were saved: the gallery reloads. */
   onChanged: () => void
   onClose: () => void
 }
 
 type Change = Parameters<typeof api.updateImage>[1]
+type Mode = 'base' | 'context'
+
+// A base set is drawn face first: that picture becomes the reference for the rest.
+const SET_ORDER: Angle[] = [
+  'face_front',
+  'face_three_quarter',
+  'face_profile',
+  'full_front',
+  'full_side',
+  'full_back',
+]
 
 /**
- * One window for a picture: drawing a new one and changing an existing one's settings.
- * Two separate steps, each started by the user: the text model writes the prompt, then the
- * image model draws it. A drawn picture is stored at once as a new reference (an earlier one
- * stays); the settings are a draft until "Apply".
+ * One window for a picture: adding a new one (drawn or uploaded) and changing an existing
+ * one's settings. A base picture shows the face or figure; a character's base pictures can
+ * be drawn as a whole set of views from one prompt. A picture in context is drawn from the
+ * base ones. Drawing is two steps, each started by the user: the text model writes the
+ * prompt, then the image model draws it. Every drawn or uploaded picture is stored at once;
+ * the settings of an existing one are a draft until "Apply".
  */
 function ImageDialog({
+  projectId,
   entityId,
   image,
+  bases,
   withAngles,
   chapters,
   hasStyle,
@@ -252,20 +275,33 @@ function ImageDialog({
 }: DialogProps) {
   const { t } = useI18n()
   const [current, setCurrent] = useState(image)
-  const [isMain, setIsMain] = useState(image?.is_main ?? true)
+  const [mode, setMode] = useState<Mode>(image && !image.is_main ? 'context' : 'base')
   const [angle, setAngle] = useState<Angle | ''>(image?.angle ?? '')
+  // Views of a new base set: the missing ones, or all of them when none is missing.
+  const [views, setViews] = useState<Angle[]>(() => {
+    const missing = SET_ORDER.filter((view) => !bases.some((b) => b.angle === view))
+    return missing.length ? missing : SET_ORDER
+  })
   const [look, setLook] = useState(image?.look_label ?? '')
   const [chapter, setChapter] = useState(image ? image.chapter_from_id || image.chapter_to_id : '')
   const [prompt, setPrompt] = useState(image?.prompt ?? '')
   const [size, setSize] = useState<ImageSize | ''>('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'save'>('')
+  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'save'>('')
+  const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
+  const picker = useRef<HTMLInputElement>(null)
+
+  const isMain = mode === 'base'
+  // A new character picture in base mode is a set of views drawn from one prompt.
+  const asSet = isMain && withAngles && !image
+  // Pictures in context are drawn from base ones, so they wait for the first.
+  const contextLocked = !image && bases.length === 0 && !current?.is_main
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
     ? { angle: withAngles ? angle : ('' as const), look_label: '', chapter_from_id: '', chapter_to_id: '' }
     : { angle: '' as const, look_label: look.trim(), chapter_from_id: chapter, chapter_to_id: chapter }
-  // The server tells a look by its label or chapter: without them it would draw a main picture.
-  const ready = isMain || Boolean(look.trim() || chapter)
+  // The server tells a look by its label or chapter: without them it would draw a base picture.
+  const ready = isMain ? !asSet || views.length > 0 : Boolean(look.trim() || chapter)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -273,15 +309,41 @@ function ImageDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const run = async (step: 'prompt' | 'image') => {
-    setBusy(step)
+  const writePrompt = async () => {
+    setBusy('prompt')
     setError('')
     try {
-      if (step === 'prompt') {
-        const written = await api.imagePrompt(entityId, request)
-        setPrompt(written.prompt)
-        // The view the service picked stays chosen, so the picture is drawn as written.
-        if (isMain) setAngle(written.angle)
+      const written = await api.imagePrompt(entityId, { ...request, view_free: asSet })
+      setPrompt(written.prompt)
+      // The view the service picked stays chosen, so the picture is drawn as written.
+      if (isMain && !asSet) setAngle(written.angle)
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+
+  const draw = async () => {
+    setBusy('image')
+    setError('')
+    try {
+      if (asSet) {
+        const order = SET_ORDER.filter((view) => views.includes(view))
+        for (const [n, view] of order.entries()) {
+          setProgress(
+            t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }),
+          )
+          const made = await api.generateImage(entityId, {
+            ...request,
+            angle: view,
+            prompt,
+            size,
+            add_view: true,
+          })
+          setCurrent(made)
+          onChanged()
+        }
+        setProgress(t('generate.set.done', { n: order.length }))
       } else {
         const made = await api.generateImage(entityId, { ...request, prompt, size })
         setCurrent(made)
@@ -289,13 +351,35 @@ function ImageDialog({
         onChanged()
       }
     } catch (e) {
+      setProgress('')
       setError(errorText(t, e))
     }
     setBusy('')
   }
 
+  // An uploaded file is filed as the mode says: a base picture (a reference for drawing) or
+  // a picture in context with its look and chapter.
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return
+    setBusy('upload')
+    setError('')
+    try {
+      let last: ImageInfo | null = null
+      for (const made of await api.uploadImages(projectId, [...files], entityId)) {
+        last = await api.updateImage(made.id, isMain ? { is_main: true } : { ...request, is_main: false })
+      }
+      setCurrent(last)
+      onChanged()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    if (picker.current) picker.current.value = ''
+    setBusy('')
+  }
+
   const apply = async () => {
-    if (!current) return onClose()
+    // A new picture is stored the moment it is drawn or uploaded.
+    if (!image || !current) return onClose()
     const change: Change = {}
     if (isMain !== current.is_main) change.is_main = isMain
     if (isMain && request.angle !== current.angle) change.angle = request.angle
@@ -316,11 +400,14 @@ function ImageDialog({
     }
   }
 
+  const toggleView = (view: Angle) =>
+    setViews((chosen) => (chosen.includes(view) ? chosen.filter((v) => v !== view) : [...chosen, view]))
+
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog generator image-dialog">
         <div className="row">
-          <h2>{t(image ? 'gallery.settings' : 'generate.title')}</h2>
+          <h2>{t(image ? 'gallery.settings' : 'gallery.add.title')}</h2>
           <span className="spacer" />
           <button className="btn ghost small" aria-label={t('app.close')} onClick={onClose}>
             ✕
@@ -347,28 +434,55 @@ function ImageDialog({
             )}
           </div>
           <div className="stack">
-            <button
-              className={`btn small toggle ${isMain ? 'on' : ''}`}
-              aria-pressed={isMain}
-              onClick={() => setIsMain(!isMain)}
-            >
-              <StarIcon on={isMain} />
-              {t(isMain ? 'gallery.is_main' : 'gallery.is_look')}
-            </button>
+            {/* One of the two is always pressed. */}
+            <div className="segmented mode-switch" role="radiogroup">
+              {(['base', 'context'] as const).map((option) => (
+                <button
+                  key={option}
+                  role="radio"
+                  aria-checked={mode === option}
+                  className={mode === option ? 'active' : ''}
+                  disabled={busy !== '' || (option === 'context' && contextLocked)}
+                  title={option === 'context' && contextLocked ? t('gallery.mode.context.locked') : ''}
+                  onClick={() => setMode(option)}
+                >
+                  {option === 'base' && <StarIcon on={mode === 'base'} />}
+                  {t(`gallery.mode.${option}`)}
+                </button>
+              ))}
+            </div>
             {/* Both sets of fields sit in one grid cell, the hidden one keeping its space:
                 switching never changes the window's size or moves the buttons. */}
             <div className="mode-fields">
               <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
-                <p className="muted small">{t('generate.hint.main')}</p>
-                {withAngles && (
-                  <label className="stack field">
-                    <span className="small muted">{t('gallery.angle')}</span>
-                    <AngleSelect
-                      value={angle}
-                      empty={t(current ? 'gallery.angle.none' : 'generate.angle.auto')}
-                      onChange={setAngle}
-                    />
-                  </label>
+                <p className="muted small">{t(asSet ? 'generate.hint.base_set' : 'generate.hint.main')}</p>
+                {asSet ? (
+                  <div className="stack field">
+                    <span className="small muted">{t('generate.views')}</span>
+                    <div className="view-choice">
+                      {SET_ORDER.map((view) => (
+                        <label key={view} className="small">
+                          <input
+                            type="checkbox"
+                            checked={views.includes(view)}
+                            onChange={() => toggleView(view)}
+                          />
+                          {t(`angle.${view}`)}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  withAngles && (
+                    <label className="stack field">
+                      <span className="small muted">{t('gallery.angle')}</span>
+                      <AngleSelect
+                        value={angle}
+                        empty={t(current ? 'gallery.angle.none' : 'generate.angle.auto')}
+                        onChange={setAngle}
+                      />
+                    </label>
+                  )
                 )}
               </div>
               <div className="stack" inert={isMain} style={{ visibility: isMain ? 'hidden' : 'visible' }}>
@@ -398,11 +512,7 @@ function ImageDialog({
               <div className="row">
                 <span className="small muted">{t('generate.prompt.label')}</span>
                 <span className="spacer" />
-                <button
-                  className="btn ghost small"
-                  disabled={busy !== '' || !ready}
-                  onClick={() => run('prompt')}
-                >
+                <button className="btn ghost small" disabled={busy !== '' || !ready} onClick={writePrompt}>
                   <SparklesIcon />
                   {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
                 </button>
@@ -425,30 +535,56 @@ function ImageDialog({
                 onChange={(e) => setPrompt(e.target.value)}
               />
             </div>
+            <select
+              className="input small"
+              value={size}
+              aria-label={t('generate.size')}
+              onChange={(e) => setSize(e.target.value as ImageSize | '')}
+            >
+              <option value="">{t('generate.size.auto')}</option>
+              {IMAGE_SIZES.map((option) => (
+                <option key={option} value={option}>
+                  {t(`generate.size.${option}`)}
+                </option>
+              ))}
+            </select>
             <div className="row wrap">
-              <select
-                className="input small size-select"
-                value={size}
-                aria-label={t('generate.size')}
-                onChange={(e) => setSize(e.target.value as ImageSize | '')}
-              >
-                <option value="">{t('generate.size.auto')}</option>
-                {IMAGE_SIZES.map((option) => (
-                  <option key={option} value={option}>
-                    {t(`generate.size.${option}`)}
-                  </option>
-                ))}
-              </select>
               <button
-                className="btn small"
+                className="btn small primary"
                 disabled={busy !== '' || !hasStyle || !prompt.trim() || !ready}
-                onClick={() => run('image')}
+                onClick={draw}
               >
-                {busy === 'image' ? t('generate.image.busy') : t('generate.image')}
+                <SparklesIcon />
+                {busy === 'image'
+                  ? t('generate.image.busy')
+                  : asSet
+                    ? t('generate.set', { n: views.length })
+                    : t('generate.image')}
               </button>
-              {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+              {!image && (
+                <>
+                  <input
+                    ref={picker}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    hidden
+                    onChange={(e) => upload(e.target.files)}
+                  />
+                  <button
+                    className="btn small"
+                    disabled={busy !== '' || !ready}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <UploadIcon />
+                    {busy === 'upload' ? t('gallery.uploading') : t('gallery.upload.file')}
+                  </button>
+                </>
+              )}
             </div>
-            {current && current.id !== image?.id && (
+            {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+            {progress && <p className="muted small">{progress}</p>}
+            {!progress && current && current.id !== image?.id && (
               <p className="muted small">{t('generate.made')}</p>
             )}
           </div>
@@ -456,12 +592,20 @@ function ImageDialog({
         {error && <p className="error">{error}</p>}
         <div className="row">
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
-            {t('app.cancel')}
-          </button>
-          <button className="btn primary" disabled={busy !== '' || !current} onClick={apply}>
-            {t('gallery.apply')}
-          </button>
+          {image ? (
+            <>
+              <button className="btn ghost" onClick={onClose}>
+                {t('app.cancel')}
+              </button>
+              <button className="btn primary" disabled={busy !== ''} onClick={apply}>
+                {t('gallery.apply')}
+              </button>
+            </>
+          ) : (
+            <button className="btn" disabled={busy === 'image' || busy === 'upload'} onClick={onClose}>
+              {t('app.close')}
+            </button>
+          )}
         </div>
       </div>
     </div>
