@@ -33,8 +33,10 @@ export default function App() {
       <>
         <header className="topbar">
           <span className="brand">
-            <img className="brand-mark" src="/favicon.svg" alt="" />
-            Book Alive
+            <span className="brand-mark">
+              <img src="/favicon.svg" alt="" />
+            </span>
+            <span className="brand-name">Book Alive</span>
           </span>
           <span className="spacer" />
           {languageButton}
@@ -47,8 +49,10 @@ export default function App() {
     <>
       <header className="topbar">
         <Link to="/" className="brand">
-          <img className="brand-mark" src="/favicon.svg" alt="" />
-          Book Alive
+          <span className="brand-mark">
+            <img src="/favicon.svg" alt="" />
+          </span>
+          <span className="brand-name">Book Alive</span>
         </Link>
         {/* Pages put their own breadcrumb and controls here. */}
         <div id="topbar-slot" className="topbar-slot" />
