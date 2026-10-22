@@ -340,6 +340,7 @@ const ru = {
   'error.nothing_to_commit': 'Изменений нет, фиксировать нечего.',
   'error.no_next_chapter': 'Это последняя глава.',
   'error.bad_base_url': 'Адрес должен начинаться с http:// или https://',
+  'error.claude_cli_missing': 'Claude Code на этом компьютере не найден.',
   'error.provider_error': 'Сервис ответил ошибкой: {detail}',
   'error.text_model_not_configured':
     'Не выбрана модель для текста. Откройте Настройки и выберите подключение и модель.',
@@ -706,6 +707,7 @@ const en: Record<keyof typeof ru, string> = {
   'error.nothing_to_commit': 'Nothing has changed, nothing to commit.',
   'error.no_next_chapter': 'This is the last chapter.',
   'error.bad_base_url': 'The address must start with http:// or https://',
+  'error.claude_cli_missing': 'Claude Code was not found on this computer.',
   'error.provider_error': 'The service returned an error: {detail}',
   'error.text_model_not_configured':
     'No text model is selected. Open Settings and choose a connection and a model.',

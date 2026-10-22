@@ -93,6 +93,8 @@ def _connection(session: Session, connection_id: str) -> Connection:
 def _validate(kind: str, base_url: str) -> None:
     if kind not in (KIND_OPENAI, KIND_CLAUDE_CLI):
         raise HTTPException(422, "bad_connection_kind")
+    if kind == KIND_CLAUDE_CLI and cli_path() is None:
+        raise HTTPException(422, "claude_cli_missing")
     if kind == KIND_OPENAI and not base_url.strip().startswith(("http://", "https://")):
         raise HTTPException(422, "bad_base_url")
 

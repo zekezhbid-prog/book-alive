@@ -10,6 +10,7 @@ import { errorText, useI18n } from '../i18n'
 
 const PRESETS = [
   { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1' },
+  { name: 'Hubris', url: 'https://api.hubris.pw/v1' },
   { name: 'OmniRoute', url: 'http://127.0.0.1:20128/v1' },
 ]
 
@@ -149,7 +150,8 @@ function AddConnection({ hasCli, onAdded }: { hasCli: boolean; onAdded: () => vo
         {t('settings.kind')}
         <select className="input" value={kind} onChange={(e) => setKind(e.target.value as ConnectionKind)}>
           <option value="openai">{t('settings.kind.openai')}</option>
-          <option value="claude_cli">{t('settings.kind.claude_cli')}</option>
+          {/* A hosted server has no Claude Code, so the subscription is offered only locally. */}
+          {hasCli && <option value="claude_cli">{t('settings.kind.claude_cli')}</option>}
         </select>
       </label>
       {kind === 'claude_cli' ? (

@@ -1,0 +1,25 @@
+# A server reachable from the internet: the app is published only through Caddy on 80/443.
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+
+services:
+  app:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

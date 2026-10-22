@@ -111,9 +111,16 @@ docker compose up -d --build
 ```
 
 The app has no user accounts. `APP_PASSWORD` is one shared password that keeps strangers
-from spending your model credits; put the app behind HTTPS (a reverse proxy) when it is
-reachable from the internet. The Claude subscription connection does not work in a
-container: there is no Claude Code CLI there.
+from spending your model credits; put the app behind HTTPS when it is reachable from the
+internet. The Claude subscription connection is not offered in a container: there is no
+Claude Code CLI there. Use any OpenAI-compatible endpoint with a key (OpenRouter, Hubris).
+
+On a server, add `DOMAIN` to `.env` (a bare IP works through sslip.io:
+`203-0-113-7.sslip.io`) and start with Caddy in front, which gets the certificate itself:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+```
 
 ## Tests
 

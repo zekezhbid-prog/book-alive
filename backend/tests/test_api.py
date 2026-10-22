@@ -124,6 +124,15 @@ def test_connection_needs_a_url(client):
     assert response.status_code == 422
 
 
+def test_subscription_connection_needs_claude_code(client, monkeypatch):
+    # A hosted server has no Claude Code CLI, so it must not accept that connection.
+    monkeypatch.setattr("app.api.connections.cli_path", lambda: None)
+    response = client.post("/api/connections", json={"name": "Claude", "kind": "claude_cli"})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "claude_cli_missing"
+    assert client.get("/api/system").json() == {"claude_cli": False}
+
+
 def test_delete_project(client):
     project = create(client)
     assert client.delete(f"/api/projects/{project['id']}").status_code == 204
