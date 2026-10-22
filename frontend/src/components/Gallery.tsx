@@ -574,10 +574,13 @@ function ImageDialog({
                   <button
                     className="btn small"
                     disabled={busy !== '' || !ready}
+                    title={isMain ? t('gallery.upload.reference.hint') : ''}
                     onClick={() => picker.current?.click()}
                   >
                     <UploadIcon />
-                    {busy === 'upload' ? t('gallery.uploading') : t('gallery.upload.file')}
+                    {busy === 'upload'
+                      ? t('gallery.uploading')
+                      : t(isMain ? 'gallery.upload.reference' : 'gallery.upload.file')}
                   </button>
                 </>
               )}
