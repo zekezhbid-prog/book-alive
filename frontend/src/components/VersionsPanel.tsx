@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api, type Project, type Version } from '../api'
 import { useI18n, versionLabel } from '../i18n'
 import { savesSettled } from '../saveQueue'
+import { ask } from '../dialogs'
 
 interface Props {
   project: Project
@@ -33,7 +34,7 @@ export default function VersionsPanel({ project, onChanged, onError }: Props) {
     setBusy(false)
   }
   const rollback = async (target: Version) => {
-    if (!confirm(t('versions.rollback.confirm', { n: target.number }))) return
+    if (!(await ask(t('versions.rollback.confirm', { n: target.number })))) return
     setBusy(true)
     await savesSettled()
     await api.rollback(project.id, target.id).then(onChanged, onError)

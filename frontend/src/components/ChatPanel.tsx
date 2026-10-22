@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { Link } from 'react-router-dom'
 import { api, type ChatMessage, type ChatStatus, type Citation } from '../api'
 import { errorText, useI18n } from '../i18n'
+import { ask } from '../dialogs'
 
 interface Props {
   projectId: string
@@ -67,7 +68,7 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
     }
   }
   const clear = async () => {
-    if (!confirm(t('chat.clear.confirm'))) return
+    if (!(await ask(t('chat.clear.confirm')))) return
     await api.clearChat(projectId)
     setMessages([])
   }

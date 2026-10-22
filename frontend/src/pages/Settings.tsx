@@ -7,6 +7,7 @@ import {
   type ModelSettings,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
+import { ask } from '../dialogs'
 
 const PRESETS = [
   { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1' },
@@ -36,7 +37,7 @@ export default function Settings() {
     api.saveSettings(next).catch(fail)
   }
   const remove = async (connection: Connection) => {
-    if (!confirm(t('settings.delete.confirm', { name: connection.name }))) return
+    if (!(await ask(t('settings.delete.confirm', { name: connection.name })))) return
     await api.deleteConnection(connection.id).catch(fail)
     loadConnections()
     api.settings().then(setSettings, fail)

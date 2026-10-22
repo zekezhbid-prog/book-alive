@@ -4,6 +4,7 @@ import { api, type Project, type StylePreset } from '../api'
 import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n, type MessageKey } from '../i18n'
+import { ask } from '../dialogs'
 
 /** One look for every picture in the project, plus references that belong to no card. */
 export default function Style() {
@@ -27,7 +28,7 @@ export default function Style() {
 
   const choose = async (styleId: string, text = '') => {
     // Pictures made so far carry the old style's label and stop being offered as references.
-    if (project.style_id && !confirm(t('style.change.confirm'))) return
+    if (project.style_id && !(await ask(t('style.change.confirm')))) return
     try {
       const saved = await api.setStyle(projectId, styleId, text)
       setProject({ ...project, ...saved })

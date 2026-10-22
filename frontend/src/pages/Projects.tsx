@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Mode, type ProjectBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
+import { ask } from '../dialogs'
 
 export default function Projects() {
   const { t } = useI18n()
@@ -20,7 +21,7 @@ export default function Projects() {
   }, [])
 
   const remove = async (project: ProjectBrief) => {
-    if (!confirm(t('projects.delete.confirm', { title: project.title }))) return
+    if (!(await ask(t('projects.delete.confirm', { title: project.title })))) return
     await api.deleteProject(project.id)
     load()
   }

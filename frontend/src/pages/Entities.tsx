@@ -14,6 +14,7 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import { errorText, useI18n } from '../i18n'
+import { ask } from '../dialogs'
 
 const POLL_MS = 2000
 
@@ -182,14 +183,14 @@ interface CardProps {
  *  Top to bottom: name, references, description, mentions by chapter. */
 function Card({ entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
-  const merge = (otherId: string) => {
+  const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
-    if (!other || !confirm(t('entities.merge.confirm', { other: other.name, name: entity.name })))
+    if (!other || !(await ask(t('entities.merge.confirm', { other: other.name, name: entity.name }))))
       return
     api.mergeEntities(entity.id, other.id).then(onChanged, onError)
   }
-  const split = (alias: string) => {
-    if (!confirm(t('entities.split.confirm', { alias }))) return
+  const split = async (alias: string) => {
+    if (!(await ask(t('entities.split.confirm', { alias })))) return
     api.splitEntity(entity.id, alias).then(onChanged, onError)
   }
   const source = (fact: Fact) =>

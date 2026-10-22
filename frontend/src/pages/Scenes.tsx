@@ -4,6 +4,7 @@ import { api, type Project, type Scene, type SceneBrief } from '../api'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import { errorText, useI18n } from '../i18n'
+import { ask } from '../dialogs'
 
 /** Scenes of the book and, for the open one, everything needed to animate it elsewhere. */
 export default function Scenes() {
@@ -32,7 +33,7 @@ export default function Scenes() {
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
 
   const remove = async () => {
-    if (!scene || !confirm(t('scene.delete.confirm'))) return
+    if (!scene || !(await ask(t('scene.delete.confirm')))) return
     await api.deleteScene(scene.id).then(loadList, fail)
     navigate(`/projects/${projectId}/scenes`)
   }

@@ -4,6 +4,7 @@ import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, 
 import { errorText, useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
 import { PlusIcon, SparklesIcon } from './icons'
+import { askText } from '../dialogs'
 
 type Section = 'chapters' | 'characters' | 'locations' | 'scenes'
 const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'scenes']
@@ -83,7 +84,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
 
   // A card for someone the search has not reached yet, so pictures can be attached now.
   const addCard = async (section: 'characters' | 'locations') => {
-    const name = prompt(t('entities.add.prompt'))?.trim()
+    const name = (await askText(t('entities.add.prompt')))?.trim()
     if (!name) return
     try {
       const created = await api.createEntity(project.id, KIND[section], name)

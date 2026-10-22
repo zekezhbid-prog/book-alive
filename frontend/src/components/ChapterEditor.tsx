@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { api, type Chapter, type Project } from '../api'
 import { useI18n } from '../i18n'
 import { enqueueSave, savesSettled } from '../saveQueue'
+import { ask } from '../dialogs'
 
 interface Props {
   project: Project
@@ -92,7 +93,7 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
   }
   const remove = async () => {
     const name = title || t('book.untitled')
-    if (!confirm(t('chapter.delete.confirm', { title: name }))) return
+    if (!(await ask(t('chapter.delete.confirm', { title: name })))) return
     saved.current = { ...latest.current } // the chapter is going away: nothing left to save
     await savesSettled()
     await api.deleteChapter(chapter.id).then(() => onStructureChange(), onError)

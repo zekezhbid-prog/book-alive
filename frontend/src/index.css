@@ -325,3 +325,6 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 }
 .project-nav .entity-link > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-list .chapter-link { width: 100%; }
+/* The site's own question and text-entry windows, in place of the browser's. */
+.dialog.ask { width: min(460px, 100%); padding: 28px; gap: 18px; }
+.ask-message { font-size: 17px; line-height: 1.55; white-space: pre-line; }

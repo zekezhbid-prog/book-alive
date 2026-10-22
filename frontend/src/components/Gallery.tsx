@@ -11,6 +11,7 @@ import {
 } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { CopyIcon, GearIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
+import { ask } from '../dialogs'
 
 interface Props {
   projectId: string
@@ -52,8 +53,8 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
   }
   const patch = (image: ImageInfo, change: Parameters<typeof api.updateImage>[1]) =>
     api.updateImage(image.id, change).then(load, fail)
-  const remove = (image: ImageInfo) => {
-    if (confirm(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(load, fail)
+  const remove = async (image: ImageInfo) => {
+    if (await ask(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(load, fail)
   }
   // A card's references start folded so the description is in view; the project's
   // general gallery is the whole point of its page and stays open.
