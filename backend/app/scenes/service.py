@@ -49,15 +49,20 @@ Rules:
 - English only, one paragraph, under 130 words, no line breaks, no quotation marks.
 - Pick the single most visual moment of the scene and describe one clear action.
 - Video models do not know the book. Never rely on names: describe who is on screen by how \
-they look. When a reference picture is listed for someone, call them "the figure from \
+they look. When you use a reference picture for someone, call them "the figure from \
 reference N" and add only what the picture cannot show (action, expression, state).
+- Choose the reference pictures the shot needs from those listed. For each person or place \
+on screen, take the look made for this chapter when there is one; otherwise take only the \
+base views this shot needs (a face for a close-up, a full-length view for a wide shot). Use \
+as few as serve, at most 4 in all, and mention in the prompt only the ones you chose.
 - Appearance comes only from the facts given. Do not invent clothes, colours or features.
 - Say where it happens, the time of day and the light, then the camera: shot size and one \
 movement.
 - If the author's note below asks for something, it overrides your own choices.
 - End with the style, word for word: {style}
 
-Reply with the prompt only."""
+Reply with one JSON object and nothing else:
+{{"references": [1, 3], "prompt": ""}}"""
 
 REFINE_SYSTEM = """Below is a prompt for an AI video generator and a change the author \
 wants. Rewrite the prompt with that change and keep everything else as it is, including \
@@ -78,6 +83,11 @@ class SceneDraft(BaseModel):
 
 class SceneDrafts(BaseModel):
     scenes: list[SceneDraft]
+
+
+class VideoAnswer(BaseModel):
+    references: list[int] = Field(default_factory=list)
+    prompt: str
 
 
 def paragraphs_of(chapter: Chapter) -> list[str]:
@@ -210,17 +220,54 @@ def pick_images(project: Project, entity: Entity, chapter: Chapter) -> list[tupl
     return picked
 
 
+def _cast(session: Session, scene: Scene) -> list[Entity]:
+    entities = [session.get(Entity, entity_id) for entity_id in scene.entity_ids]
+    # Characters first: they matter most for consistency, and models take few pictures.
+    return sorted((e for e in entities if e), key=lambda e: (e.kind != KIND_CHARACTER, e.name))
+
+
+def _covers(project: Project, image: Image, chapter: Chapter) -> bool:
+    positions = {c.id: c.position for c in project.chapters}
+    start = positions.get(image.chapter_from_id, 0)
+    end = positions.get(image.chapter_to_id, len(positions))
+    return start <= chapter.position <= end
+
+
+def candidates(
+    session: Session, project: Project, scene: Scene, chapter: Chapter
+) -> list[Reference]:
+    """Everything the model may choose from: every base view in the current style and every
+    look whose chapters cover this one."""
+    key = style_key(project)
+    result: list[Reference] = []
+    for entity in _cast(session, scene):
+        for image in angles.mains(entity.images, key):
+            result.append(Reference(len(result) + 1, image, entity, "main"))
+        for image in entity.images:
+            if (
+                image.style_key == key
+                and not image.is_main
+                and (image.look_label or image.chapter_from_id or image.chapter_to_id)
+                and _covers(project, image, chapter)
+            ):
+                result.append(Reference(len(result) + 1, image, entity, "look"))
+    return result
+
+
 def references(
     session: Session, project: Project, scene: Scene, chapter: Chapter
 ) -> list[Reference]:
-    entities = [session.get(Entity, entity_id) for entity_id in scene.entity_ids]
-    # Characters first: they matter most for consistency, and models take few pictures.
-    ordered = sorted((e for e in entities if e), key=lambda e: (e.kind != KIND_CHARACTER, e.name))
-    result: list[Reference] = []
-    for entity in ordered:
-        for image, role in pick_images(project, entity, chapter):
-            result.append(Reference(len(result) + 1, image, entity, role))
-    return result
+    """The pictures that go with the video prompt: those the model chose when it wrote it,
+    or, before that (or when they are gone or out of style), a choice by fixed rules."""
+    by_id = {r.image.id: r for r in candidates(session, project, scene, chapter)}
+    chosen = [by_id[i] for i in scene.reference_ids if i in by_id]
+    if not chosen:
+        chosen = [
+            Reference(0, image, entity, role)
+            for entity in _cast(session, scene)
+            for image, role in pick_images(project, entity, chapter)
+        ]
+    return [Reference(n, r.image, r.entity, r.role) for n, r in enumerate(chosen, 1)]
 
 
 # ---------- prompt ----------
@@ -242,21 +289,27 @@ def _facts_at(project: Project, entity: Entity, chapter: Chapter) -> tuple[list[
     return permanent, [f.text for f in earlier if positions.get(f.chapter_id) == latest]
 
 
+def _label(ref: Reference) -> str:
+    if ref.role == "look":
+        return f"look: {ref.image.look_label}" if ref.image.look_label else "look for this chapter"
+    return ", ".join(filter(None, ["base", ref.image.angle]))
+
+
 def scene_context(
-    session: Session, project: Project, scene: Scene, chapter: Chapter, note: str
+    session: Session,
+    project: Project,
+    scene: Scene,
+    chapter: Chapter,
+    note: str,
+    refs: list[Reference],
 ) -> str:
-    refs = references(session, project, scene, chapter)
     lines = ["Scene text:", scene_text(scene, chapter), ""]
     for entity_id in scene.entity_ids:
         entity = session.get(Entity, entity_id)
         if entity is None:
             continue
         permanent, state = _facts_at(project, entity, chapter)
-        numbers = [
-            f"reference {r.number} ({', '.join(filter(None, [r.role, r.image.angle]))})"
-            for r in refs
-            if r.entity.id == entity.id
-        ]
+        numbers = [f"reference {r.number} ({_label(r)})" for r in refs if r.entity.id == entity.id]
         kind = "Character" if entity.kind == KIND_CHARACTER else "Location"
         lines.append(f"{kind}: {entity.name} - {', '.join(numbers) or 'no reference picture'}")
         lines += [f"  permanent: {t}" for t in permanent]
@@ -266,13 +319,30 @@ def scene_context(
     return "\n".join(lines)
 
 
+_REFERENCE = re.compile(r"\b(references?\s+)(\d+)\b", re.IGNORECASE)
+
+
 def video_prompt(
     session: Session, model: TextModel, project: Project, scene: Scene, note: str
-) -> str:
+) -> tuple[str, list[str]]:
+    """The prompt and the ids of the pictures it refers to, renumbered from 1 in the
+    order they go into the archive."""
     chapter = session.get(Chapter, scene.chapter_id)
+    pool = candidates(session, project, scene, chapter)
     system = VIDEO_SYSTEM.format(style=style_prompt(project) or "(no style chosen: omit this part)")
-    context = scene_context(session, project, scene, chapter, note)
-    return model.invoke("video_prompt", [SystemMessage(system), HumanMessage(context)]).strip()
+    context = scene_context(session, project, scene, chapter, note, pool)
+    answer = model.invoke_json(
+        "video_prompt", [SystemMessage(system), HumanMessage(context)], VideoAnswer
+    )
+    prompt = answer.prompt.strip()
+    # A picture the prompt names counts as chosen even if the list forgot it.
+    named = {int(m.group(2)) for m in _REFERENCE.finditer(prompt)}
+    chosen = [r for r in pool if r.number in {*answer.references, *named}]
+    new_number = {r.number: n for n, r in enumerate(chosen, 1)}
+    prompt = _REFERENCE.sub(
+        lambda m: m.group(1) + str(new_number.get(int(m.group(2)), m.group(2))), prompt
+    )
+    return prompt, [r.image.id for r in chosen]
 
 
 def refine_prompt(model: TextModel, prompt: str, change: str) -> str:

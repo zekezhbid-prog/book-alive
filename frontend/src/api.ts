@@ -285,7 +285,8 @@ export interface SceneBrief {
 export interface Scene extends SceneBrief {
   text: string
   prompt: string
-  participants: { id: string; kind: EntityKind; name: string }[]
+  frame_prompt: string
+  participants: { id: string; kind: EntityKind; name: string; images: ImageInfo[] }[]
   references: {
     number: number
     entity_id: string
@@ -468,7 +469,13 @@ export const api = {
     request<Scene>('POST', `/scenes/${id}/prompt/refine`, { change }),
   saveScenePrompt: (id: string, prompt: string) =>
     request<Scene>('PUT', `/scenes/${id}/prompt`, { prompt }),
-  generateSceneFrame: (id: string) => request<Scene>('POST', `/scenes/${id}/frame`),
+  generateSceneFrame: (id: string, prompt: string) =>
+    request<Scene>('POST', `/scenes/${id}/frame`, { prompt }),
+  uploadSceneFrame: (id: string, file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    return request<Scene>('POST', `/scenes/${id}/frame/upload`, form)
+  },
   sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
   usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 

@@ -27,8 +27,15 @@ class FakeModel:
         self.scenes = scenes or []
         self.context = ""
         self.system = ""
+        self.video = {
+            "references": [2],
+            "prompt": " The figure from reference 2 hands over a key. ",
+        }
 
     def invoke_json(self, operation, messages, schema):
+        if schema is service.VideoAnswer:
+            self.system, self.context = messages[0].content, messages[1].content
+            return schema.model_validate(self.video)
         return schema.model_validate({"scenes": self.scenes})
 
     def invoke(self, operation, messages):
@@ -142,9 +149,16 @@ def test_references_follow_the_chapter_and_the_current_style(session, book):
 def test_video_prompt_gets_the_state_as_of_the_chapter(session, book):
     scene = service.mark_scene(session, book.mill, 0, 3, "Ключ")
     model = FakeModel()
-    prompt = service.video_prompt(session, model, book, scene, "камера снизу")
-    assert prompt == "A woman hands over a silver key."
-    assert "Character: Люта - reference 1 (main), reference 2 (look)" in model.context
+    prompt, chosen = service.video_prompt(session, model, book, scene, "камера снизу")
+    # Every base view and the look for this chapter are offered; the look of the prologue is not.
+    assert "Character: Люта - reference 1 (base), reference 2 (look: в платке)" in model.context
+    # The model took only the look: it becomes reference 1, in the prompt as well.
+    assert prompt == "The figure from reference 1 hands over a key."
+    look = session.query(Image).filter_by(project_id=book.id, look_label="в платке").one()
+    assert chosen == [look.id]
+    scene.reference_ids = chosen
+    refs = service.references(session, book, scene, book.mill)
+    assert [(r.number, r.role, r.image.look_label) for r in refs] == [(1, "look", "в платке")]
     assert "at this point: красный платок" in model.context
     assert "серый плащ" not in model.context  # an earlier chapter, replaced by this one
     # Рыхташ has no state facts in this chapter: the latest earlier ones are used.
@@ -171,6 +185,8 @@ def test_scene_api_prompt_edit_and_archive(client, session, book):
     assert saved["prompt"] == "A key changes hands."
     assert saved["text"].startswith("Внутри его ждала Люта")
     assert [r["role"] for r in saved["references"]] == ["main", "look"]
+    # The card's every picture can be paged through, not only those sent to the video.
+    assert len(saved["participants"][0]["images"]) >= len(saved["references"])
 
     response = client.get(f"/api/scenes/{made['id']}/archive")
     assert response.headers["content-disposition"] == 'attachment; filename="test_klyuch.zip"'
@@ -192,6 +208,26 @@ def test_scene_api_prompt_edit_and_archive(client, session, book):
     book.mill.content_hash = text_hash(book.mill.text)
     session.commit()
     assert client.get(f"/api/scenes/{made['id']}").json()["stale"] is True
+
+
+def test_uploaded_frame_needs_no_prompt_and_goes_into_the_archive(client, book):
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 2, "paragraph_to": 3, "title": "Ключ"},
+    ).json()
+    url = f"/api/scenes/{made['id']}/frame/upload"
+    assert client.post(url, files={"file": ("x.txt", b"text")}).status_code == 422
+    scene = client.post(url, files={"file": ("mine.png", PNG)}).json()
+    assert [f["origin"] for f in scene["frames"]] == ["upload"]
+    assert scene["frame_prompt"] == ""
+
+    scene = client.put(
+        f"/api/scenes/{made['id']}/prompt", json={"prompt": "A key changes hands."}
+    ).json()
+    assert scene["frame_prompt"].endswith(": A key changes hands.")
+    response = client.get(f"/api/scenes/{made['id']}/archive")
+    with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+        assert "frame.png" in bundle.namelist()
 
 
 def test_bad_range_and_missing_model(client, book):

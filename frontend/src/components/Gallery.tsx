@@ -260,9 +260,10 @@ const SET_ORDER: Angle[] = [
  * be drawn as a whole set of views from one prompt. A picture in context is drawn from the
  * base ones. Drawing is two steps, each started by the user: the text model writes the
  * prompt, then the image model draws it. Every drawn or uploaded picture is stored at once;
- * the settings of an existing one are a draft until "Apply".
+ * the settings of an existing one are a draft until "Apply". A scene opens it too, for a
+ * card in that scene.
  */
-function ImageDialog({
+export function ImageDialog({
   projectId,
   entityId,
   image,
@@ -409,7 +410,7 @@ function ImageDialog({
         <div className="row">
           <h2>{t(image ? 'gallery.settings' : 'gallery.add.title')}</h2>
           <span className="spacer" />
-          <button className="btn ghost small" aria-label={t('app.close')} onClick={onClose}>
+          <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
             ✕
           </button>
         </div>
@@ -593,23 +594,18 @@ function ImageDialog({
           </div>
         </div>
         {error && <p className="error">{error}</p>}
-        <div className="row">
-          <span className="spacer" />
-          {image ? (
-            <>
-              <button className="btn ghost" onClick={onClose}>
-                {t('app.cancel')}
-              </button>
-              <button className="btn primary" disabled={busy !== ''} onClick={apply}>
-                {t('gallery.apply')}
-              </button>
-            </>
-          ) : (
-            <button className="btn" disabled={busy === 'image' || busy === 'upload'} onClick={onClose}>
-              {t('app.close')}
+        {/* A new picture is stored as soon as it is made: the cross above closes the window. */}
+        {image && (
+          <div className="row">
+            <span className="spacer" />
+            <button className="btn ghost" onClick={onClose}>
+              {t('app.cancel')}
             </button>
-          )}
-        </div>
+            <button className="btn primary" disabled={busy !== ''} onClick={apply}>
+              {t('gallery.apply')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

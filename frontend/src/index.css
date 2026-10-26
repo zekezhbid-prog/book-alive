@@ -225,8 +225,17 @@ button.mode-option { background: transparent; text-align: left; }
 .chip.plain:hover { border-color: var(--accent); }
 .floating { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 30; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), var(--glow); }
 .refs { display: flex; flex-wrap: wrap; gap: 12px; }
-.refs figure { margin: 0; width: 120px; font-size: 14px; }
+.refs figure { margin: 0; width: 140px; font-size: 14px; }
 .refs img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.refs figcaption .row { gap: 2px; align-items: flex-start; }
+.refs figcaption .grow { min-width: 0; padding-top: 6px; overflow-wrap: anywhere; }
+.ref-pic { position: relative; }
+.ref-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 26px; height: 40px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: rgba(255, 231, 160, 0.75); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); font-size: 22px; line-height: 1; cursor: pointer; }
+.ref-arrow:hover { background: rgba(0, 0, 0, 0.6); color: var(--accent); }
+.ref-arrow.prev { left: 4px; }
+.ref-arrow.next { right: 4px; }
+.ref-count { position: absolute; right: 6px; bottom: 6px; padding: 0 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: var(--muted); font-size: 11px; line-height: 18px; }
+.ref-blank { width: 100%; aspect-ratio: 3 / 4; border: 1px dashed rgba(250, 204, 21, 0.35); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.03); }
 .refs.wide figure { width: 260px; }
 .refs.wide img { aspect-ratio: 16 / 9; }
 details summary { cursor: pointer; margin-bottom: 8px; }
@@ -312,7 +321,14 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .nav-head.current { color: #ffe7a0; background: linear-gradient(180deg, rgba(250, 204, 21, 0.16), rgba(250, 204, 21, 0.05)); border-color: rgba(250, 204, 21, 0.28); }
 .nav-chevron { width: 1em; color: var(--accent); font-size: 18px; line-height: 1; text-align: center; }
 .nav-count { min-width: 24px; padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--faint); font: 600 12px/20px var(--sans); text-align: center; }
-.nav-group { margin: 10px 0 2px 12px; color: var(--faint); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+.nav-group { display: flex; align-items: center; gap: 6px; width: 100%; margin: 10px 0 2px; padding: 2px 12px; background: transparent; border: 0; border-radius: 8px; cursor: pointer; color: var(--faint); font-family: var(--sans); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; text-align: left; }
+.nav-group:hover { color: var(--accent); }
+.nav-group-chevron { width: 10px; flex: none; }
+.nav-toggle { align-self: flex-start; margin: 0 0 4px 12px; padding: 2px 10px; background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; color: var(--faint); font-family: var(--sans); font-size: 12px; }
+.nav-toggle.on { color: var(--accent); border-color: rgba(250, 204, 21, 0.4); }
+.nav-toggle:hover { color: var(--accent); }
+.has-prompt { flex: none; color: var(--accent); font-weight: 800; font-size: 15px; }
+.nav-list .chapter-link[hidden] { display: none; }
 .nav-empty { padding: 4px 12px; }
 .nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; text-align: left; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }

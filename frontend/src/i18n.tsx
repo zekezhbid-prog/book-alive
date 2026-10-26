@@ -282,6 +282,10 @@ const ru = {
     'Сцен пока нет. Откройте главу на вкладке «Книга»: там можно разбить её на сцены или выделить мышью нужный кусок текста.',
   'scenes.select': 'Выберите сцену слева.',
   'scenes.vivid': 'Яркая сцена',
+  'scenes.vivid.toggle': '★ Яркие сцены',
+  'scenes.has_prompt': 'Промпт для видео готов',
+  'scenes.vivid.hint':
+    'Звёздочкой ИИ отмечает 2–3 самые зрелищные сцены главы, которые лучше всего подходят для видео. Нажмите, чтобы показать или скрыть звёздочки.',
   'scenes.split': 'Разбить на сцены',
   'scenes.split.busy': 'Делю главу на сцены…',
   'scenes.split.confirm':
@@ -296,8 +300,11 @@ const ru = {
     'Текст главы изменился после создания сцены, её границы могли сместиться. Создайте сцену заново.',
   'scene.text': 'Текст сцены',
   'scene.references': 'Референсы',
-  'scene.references.none':
-    'У участников сцены нет картинок в стиле проекта. Загрузите или сгенерируйте их в карточках, и они подставятся сюда сами.',
+  'scene.ref.missing': 'картинок пока нет',
+  'scene.ref.in_video': 'в видео',
+  'scene.ref.add': 'Добавить референс: сгенерировать или загрузить',
+  'scene.ref.prev': 'Предыдущая картинка',
+  'scene.ref.next': 'Следующая картинка',
   'scene.references.no_style':
     'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его на вкладке «Стиль».',
   'scene.look': 'облик',
@@ -312,8 +319,15 @@ const ru = {
   'scene.copy': 'Скопировать промпт',
   'scene.copied': 'Скопировано',
   'scene.archive': 'Скачать архив',
-  'scene.frame': 'Сгенерировать кадр',
-  'scene.frames': 'Стартовые кадры',
+  'scene.archive.hint': 'Скачать архив для видеосервиса: промпт, референсы и стартовый кадр',
+  'scene.first_frame': 'Первый кадр',
+  'scene.frame.none': 'кадра пока нет',
+  'scene.frame.add': 'Добавить первый кадр: сгенерировать или загрузить',
+  'scene.frame.title': 'Первый кадр',
+  'scene.frame.hint':
+    'Кадр, с которого видеосервис начнёт ролик. Промпт собран из промпта для видео, его можно поправить. Рисуется вместе с референсами сцены; самый новый кадр идёт в архив.',
+  'scene.frame.needs_prompt': 'Сначала соберите промпт для видео',
+  'scene.frame.upload': 'Загрузить свой кадр',
   'scene.frame.latest': 'последний, идёт в архив',
 
   'settings.title': 'Настройки',
@@ -671,6 +685,10 @@ const en: Record<keyof typeof ru, string> = {
     'No scenes yet. Open a chapter on the Book tab: split it into scenes there, or select the stretch of text you want.',
   'scenes.select': 'Pick a scene on the left.',
   'scenes.vivid': 'A vivid scene',
+  'scenes.vivid.toggle': '★ Vivid scenes',
+  'scenes.has_prompt': 'The video prompt is ready',
+  'scenes.vivid.hint':
+    'The AI stars the two or three most striking scenes of a chapter, the ones best suited for video. Click to show or hide the stars.',
   'scenes.split': 'Split into scenes',
   'scenes.split.busy': 'Splitting the chapter…',
   'scenes.split.confirm':
@@ -685,8 +703,11 @@ const en: Record<keyof typeof ru, string> = {
     'The chapter text changed after the scene was made, so its boundaries may have moved. Make the scene again.',
   'scene.text': 'Scene text',
   'scene.references': 'References',
-  'scene.references.none':
-    'Nobody in this scene has pictures in the project style. Upload or generate them on the cards and they will appear here.',
+  'scene.ref.missing': 'no pictures yet',
+  'scene.ref.in_video': 'goes to video',
+  'scene.ref.add': 'Add a reference: generate or upload',
+  'scene.ref.prev': 'Previous picture',
+  'scene.ref.next': 'Next picture',
   'scene.references.no_style':
     'No project style is chosen, so references are not picked. Choose one on the Style tab.',
   'scene.look': 'look',
@@ -701,8 +722,15 @@ const en: Record<keyof typeof ru, string> = {
   'scene.copy': 'Copy prompt',
   'scene.copied': 'Copied',
   'scene.archive': 'Download archive',
-  'scene.frame': 'Generate frame',
-  'scene.frames': 'First frames',
+  'scene.archive.hint': 'Download an archive for a video service: the prompt, references and first frame',
+  'scene.first_frame': 'First frame',
+  'scene.frame.none': 'no frame yet',
+  'scene.frame.add': 'Add a first frame: generate or upload',
+  'scene.frame.title': 'First frame',
+  'scene.frame.hint':
+    'The frame a video service starts the clip from. The prompt comes from the video prompt and can be edited. It is drawn with the scene references; the newest frame goes into the archive.',
+  'scene.frame.needs_prompt': 'Build the video prompt first',
+  'scene.frame.upload': 'Upload your own frame',
   'scene.frame.latest': 'latest, goes into the archive',
 
   'settings.title': 'Settings',

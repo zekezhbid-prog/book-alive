@@ -65,6 +65,20 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     navigate(section === 'chapters' ? base : `${base}/${section}`)
   }
 
+  // Chapters whose scenes are folded away in the list; a click on the chapter title toggles.
+  const [foldedChapters, setFoldedChapters] = useState<Set<string>>(new Set())
+  const toggleChapter = (id: string) =>
+    setFoldedChapters((folded) => {
+      const next = new Set(folded)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  const [showVivid, setShowVivid] = useState(() => localStorage.getItem('nav:vivid') !== '0')
+  const toggleVivid = () => {
+    setShowVivid(!showVivid)
+    localStorage.setItem('nav:vivid', showVivid ? '0' : '1')
+  }
+
   const [query, setQuery] = useState('')
   const [found, setHits] = useState<SearchHit[] | null>(null)
   const searching = query.trim().length >= 2
@@ -132,17 +146,35 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     scenes: (
       <>
         {scenes?.length === 0 && <p className="faint small nav-empty">{t('scenes.empty')}</p>}
+        {scenes?.some((s) => s.vivid) && (
+          <button
+            className={`nav-toggle ${showVivid ? 'on' : ''}`}
+            aria-pressed={showVivid}
+            title={t('scenes.vivid.hint')}
+            onClick={toggleVivid}
+          >
+            {t('scenes.vivid.toggle')}
+          </button>
+        )}
         {scenes?.map((item, i) => (
           <div key={item.id}>
             {item.chapter_id !== scenes[i - 1]?.chapter_id && (
-              <div className="nav-group">{item.chapter_title || t('book.untitled')}</div>
+              <button
+                className="nav-group"
+                aria-expanded={!foldedChapters.has(item.chapter_id)}
+                onClick={() => toggleChapter(item.chapter_id)}
+              >
+                <span className="nav-group-chevron">{foldedChapters.has(item.chapter_id) ? '▸' : '▾'}</span>
+                <span className="grow">{item.chapter_title || t('book.untitled')}</span>
+              </button>
             )}
             <button
               className={`chapter-link entity-link ${item.id === sceneId ? 'active' : ''}`}
+              hidden={foldedChapters.has(item.chapter_id)}
               onClick={() => navigate(`${base}/scenes/${item.id}`)}
             >
               <span>
-                {item.vivid && (
+                {showVivid && item.vivid && (
                   <span className="vivid" title={t('scenes.vivid')}>
                     ★{' '}
                   </span>
@@ -150,7 +182,11 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
                 {item.title || t('book.untitled')}
               </span>
               {item.stale && <span className="dot" title={t('scene.stale')} />}
-              {item.has_prompt && <span className="faint small">✓</span>}
+              {item.has_prompt && (
+                <span className="has-prompt" title={t('scenes.has_prompt')}>
+                  ✓
+                </span>
+              )}
             </button>
           </div>
         ))}

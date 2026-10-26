@@ -310,4 +310,6 @@ class Scene(Base):
     entity_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     # The video prompt: only the latest version is kept.
     prompt: Mapped[str] = mapped_column(Text, default="")
+    # The pictures the model chose for that prompt, in order; empty until it is built.
+    reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
