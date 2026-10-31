@@ -11,6 +11,12 @@ class Settings(BaseSettings):
 
     # Empty means "start the embedded PostgreSQL in data_dir" (needs the `embedded` extra).
     database_url: str = ""
+    # Empty: the app owns the database and uses the default schema (own pgvector container,
+    # embedded PostgreSQL). Set it to share a server with other projects (e.g. Supabase):
+    # every table then lives in this schema and the connection sees nothing else.
+    db_schema: str = ""
+    # Connections kept to a shared PostgreSQL; small on purpose.
+    db_pool_size: int = 5
     data_dir: Path = REPO_ROOT / "data"
     # Key for encrypting API keys at rest. Empty means "generate and keep in data_dir".
     secret_key: str = ""

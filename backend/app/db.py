@@ -38,7 +38,16 @@ def get_engine() -> Engine:
     global _engine
     if _engine is None:
         url = _database_url().replace("postgresql://", "postgresql+psycopg://", 1)
-        _engine = create_engine(url, pool_pre_ping=True)
+        options: dict = {}
+        if settings.db_schema:
+            # Tables are created in, and looked up in, the first schema of the path. `extensions`
+            # is where Supabase keeps pgvector; `public` stays last for plain servers.
+            options["connect_args"] = {
+                "options": f"-csearch_path={settings.db_schema},extensions,public"
+            }
+            options["pool_size"] = settings.db_pool_size
+            options["max_overflow"] = 0
+        _engine = create_engine(url, pool_pre_ping=True, **options)
     return _engine
 
 
@@ -52,7 +61,10 @@ def init_db() -> None:
 
     engine = get_engine()
     with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # A limited role on a shared server cannot create extensions; it is enough that
+        # the administrator has already installed it.
+        if not conn.scalar(text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")):
+            conn.execute(text("CREATE EXTENSION vector"))
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     tables = set(inspect(engine).get_table_names())
     if "projects" in tables and "alembic_version" not in tables:

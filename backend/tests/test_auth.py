@@ -45,9 +45,9 @@ def test_changing_the_password_ends_old_sessions(client, password, monkeypatch):
 
 def test_forged_and_expired_cookies_are_rejected(client, password):
     client.cookies.clear()
-    client.cookies.set("book_alive_session", "9999999999.deadbeef")
+    client.cookies.set("lorebook_session", "9999999999.deadbeef")
     assert client.get("/api/projects").status_code == 401
-    client.cookies.set("book_alive_session", "1.whatever")
+    client.cookies.set("lorebook_session", "1.whatever")
     assert client.get("/api/projects").status_code == 401
     client.cookies.clear()
 

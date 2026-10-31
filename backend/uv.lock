@@ -48,7 +48,7 @@ wheels = [
 ]
 
 [[package]]
-name = "book-alive"
+name = "lorebook"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.crypto import signing_key
 
-COOKIE = "book_alive_session"
+COOKIE = "lorebook_session"
 SESSION_SECONDS = 30 * 24 * 3600
 # A shared password has no per-user lockout, so wrong attempts are limited for everyone:
 # after MAX_FAILURES in WINDOW_SECONDS, logging in is refused until the window passes.

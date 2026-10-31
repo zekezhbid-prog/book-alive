@@ -1,4 +1,4 @@
-# Book Alive
+# Lorebook
 
 Web app that turns a book into chapters, characters, locations, scenes and prompts for
 AI video. Two goals, in this order: a portfolio project showing Python + LangChain/LangGraph

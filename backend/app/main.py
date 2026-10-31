@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import auth
 from app.analysis import runner
-from app.api import analysis, chat, connections, images, projects, scenes
+from app.api import analysis, chat, connections, images, projects, review, scenes
 from app.config import settings
 from app.db import get_engine, init_db
 
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Book Alive",
+    title="Lorebook",
     lifespan=lifespan,
     # Under /api, so the login middleware covers the API description too.
     docs_url="/api/docs",
@@ -36,6 +36,7 @@ app.include_router(analysis.router)
 app.include_router(chat.router)
 app.include_router(images.router)
 app.include_router(scenes.router)
+app.include_router(review.router)
 
 # In production the API also serves the built frontend; in development Vite does.
 if settings.frontend_dist.is_dir():

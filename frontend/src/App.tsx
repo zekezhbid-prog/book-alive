@@ -36,7 +36,7 @@ export default function App() {
             <span className="brand-mark">
               <img src="/favicon.svg" alt="" />
             </span>
-            <span className="brand-name">Book Alive</span>
+            <span className="brand-name">Lorebook</span>
           </span>
           <span className="spacer" />
           {languageButton}
@@ -52,7 +52,7 @@ export default function App() {
           <span className="brand-mark">
             <img src="/favicon.svg" alt="" />
           </span>
-          <span className="brand-name">Book Alive</span>
+          <span className="brand-name">Lorebook</span>
         </Link>
         {/* Pages put their own breadcrumb and controls here. */}
         <div id="topbar-slot" className="topbar-slot" />

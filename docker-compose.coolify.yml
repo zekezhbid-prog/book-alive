@@ -1,0 +1,46 @@
+# Coolify next to an existing Supabase on the same server: no database container of our own.
+# The app joins Supabase's Docker network and keeps all its tables in the schema `lorebook`,
+# owned by a role that sees nothing else (see docs/supabase.md).
+#
+# To move to a plain pgvector server instead, use docker-compose.yml (own `db` container)
+# or point DATABASE_URL at any PostgreSQL with pgvector and leave DB_SCHEMA empty.
+#
+# Set in Coolify: DATABASE_URL, DB_SCHEMA=lorebook, SECRET_KEY, APP_PASSWORD, SUPABASE_NETWORK.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      DB_SCHEMA: ${DB_SCHEMA:-lorebook}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-4}
+      # Encrypts stored API keys and signs sessions. Changing it makes stored keys unreadable.
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      # The one password that opens the app: anyone who reaches it can spend model credits.
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD}
+      # The embedding model would otherwise use every core of a shared server.
+      OMP_NUM_THREADS: "2"
+      ORT_NUM_THREADS: "2"
+    volumes:
+      - lorebook_data:/data
+    # A shared server: the app may never take more than this.
+    mem_limit: 1536m
+    cpus: 1.5
+    networks:
+      - default
+      - supabase
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/session', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  lorebook_data:
+
+networks:
+  supabase:
+    external: true
+    name: ${SUPABASE_NETWORK:?set SUPABASE_NETWORK}

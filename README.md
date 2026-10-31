@@ -1,4 +1,4 @@
-# Book Alive
+# Lorebook
 
 Turn a book into chapters, characters, locations and scenes, and get ready-to-use prompts
 and reference pictures for AI video. A working example of LangChain and LangGraph on a real

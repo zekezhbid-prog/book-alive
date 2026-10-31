@@ -1,5 +1,21 @@
 export type Mode = 'reader' | 'writer'
 
+export type ReviewKind = 'grammar' | 'editorial' | 'contradictions'
+
+export interface RemarkPlace {
+  chapter_id: string
+  chapter_title: string
+  paragraph: number | null
+  quote: string
+}
+
+export interface Remark {
+  category: string
+  problem: string
+  suggestion: string
+  places: RemarkPlace[]
+}
+
 export interface ChapterBrief {
   id: string
   position: number
@@ -378,6 +394,12 @@ export const api = {
     request<Project>('POST', `/projects/${projectId}/versions`, { label }),
   rollback: (projectId: string, versionId: string) =>
     request<Project>('POST', `/projects/${projectId}/versions/${versionId}/rollback`),
+
+  review: (projectId: string, kind: ReviewKind, chapterId: string) =>
+    request<{ kind: ReviewKind; remarks: Remark[] }>('POST', `/projects/${projectId}/review`, {
+      kind,
+      chapter_id: chapterId,
+    }),
 
   estimate: (projectId: string, kind: EntityKind, chapterIds: string[]) =>
     request<Estimate>('POST', `/projects/${projectId}/analysis/estimate`, {

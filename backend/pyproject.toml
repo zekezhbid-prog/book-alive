@@ -1,5 +1,5 @@
 [project]
-name = "book-alive"
+name = "lorebook"
 version = "0.1.0"
 description = "Turn a book into characters, locations, scenes and video prompts with LangChain and LangGraph"
 requires-python = ">=3.12,<3.13"

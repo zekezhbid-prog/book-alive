@@ -5,6 +5,7 @@ import ChapterEditor from '../components/ChapterEditor'
 import ChatPanel from '../components/ChatPanel'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
+import ReviewPanel from '../components/ReviewPanel'
 import ProjectNav from '../components/ProjectNav'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
@@ -27,7 +28,7 @@ export default function Book() {
   const [view, setViewState] = useState<View>(
     () => (localStorage.getItem(`view:${projectId}`) as View) || 'writer',
   )
-  const [side, setSide] = useState<'chat' | 'versions'>('chat')
+  const [side, setSide] = useState<'chat' | 'versions' | 'review'>('chat')
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const reloadProject = useCallback(
@@ -154,7 +155,7 @@ export default function Book() {
         <aside className="side">
           {project.mode === 'writer' && (
             <div className="segmented side-tabs">
-              {(['chat', 'versions'] as const).map((option) => (
+              {(['chat', 'review', 'versions'] as const).map((option) => (
                 <button key={option} className={side === option ? 'active' : ''} onClick={() => setSide(option)}>
                   {t(`side.${option}`)}
                   {option === 'versions' && project.changes?.dirty && <span className="dot" />}
@@ -164,6 +165,8 @@ export default function Book() {
           )}
           {project.mode === 'writer' && side === 'versions' ? (
             <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
+          ) : project.mode === 'writer' && side === 'review' ? (
+            <ReviewPanel projectId={project.id} chapterId={activeId} />
           ) : (
             <ChatPanel projectId={project.id} chapterId={activeId} canSuggest={writing} />
           )}
