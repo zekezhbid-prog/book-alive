@@ -162,6 +162,7 @@ export interface Entity {
   name: string
   aliases: string[]
   description: string
+  summary: string
   profile: Fact[]
   permanent: Fact[]
   timeline: ChapterFacts[]

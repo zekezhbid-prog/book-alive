@@ -1,10 +1,12 @@
+import re
+
 import pytest
 from sqlalchemy.orm import Session
 
 from app.analysis import entities as analysis
 from app.analysis import runner
 from app.db import get_engine
-from app.llm.calls import _parse, estimate_tokens
+from app.llm.calls import BadModelOutput, _parse, estimate_tokens
 from app.models import AnalysisRun, Chapter, Entity, Project, text_hash
 
 CHAPTER_1 = (
@@ -53,9 +55,21 @@ class FakeModel:
     def __init__(self):
         self.calls: list[str] = []
         self.fail_on: str | None = None
+        self.bad_json_times = 0  # that many chapter reads answer with broken JSON first
 
     def invoke_json(self, operation, messages, schema):
         self.calls.append(operation)
+        if schema is analysis.Summaries:
+            numbers = re.findall(r"^\[(\d+)\]", messages[-1].content, re.MULTILINE)
+            return analysis.Summaries(
+                summaries=[
+                    analysis.CardSummary(number=int(n), text=f"Связный рассказ {n}.")
+                    for n in numbers
+                ]
+            )
+        if operation.startswith("find_") and self.bad_json_times:
+            self.bad_json_times -= 1
+            raise BadModelOutput("Expecting property name enclosed in double quotes")
         if schema is analysis.Groups:
             # "Дед" and "Рыхташ" are the same man: entries 1 and 3 in name order.
             return analysis.Groups(groups=[[1, 3]])
@@ -83,6 +97,11 @@ def project(session):
     return book
 
 
+@pytest.fixture(autouse=True)
+def no_pause(monkeypatch):
+    monkeypatch.setattr(runner, "RESTART_PAUSE", 0)
+
+
 def run(session, project, model, chapters=None):
     record = AnalysisRun(
         project_id=project.id,
@@ -106,7 +125,12 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
     record = run(session, project, model)
     assert record.status == "done"
     assert len(record.done_chapter_ids) == 2
-    assert model.calls == ["find_characters", "find_characters", "merge_characters"]
+    assert model.calls == [
+        "find_characters",
+        "find_characters",
+        "merge_characters",
+        "summarize_characters",
+    ]
 
     people = cast(session, project)
     assert set(people) == {"Рыхташ", "Люта"}  # "Дед" was merged into "Рыхташ"
@@ -138,7 +162,7 @@ def test_failed_run_resumes_without_paying_twice(session, project):
     again = run(session, project, model)
     assert again.status == "done"
     # The first chapter comes from the stored answer: only the second one is read.
-    assert model.calls == ["find_characters", "merge_characters"]
+    assert model.calls == ["find_characters", "merge_characters", "summarize_characters"]
 
 
 def test_rerun_is_idempotent(session, project):
@@ -148,12 +172,12 @@ def test_rerun_is_idempotent(session, project):
     model.calls.clear()
     run(session, project, model)
     assert {n: len(e.facts) for n, e in cast(session, project).items()} == before
-    assert model.calls == ["merge_characters"]
+    assert model.calls == ["merge_characters", "summarize_characters"]
 
 
 def test_estimate_skips_chapters_already_read(session, project):
     first = analysis.estimate(session, project.chapters, "character")
-    assert (first.chapters, first.cached, first.requests) == (2, 0, 3)
+    assert (first.chapters, first.cached, first.requests) == (2, 0, 4)
     run(session, project, FakeModel())
     assert analysis.estimate(session, project.chapters, "character").requests == 0
 
@@ -163,7 +187,7 @@ def test_estimate_skips_chapters_already_read(session, project):
     chapter.content_hash = text_hash(chapter.text)
     session.commit()
     after = analysis.estimate(session, project.chapters, "character")
-    assert (after.cached, after.requests) == (1, 2)
+    assert (after.cached, after.requests) == (1, 3)
 
 
 def test_api_reports_stale_cards_after_an_edit(client, session, project):
@@ -288,3 +312,52 @@ def test_profile_facts_go_to_the_top_of_the_card_not_to_looks_or_timeline(
     assert all(
         f["text"] != "старый мельник, живёт один" for e in card["timeline"] for f in e["facts"]
     )
+
+
+def test_parse_forgives_trailing_commas():
+    reply = '{"groups": [[1, 2,],],}'
+    assert _parse(reply, analysis.Groups).groups == [[1, 2]]
+
+
+def test_broken_model_answers_are_retried_by_the_run_itself(session, project):
+    model = FakeModel()
+    model.bad_json_times = 2
+    record = run(session, project, model)
+    assert record.status == "done"
+    assert len(record.done_chapter_ids) == 2
+
+
+def test_run_gives_up_after_repeated_failures(session, project):
+    model = FakeModel()
+    model.bad_json_times = 100
+    record = run(session, project, model)
+    assert record.status == "failed"
+    assert "double quotes" in record.error
+    # No coherent description is written from a run that broke off.
+    assert all(e.summary == "" for e in cast(session, project).values())
+
+
+def test_finished_run_writes_a_coherent_description_of_each_card(session, project, client):
+    run(session, project, FakeModel())
+    people = cast(session, project)
+    assert people["Рыхташ"].summary.startswith("Связный рассказ")
+    # Люта has no facts but her name: there is nothing to tell about her yet.
+    assert people["Люта"].summary == ""
+    card = client.get(f"/api/entities/{people['Рыхташ'].id}").json()
+    assert card["summary"] == people["Рыхташ"].summary
+
+
+def test_cancelled_run_describes_what_was_found_so_far(session, project):
+    class Cancelling(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            result = super().invoke_json(operation, messages, schema)
+            if operation == "find_characters":
+                record = session.query(AnalysisRun).filter_by(project_id=project.id).one()
+                record.cancel_requested = True
+                session.commit()
+            return result
+
+    record = run(session, project, Cancelling())
+    assert record.status == "cancelled", record.error
+    assert len(record.done_chapter_ids) == 1
+    assert cast(session, project)["Рыхташ"].summary

@@ -1,8 +1,8 @@
 """Finding characters and locations, chapter by chapter, as a LangGraph loop.
 
-    extract -> merge -+-> extract ...      (next chapter)
-                      +-> reconcile -> END (no chapters left)
-                      +-> END              (cancelled)
+    extract -> merge -+-> extract ...                       (next chapter)
+                      +-> reconcile -> summarize -> END    (no chapters left)
+                      +-> summarize -> END                 (cancelled)
 
 `extract` asks the model about one chapter and stores the raw answer keyed by the
 chapter's text hash. `merge` turns that answer into entities and facts without any
@@ -21,9 +21,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.analysis import prompts
-from app.llm.calls import TextModel, estimate_tokens
+from app.llm.calls import BadModelOutput, TextModel, estimate_tokens
 from app.models import (
     FACT_PERMANENT,
+    FACT_PROFILE,
     FACT_STATE,
     AnalysisRun,
     Chapter,
@@ -58,6 +59,15 @@ class ChapterEntities(BaseModel):
 
 class Groups(BaseModel):
     groups: list[list[int]] = Field(default_factory=list)
+
+
+class CardSummary(BaseModel):
+    number: int
+    text: str = ""
+
+
+class Summaries(BaseModel):
+    summaries: list[CardSummary] = Field(default_factory=list)
 
 
 # ---------- helpers ----------
@@ -145,9 +155,9 @@ def estimate(
             # Observed on prose: the answer runs to roughly a fifth of the chapter.
             result.output_tokens += max(300, tokens // 5)
     if result.requests:
-        result.requests += 1  # the final pass that merges duplicate names
-        result.input_tokens += 1500 + request_overhead
-        result.output_tokens += 200
+        result.requests += 2  # the final passes: merging duplicate names, describing the cards
+        result.input_tokens += 4000 + request_overhead
+        result.output_tokens += 1500
     return result
 
 
@@ -320,6 +330,68 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     return {}
 
 
+SUMMARY_BATCH = 6
+SUMMARY_FACTS = 30
+
+
+def summarize(state: State, config: RunnableConfig) -> dict:
+    """Last step of a run that finished or was cancelled: a coherent description per card."""
+    session, model, run = _context(config)
+    summarize_cards(session, model, run.project_id, run.kind)
+    return {}
+
+
+def _card_text(session: Session, number: int, entity: Entity) -> str:
+    titles = {
+        c.id: c.title or f"#{c.position + 1}"
+        for c in session.scalars(select(Chapter).where(Chapter.project_id == entity.project_id))
+    }
+    chapters = sorted(
+        {f.chapter_id for f in entity.facts if f.chapter_id in titles},
+        key=lambda cid: titles[cid],
+    )
+    also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
+    lines = [f"[{number}] {entity.name}{also}"]
+    if chapters:
+        lines.append(f"chapters ({len(chapters)}): " + ", ".join(titles[c] for c in chapters[:12]))
+    # General description and lasting looks first, then what the chapters say in passing.
+    order = {FACT_PROFILE: 0, FACT_PERMANENT: 1}
+    facts = sorted(
+        (f for f in entity.facts if f.text.strip()), key=lambda f: order.get(f.category, 2)
+    )
+    seen: set[str] = set()
+    for fact in facts:
+        if norm(fact.text) not in seen and len(seen) < SUMMARY_FACTS:
+            seen.add(norm(fact.text))
+            lines.append(f"- {fact.text.strip()}")
+    return "\n".join(lines)
+
+
+def summarize_cards(session: Session, model: TextModel, project_id: str, kind: str) -> None:
+    """A card with no facts but its name is left as it is: there is nothing to tell.
+    A batch whose answer cannot be read keeps the old text; the rest still gets written."""
+    cards = [
+        e
+        for e in sorted(_entities(session, project_id, kind), key=lambda e: e.name)
+        if any(f.text.strip() for f in e.facts)
+    ]
+    for start in range(0, len(cards), SUMMARY_BATCH):
+        batch = cards[start : start + SUMMARY_BATCH]
+        listing = "\n\n".join(_card_text(session, n, e) for n, e in enumerate(batch, 1))
+        try:
+            answer = model.invoke_json(
+                f"summarize_{kind}s",
+                [SystemMessage(prompts.summary_system(kind)), HumanMessage(listing)],
+                Summaries,
+            )
+        except BadModelOutput:
+            continue
+        for item in answer.summaries:
+            if 1 <= item.number <= len(batch) and item.text.strip():
+                batch[item.number - 1].summary = item.text.strip()
+        session.commit()
+
+
 def absorb(session: Session, main: Entity, other: Entity) -> list[str]:
     """Fold `other` into `main`: its names become other names of `main`, its facts move.
     Returns the names that were added."""
@@ -372,7 +444,8 @@ def _next(state: State, config: RunnableConfig) -> str:
     session, _, run = _context(config)
     session.refresh(run)
     if run.cancel_requested:
-        return END
+        # Stopped by the user: describe what has been found so far.
+        return "summarize"
     return "extract" if state["pending"] else "reconcile"
 
 
@@ -381,10 +454,12 @@ def build_graph():
     graph.add_node("extract", extract)
     graph.add_node("merge", merge)
     graph.add_node("reconcile", reconcile)
-    graph.add_conditional_edges(START, _next, ["extract", "reconcile", END])
+    graph.add_node("summarize", summarize)
+    graph.add_conditional_edges(START, _next, ["extract", "reconcile", "summarize"])
     graph.add_edge("extract", "merge")
-    graph.add_conditional_edges("merge", _next, ["extract", "reconcile", END])
-    graph.add_edge("reconcile", END)
+    graph.add_conditional_edges("merge", _next, ["extract", "reconcile", "summarize"])
+    graph.add_edge("reconcile", "summarize")
+    graph.add_edge("summarize", END)
     return graph.compile()
 
 

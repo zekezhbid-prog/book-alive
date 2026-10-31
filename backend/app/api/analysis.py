@@ -71,6 +71,7 @@ class EntityOut(BaseModel):
     name: str
     aliases: list[str]
     description: str
+    summary: str
     profile: list[FactOut]
     permanent: list[FactOut]
     timeline: list[ChapterFacts]
@@ -287,6 +288,7 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         name=entity.name,
         aliases=entity.aliases,
         description=entity.description,
+        summary=entity.summary,
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),

@@ -76,6 +76,20 @@ Reply with one JSON object and nothing else:
 Use an empty list when nothing should be merged."""
 
 
+SUMMARY_SYSTEM = """Below are numbered cards of {noun} from one book. Each lists the chapters where \
+it appears and facts taken from the text. For every card write one coherent description of \
+3 to 5 sentences in the language of the facts: who or what it is, its role in the book, the \
+main traits and what is known about it overall. Connected prose, not a list and not quotes.
+Use only the given facts. Never invent anything; if little is known, write less.
+
+Reply with one JSON object and nothing else:
+{{"summaries": [{{"number": 1, "text": ""}}]}}"""
+
+
+def summary_system(kind: str) -> str:
+    return SUMMARY_SYSTEM.format(noun="characters" if kind == KIND_CHARACTER else "locations")
+
+
 def extract_system(kind: str) -> str:
     return EXTRACT_SYSTEM.format(**_SUBJECT[kind])
 

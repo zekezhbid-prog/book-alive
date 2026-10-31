@@ -184,6 +184,9 @@ class Entity(Base):
     # The author's own words about the card (a writer describes people and places in text
     # only); the facts below are what a search read out of the chapters.
     description: Mapped[str] = mapped_column(Text, default="")
+    # A coherent description (who it is, its role, what is known), written by the model at
+    # the end of a run from the card's facts. Empty until a run has finished or was cancelled.
+    summary: Mapped[str] = mapped_column(Text, default="")
 
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"

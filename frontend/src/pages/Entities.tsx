@@ -259,17 +259,25 @@ function Card({ entity, projectId, others, onChanged, onError, gallery, writing 
         />
       )}
       <h4>{t('entities.profile')}</h4>
-      {entity.profile.length + entity.permanent.length === 0 && (
+      {/* A connected text written by the model when a search ends or is stopped. */}
+      {entity.summary ? (
+        <p className="summary">{entity.summary}</p>
+      ) : (
         <p className="faint">{t('entities.profile.none')}</p>
       )}
-      <ul className="facts">
-        {[...entity.profile, ...entity.permanent].map((fact, i) => (
-          <li key={i}>
-            {fact.text} {fact.stale && stale}
-            {source(fact)}
-          </li>
-        ))}
-      </ul>
+      {entity.profile.length + entity.permanent.length > 0 && (
+        <details>
+          <summary className="muted">{t('entities.facts')}</summary>
+          <ul className="facts">
+            {[...entity.profile, ...entity.permanent].map((fact, i) => (
+              <li key={i}>
+                {fact.text} {fact.stale && stale}
+                {source(fact)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {gallery}
       <h4>{t('entities.timeline')}</h4>
       {entity.timeline.map((entry) => (

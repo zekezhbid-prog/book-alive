@@ -142,8 +142,8 @@ export const by: Record<string, string> = {
   'entities.select': 'Выберыце картку злева.',
   'entities.aliases': 'Таксама',
   'entities.profile': 'Агульнае апісанне',
-  'entities.profile.none':
-    'Агульнае апісанне з’явіцца, калі будуць прачытаны раздзелы з ім (калі раздзелы чыталіся раней, запусціце пошук нанова).',
+  'entities.profile.none': 'Агульнае апісанне з’явіцца, калі пошук скончыцца або вы яго спыніце.',
+  'entities.facts': 'Факты з тэксту, з цытатамі',
   'entities.permanent': 'Знешнасць (пастаяннае)',
   'entities.permanent.none': 'У прачытаных раздзелах пастаянных рыс не апісана.',
   'entities.timeline': 'Па раздзелах',

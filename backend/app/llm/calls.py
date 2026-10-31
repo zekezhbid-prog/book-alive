@@ -83,7 +83,13 @@ def _parse[T: BaseModel](reply: str, schema: type[T]) -> T:
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end <= start:
         raise ValueError("no JSON object in the reply")
-    return schema.model_validate(json.loads(text[start : end + 1]))
+    body = text[start : end + 1]
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        # Models often leave a comma before a closing bracket: harmless, so forgive it.
+        data = json.loads(re.sub(r",(\s*[}\]])", r"\1", body))
+    return schema.model_validate(data)
 
 
 def estimate_tokens(text: str) -> int:
