@@ -240,3 +240,23 @@ def test_bad_range_and_missing_model(client, book):
 def test_slug_transliterates_cyrillic_and_belarusian():
     assert service.slug("Зіхцінка ў лесе") == "zikhtsinka_u_lese"
     assert service.slug("!!!") == "x"
+
+
+def test_writer_can_describe_a_card_and_a_scene_in_words(client, book):
+    luta = client.get(f"/api/projects/{book.id}/entities", params={"kind": "character"}).json()
+    luta_id = next(c["id"] for c in luta if c["name"] == "Люта")
+    assert client.get(f"/api/entities/{luta_id}").json()["description"] == ""
+    saved = client.put(f"/api/entities/{luta_id}/description", json={"text": "  Рыжая и упрямая.  "})
+    assert saved.status_code == 200
+    assert saved.json()["description"] == "Рыжая и упрямая."
+    assert client.get(f"/api/entities/{luta_id}").json()["description"] == "Рыжая и упрямая."
+    assert client.put("/api/entities/nope/description", json={"text": "x"}).status_code == 404
+
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 0, "paragraph_to": 0, "title": "Ключ"},
+    ).json()
+    scene = client.put(f"/api/scenes/{made['id']}/summary", json={"text": " Люта отдаёт ключ. "})
+    assert scene.status_code == 200
+    assert scene.json()["summary"] == "Люта отдаёт ключ."
+    assert client.get(f"/api/scenes/{made['id']}").json()["summary"] == "Люта отдаёт ключ."

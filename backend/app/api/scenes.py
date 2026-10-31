@@ -85,6 +85,10 @@ class PromptPatch(BaseModel):
     prompt: str = Field(max_length=6000)
 
 
+class SummaryPatch(BaseModel):
+    text: str = Field(max_length=6000)
+
+
 class FrameRequest(BaseModel):
     # The user's edit of the frame prompt; empty draws from the video prompt as it is.
     prompt: str = Field(default="", max_length=6000)
@@ -269,6 +273,15 @@ def save_prompt(scene_id: str, body: PromptPatch, session: SessionDep) -> SceneO
     """The user's own edit. Only the latest text is kept."""
     scene, chapter, project = _scene(session, scene_id)
     scene.prompt = body.prompt.strip()
+    session.commit()
+    return _full(session, scene, chapter, project)
+
+
+@router.put("/scenes/{scene_id}/summary")
+def save_summary(scene_id: str, body: SummaryPatch, session: SessionDep) -> SceneOut:
+    """The author's own description of the scene."""
+    scene, chapter, project = _scene(session, scene_id)
+    scene.summary = body.text.strip()
     session.commit()
     return _full(session, scene, chapter, project)
 

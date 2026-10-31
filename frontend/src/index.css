@@ -348,3 +348,12 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .view-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
 .view-choice label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); }
 .view-choice input { accent-color: var(--accent); }
+
+/* Top bar of a project: the title alone, bright; the project's own links sit in the left menu. */
+.book-title { flex: none; max-width: 28vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--book); font-size: 20px; font-weight: 800; color: #ffe7a0; text-shadow: 0 0 18px rgba(250, 204, 21, 0.35); }
+.topbar .btn.ghost { padding: 8px 12px; }
+.nav-footer { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--line); }
+.nav-footer a, .nav-footer button { background: transparent; border: 0; text-align: left; cursor: pointer; padding: 7px 8px; border-radius: var(--radius-sm); color: var(--muted); font-family: var(--book); font-size: 14px; font-weight: 600; }
+.nav-footer a:hover, .nav-footer button:hover { color: #ffe7a0; background: rgba(250, 204, 21, 0.08); }
+.lang-select { width: auto; padding: 6px 8px; font-weight: 700; cursor: pointer; }
+.rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text); }

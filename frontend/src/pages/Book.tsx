@@ -10,25 +10,22 @@ import ProjectNav from '../components/ProjectNav'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
 import { savesSettled } from '../saveQueue'
-
-type View = 'writer' | 'illustrator'
+import { saveView, useSide, useView, type View } from '../view'
 
 export default function Book() {
   const { t } = useI18n()
   const { projectId = '', chapterId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [project, setProject] = useState<Project | null>(null)
   const [chapter, setChapter] = useState<Chapter | null>(null)
   // Bumped whenever chapter text may have changed on the server behind the editor's back
   // (rollback, merge, split): the open chapter is refetched and its component remounted.
   const [epoch, setEpoch] = useState(0)
   const [names, setNames] = useState<NamedEntity[]>([])
   const [error, setError] = useState('')
-  const [view, setViewState] = useState<View>(
-    () => (localStorage.getItem(`view:${projectId}`) as View) || 'writer',
-  )
-  const [side, setSide] = useState<'chat' | 'versions' | 'review'>('chat')
+  const [project, setProject] = useState<Project | null>(null)
+  const view = useView({ id: projectId, mode: project?.mode ?? 'writer' })
+  const [side] = useSide(projectId)
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const reloadProject = useCallback(
@@ -80,8 +77,7 @@ export default function Book() {
   const setView = async (next: View) => {
     // The other view is drawn from what the server has, so the draft must be there first.
     await savesSettled()
-    localStorage.setItem(`view:${projectId}`, next)
-    setViewState(next)
+    saveView(projectId, next)
     // Choosing a view by hand leaves the paragraph link behind.
     if (highlighted !== undefined && activeId) open(activeId)
   }
@@ -153,20 +149,10 @@ export default function Book() {
         </section>
 
         <aside className="side">
-          {project.mode === 'writer' && (
-            <div className="segmented side-tabs">
-              {(['chat', 'review', 'versions'] as const).map((option) => (
-                <button key={option} className={side === option ? 'active' : ''} onClick={() => setSide(option)}>
-                  {t(`side.${option}`)}
-                  {option === 'versions' && project.changes?.dirty && <span className="dot" />}
-                </button>
-              ))}
-            </div>
-          )}
-          {project.mode === 'writer' && side === 'versions' ? (
+          {writing && side === 'versions' ? (
             <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
-          ) : project.mode === 'writer' && side === 'review' ? (
-            <ReviewPanel projectId={project.id} chapterId={activeId} />
+          ) : writing && side === 'review' ? (
+            <ReviewPanel project={project} chapterId={activeId} />
           ) : (
             <ChatPanel projectId={project.id} chapterId={activeId} canSuggest={writing} />
           )}

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { api, type SessionInfo } from './api'
-import { errorText, useI18n } from './i18n'
+import { errorText, LANGS, useI18n, type Lang } from './i18n'
+import { SessionActions } from './session'
 import Book from './pages/Book'
 import Entities from './pages/Entities'
 import Projects from './pages/Projects'
@@ -22,10 +23,22 @@ export default function App() {
     return () => window.removeEventListener('login-required', expired)
   }, [])
 
+  // The pages with the left menu keep Settings and Sign out at its foot.
+  const { pathname } = useLocation()
+  const hasMenu = /^\/projects\/[^/]+(\/(chapters|characters|locations|scenes)(\/|$)|$)/.test(pathname)
   const languageButton = (
-    <button className="btn ghost" onClick={() => setLang(lang === 'ru' ? 'en' : 'ru')} title="Language / Язык">
-      {lang === 'ru' ? 'EN' : 'RU'}
-    </button>
+    <select
+      className="input lang-select"
+      value={lang}
+      onChange={(e) => setLang(e.target.value as Lang)}
+      title="Language / Мова / Язык"
+    >
+      {LANGS.map((code) => (
+        <option key={code} value={code}>
+          {code.toUpperCase()}
+        </option>
+      ))}
+    </select>
   )
   if (!session) return null
   if (!session.authenticated) {
@@ -56,16 +69,25 @@ export default function App() {
         </Link>
         {/* Pages put their own breadcrumb and controls here. */}
         <div id="topbar-slot" className="topbar-slot" />
-        <NavLink to="/settings" className="btn ghost">
-          {t('app.settings')}
-        </NavLink>
-        {session.accounts && (
+        {!hasMenu && (
+          <NavLink to="/settings" className="btn ghost">
+            {t('app.settings')}
+          </NavLink>
+        )}
+        {!hasMenu && session.accounts && (
           <button className="btn ghost" title={session.email} onClick={() => api.logout().then(setSession)}>
             {t('login.logout')}
           </button>
         )}
         {languageButton}
       </header>
+      <SessionActions.Provider
+        value={{
+          accounts: session.accounts,
+          email: session.email,
+          logout: () => void api.logout().then(setSession),
+        }}
+      >
       <Routes>
         <Route path="/" element={<Projects />} />
         <Route path="/projects/:projectId" element={<Book />} />
@@ -91,6 +113,7 @@ export default function App() {
         <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      </SessionActions.Provider>
     </>
   )
 }

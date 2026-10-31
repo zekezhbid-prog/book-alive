@@ -1,22 +1,38 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import type { Project } from '../api'
 import { useI18n } from '../i18n'
+import { useSide, useView, type Side } from '../view'
 
-/** Project title, the tabs of the book's parts and the project's own settings, rendered
- * into the app's top bar. */
+/** The book's title, the tabs of its parts and, for a writer, the checks and versions,
+ * rendered into the app's top bar. The project's own links sit in the left menu. */
 export default function ProjectHeader({ project, children }: { project: Project; children?: ReactNode }) {
   const { t } = useI18n()
+  const navigate = useNavigate()
+  const view = useView(project)
+  const [side, setSide] = useSide(project.id)
   const slot = document.getElementById('topbar-slot')
   if (!slot) return null
   const base = `/projects/${project.id}`
+  // Checks and versions are the writer's tools: they open beside the text of the book.
+  const writerTool = (tool: Side) => (
+    <button
+      className={`btn ghost ${side === tool ? 'active' : ''}`}
+      onClick={() => {
+        setSide(side === tool ? 'chat' : tool)
+        if (!location.pathname.startsWith(`${base}/chapters/`) && location.pathname !== base) navigate(base)
+      }}
+    >
+      {t(`side.${tool}`)}
+      {tool === 'versions' && project.changes?.dirty && <span className="dot" />}
+    </button>
+  )
   return createPortal(
     <>
-      <span className="crumb">
-        <Link to="/">{t('app.projects')}</Link> / <b>{project.title}</b>
-      </span>
-      <span className={`badge ${project.mode}`}>{t(`mode.${project.mode}`)}</span>
+      <b className="book-title" title={project.title}>
+        {project.title}
+      </b>
       <nav className="tabs">
         {/* The book tab also covers /chapters/:id, the others are exact sections. */}
         <NavLink to={base} end={false} className={({ isActive }) => tabClass(isActive && !isSection())}>
@@ -32,15 +48,14 @@ export default function ProjectHeader({ project, children }: { project: Project;
           {t('tabs.scenes')}
         </NavLink>
       </nav>
+      {project.mode === 'writer' && view === 'writer' && (
+        <>
+          {writerTool('review')}
+          {writerTool('versions')}
+        </>
+      )}
       <span className="spacer" />
       {children}
-      {/* Project-wide settings sit on the right, next to the app's own settings. */}
-      <NavLink to={`${base}/style`} className="btn ghost">
-        {t('tabs.style')}
-      </NavLink>
-      <NavLink to={`${base}/usage`} className="btn ghost">
-        {t('tabs.usage')}
-      </NavLink>
     </>,
     slot,
   )

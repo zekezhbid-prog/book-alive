@@ -17,6 +17,9 @@ class ModelInfo:
     name: str
     free: bool | None = None  # None: the endpoint does not publish prices
     image: bool = False  # can produce images
+    # What the model produces: text, image, video, other (audio and the like) or unknown
+    # when the endpoint does not say. The pickers use it to offer only fitting models.
+    kind: str = "unknown"
 
 
 def chat_model(connection: Connection, model: str, **kwargs) -> BaseChatModel:
@@ -43,15 +46,30 @@ def list_models(connection: Connection) -> list[ModelInfo]:
 
 def _model_info(item: dict) -> ModelInfo:
     model_id = item["id"]
-    free: bool | None = True if model_id.endswith(":free") else None
     pricing = item.get("pricing")
+    free: bool | None = True if model_id.endswith(":free") else None
     if isinstance(pricing, dict) and free is None:
-        try:
-            free = all(float(pricing.get(k) or 0) == 0 for k in ("prompt", "completion", "image"))
-        except (TypeError, ValueError):
-            free = None
+        if isinstance(pricing.get("is_free"), bool):
+            free = pricing["is_free"]
+        else:
+            try:
+                prices = [float(pricing.get(k) or 0) for k in ("prompt", "completion", "image")]
+                free = all(p == 0 for p in prices)
+            except (TypeError, ValueError):
+                free = None
     architecture = item.get("architecture") or {}
-    outputs = architecture.get("output_modalities") or item.get("output_modalities") or []
-    return ModelInfo(
-        id=model_id, name=item.get("name") or model_id, free=free, image="image" in outputs
+    outputs = (
+        item.get("output_modalities") or architecture.get("output_modalities") or []
     )
+    if "video" in outputs:
+        kind = "video"
+    elif "image" in outputs:
+        kind = "image"
+    elif outputs == ["text"]:
+        kind = "text"
+    elif outputs:
+        kind = "other"
+    else:
+        kind = "unknown"
+    name = item.get("display_name") or item.get("name") or model_id
+    return ModelInfo(id=model_id, name=name, free=free, image="image" in outputs, kind=kind)

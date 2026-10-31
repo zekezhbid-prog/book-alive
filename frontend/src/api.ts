@@ -92,6 +92,8 @@ export interface ModelInfo {
   name: string
   free: boolean | null
   image: boolean
+  /** What the model produces; the pickers offer only the fitting ones. */
+  kind: 'text' | 'image' | 'video' | 'other' | 'unknown'
 }
 
 export interface ModelSettings {
@@ -159,6 +161,7 @@ export interface Entity {
   kind: EntityKind
   name: string
   aliases: string[]
+  description: string
   profile: Fact[]
   permanent: Fact[]
   timeline: ChapterFacts[]
@@ -527,5 +530,9 @@ export const api = {
   testModel: (connectionId: string, model: string) =>
     request<TestResult>('POST', `/connections/${connectionId}/test`, { model }),
   settings: () => request<ModelSettings>('GET', '/settings'),
+  saveEntityDescription: (entityId: string, text: string) =>
+    request<Entity>('PUT', `/entities/${entityId}/description`, { text }),
+  saveSceneSummary: (sceneId: string, text: string) =>
+    request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),
 }

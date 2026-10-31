@@ -42,6 +42,7 @@ class ModelOut(BaseModel):
     name: str
     free: bool | None
     image: bool
+    kind: str
 
 
 class TestRequest(BaseModel):

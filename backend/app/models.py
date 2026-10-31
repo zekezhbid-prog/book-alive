@@ -181,6 +181,9 @@ class Entity(Base):
     pinned_names: Mapped[list[str]] = mapped_column(JSON, default=list)
     # and a card the user split off, which is never merged away again.
     standalone: Mapped[bool] = mapped_column(default=False)
+    # The author's own words about the card (a writer describes people and places in text
+    # only); the facts below are what a search read out of the chapters.
+    description: Mapped[str] = mapped_column(Text, default="")
 
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"

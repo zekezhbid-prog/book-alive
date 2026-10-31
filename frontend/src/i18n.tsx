@@ -1,11 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { ApiError } from './api'
 
-export type Lang = 'ru' | 'en'
+import { by } from './i18n.by'
+
+export type Lang = 'ru' | 'by' | 'en'
+export const LANGS: Lang[] = ['ru', 'by', 'en']
 
 const ru = {
   'app.settings': 'Настройки',
   'app.projects': 'Проекты',
+  'nav.my_projects': 'Мои проекты',
   'app.loading': 'Загрузка…',
   'auth.email': 'Почта',
   'auth.register': 'Регистрация',
@@ -224,10 +228,29 @@ const ru = {
   'side.review': 'Проверка',
   'review.title': 'Проверка текста',
   'review.hint': 'Ничего не меняет в книге: только показывает замечания. Каждый запуск тратит токены.',
-  'review.grammar': 'Грамматика и орфография (открытая глава)',
-  'review.editorial': 'Издательская вычитка (открытая глава)',
-  'review.contradictions': 'Противоречия в описаниях (вся книга)',
-  'review.contradictions.hint': 'Сверяет факты карточек персонажей и локаций. Сначала найдите их в разделах «Персонажи» и «Локации».',
+  'description.title': 'Описание',
+  'description.character.placeholder': 'Кто это: внешность, характер, роль в истории…',
+  'description.location.placeholder': 'Что это за место: как выглядит, что в нём происходит…',
+  'description.scene.placeholder': 'Что происходит в сцене…',
+  'review.grammar': 'Грамматика и орфография',
+  'review.editorial': 'Издательская вычитка',
+  'review.contradictions': 'Противоречия в описаниях',
+  'review.contradictions.hint': 'Проверяется вся книга: сверяются факты карточек персонажей и локаций. Сначала найдите их в разделах «Персонажи» и «Локации».',
+  'review.rules': 'По каким правилам идёт проверка',
+  'review.start': 'Проверить',
+  'review.many': 'Глав к проверке: {n}. Каждая глава — отдельный запрос к модели.',
+  'review.rule.grammar.1': 'Орфографические ошибки и опечатки, в том числе удвоенные слова.',
+  'review.rule.grammar.2': 'Грамматика: неверные формы слов и согласование.',
+  'review.rule.grammar.3': 'Лишняя или пропущенная пунктуация.',
+  'review.rule.grammar.4': 'Стиль и выбор слов не трогаются: диалект, сленг и архаизмы ошибкой не считаются.',
+  'review.rule.editorial.1': 'Повторы слов и однокоренных слов рядом.',
+  'review.rule.editorial.2': 'Штампы, клише и слова-паразиты.',
+  'review.rule.editorial.3': 'Слишком длинные и запутанные предложения, тавтология.',
+  'review.rule.editorial.4': 'Знаки препинания в диалогах и единообразие написания имён и терминов.',
+  'review.rule.editorial.5': 'Скачки времени глаголов, неясные местоимения, анахронизмы.',
+  'review.rule.editorial.6': 'Орфография и сюжет не оцениваются.',
+  'review.rule.contradictions.1': 'Факты об одном персонаже или месте, которые не могут быть верны вместе: цвет глаз и волос, возраст, рост, планировка, шрам, который появляется и исчезает.',
+  'review.rule.contradictions.2': 'Не считаются противоречиями изменения, которые объясняют события: новая одежда, ранение, смена дня и ночи, разрушенное место.',
   'review.running': 'Проверяю…',
   'review.empty': 'Замечаний нет.',
   'review.count': 'Замечаний: {n}',
@@ -416,6 +439,10 @@ const ru = {
   'settings.models.count': 'Моделей: {n}',
   'settings.free.only': 'Только бесплатные',
   'settings.free': 'бесплатно',
+  'settings.kind.unknown': 'Сервис не сообщает, что умеет каждая модель, поэтому показаны все.',
+  'settings.kind.none.text': 'У этого подключения нет текстовых моделей.',
+  'settings.kind.none.image': 'У этого подключения нет моделей для рисунков.',
+  'settings.kind.none.video': 'У этого подключения нет моделей для видео.',
   'settings.image.unknown':
     'Сервис не сообщает, какие модели умеют рисовать, поэтому показаны все.',
   'settings.test': 'Проверить',
@@ -463,6 +490,7 @@ const ru = {
 const en: Record<keyof typeof ru, string> = {
   'app.settings': 'Settings',
   'app.projects': 'Projects',
+  'nav.my_projects': 'My projects',
   'app.loading': 'Loading…',
   'auth.email': 'E-mail',
   'auth.register': 'Register',
@@ -680,10 +708,29 @@ const en: Record<keyof typeof ru, string> = {
   'side.review': 'Review',
   'review.title': 'Text review',
   'review.hint': 'Changes nothing in the book: it only shows remarks. Every run spends tokens.',
-  'review.grammar': 'Grammar and spelling (open chapter)',
-  'review.editorial': 'Editorial polish (open chapter)',
-  'review.contradictions': 'Contradictions in descriptions (whole book)',
-  'review.contradictions.hint': 'Compares the facts on character and location cards. Find them first in the Characters and Locations sections.',
+  'description.title': 'Description',
+  'description.character.placeholder': 'Who this is: looks, character, role in the story…',
+  'description.location.placeholder': 'What this place is: how it looks, what happens there…',
+  'description.scene.placeholder': 'What happens in the scene…',
+  'review.grammar': 'Grammar and spelling',
+  'review.editorial': 'Editorial polish',
+  'review.contradictions': 'Contradictions in descriptions',
+  'review.contradictions.hint': 'The whole book is checked: facts on character and location cards are compared. Find them first in the Characters and Locations sections.',
+  'review.rules': 'What the check looks for',
+  'review.start': 'Check',
+  'review.many': 'Chapters to check: {n}. Each chapter is a separate model request.',
+  'review.rule.grammar.1': 'Spelling mistakes and typos, including doubled words.',
+  'review.rule.grammar.2': 'Grammar: wrong word forms and agreement.',
+  'review.rule.grammar.3': 'Extra or missing punctuation.',
+  'review.rule.grammar.4': 'Style and word choice are left alone: dialect, slang and archaic words are not mistakes.',
+  'review.rule.editorial.1': 'Repeated words and roots close together.',
+  'review.rule.editorial.2': 'Cliches, stock phrases and filler words.',
+  'review.rule.editorial.3': 'Overlong or tangled sentences, tautology.',
+  'review.rule.editorial.4': 'Dialogue punctuation and consistent spelling of names and terms.',
+  'review.rule.editorial.5': 'Tense jumps, unclear pronoun references, anachronisms.',
+  'review.rule.editorial.6': 'Spelling and plot are not judged.',
+  'review.rule.contradictions.1': 'Facts about one character or place that cannot both be true: eye or hair colour, age, height, layout, a scar that appears or disappears.',
+  'review.rule.contradictions.2': 'Changes explained by events are not contradictions: new clothes, an injury, day turning to night, a destroyed place.',
   'review.running': 'Checking…',
   'review.empty': 'No remarks.',
   'review.count': 'Remarks: {n}',
@@ -873,6 +920,10 @@ const en: Record<keyof typeof ru, string> = {
   'settings.models.count': 'Models: {n}',
   'settings.free.only': 'Free only',
   'settings.free': 'free',
+  'settings.kind.unknown': 'The service does not say what each model does, so all are shown.',
+  'settings.kind.none.text': 'This connection has no text models.',
+  'settings.kind.none.image': 'This connection has no image models.',
+  'settings.kind.none.video': 'This connection has no video models.',
   'settings.image.unknown': 'The service does not say which models can draw, so all are shown.',
   'settings.test': 'Test',
   'settings.testing': 'Testing…',
@@ -921,7 +972,8 @@ export type MessageKey = keyof typeof ru
 type Params = Record<string, string | number>
 export type Translate = (key: MessageKey, params?: Params) => string
 
-const dictionaries = { ru, en }
+// Belarusian falls back to Russian for anything not translated yet.
+const dictionaries: Record<Lang, Record<MessageKey, string>> = { ru, en, by: { ...ru, ...by } }
 
 const I18nContext = createContext<{
   lang: Lang
@@ -934,9 +986,10 @@ const I18nContext = createContext<{
 const hasMessage = (key: string): key is MessageKey => key in ru
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() =>
-    localStorage.getItem('lang') === 'en' ? 'en' : 'ru',
-  )
+  const [lang, setLangState] = useState<Lang>(() => {
+    const saved = localStorage.getItem('lang')
+    return saved === 'en' || saved === 'by' ? saved : 'ru'
+  })
   const setLang = useCallback((next: Lang) => {
     localStorage.setItem('lang', next)
     document.documentElement.lang = next

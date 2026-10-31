@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, type SearchHit } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
 import { PlusIcon, SparklesIcon } from './icons'
 import { askText } from '../dialogs'
+import { useSessionActions } from '../session'
+import { useView } from '../view'
 
 type Section = 'chapters' | 'characters' | 'locations' | 'scenes'
 const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'scenes']
@@ -33,6 +35,9 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   const { pathname } = useLocation()
   const { entityId, sceneId } = useParams()
   const base = `/projects/${project.id}`
+  const { accounts, email, logout } = useSessionActions()
+  // The style belongs to the illustrator's work, not to the writer's.
+  const illustrating = useView(project) === 'illustrator'
   // The search dialogs start from the chapter the user was last reading.
   useEffect(() => {
     if (!activeChapter) return
@@ -255,6 +260,18 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
               <span className="nav-chevron">{section === current && open ? '‹' : '›'}</span>
             </button>
           ))}
+        </nav>
+        {/* The project's own links and the app's settings, at the foot of the first column. */}
+        <nav className="nav-footer">
+          <Link to="/">{t('nav.my_projects')}</Link>
+          {illustrating && <Link to={`${base}/style`}>{t('tabs.style')}</Link>}
+          <Link to={`${base}/usage`}>{t('tabs.usage')}</Link>
+          <Link to="/settings">{t('app.settings')}</Link>
+          {accounts && (
+            <button title={email} onClick={logout}>
+              {t('login.logout')}
+            </button>
+          )}
         </nav>
       </div>
       {/* Search results take the list's place while there is a query. */}

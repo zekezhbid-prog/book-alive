@@ -6,7 +6,7 @@ import {
   type ModelInfo,
   type ModelSettings,
 } from "../api";
-import { errorText, useI18n } from "../i18n";
+import { errorText, useI18n, type MessageKey } from "../i18n";
 import { ask } from "../dialogs";
 
 const PRESETS = [{ name: "Hubris", url: "https://api.hubris.pw/v1" }];
@@ -108,6 +108,7 @@ export default function Settings() {
           </div>
           <ModelPicker
             title={t("settings.models.text")}
+            kind="text"
             connections={connections}
             connectionId={settings.text_connection_id}
             model={settings.text_model}
@@ -117,7 +118,7 @@ export default function Settings() {
           />
           <ModelPicker
             title={t("settings.models.image")}
-            imagesOnly
+            kind="image"
             connections={connections}
             connectionId={settings.image_connection_id}
             model={settings.image_model}
@@ -127,6 +128,7 @@ export default function Settings() {
           />
           <ModelPicker
             title={t("settings.models.video")}
+            kind="video"
             connections={connections}
             connectionId={settings.video_connection_id}
             model={settings.video_model}
@@ -240,7 +242,7 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
 
 interface PickerProps {
   title: string;
-  imagesOnly?: boolean;
+  kind: "text" | "image" | "video";
   connections: Connection[];
   connectionId: string;
   model: string;
@@ -249,7 +251,7 @@ interface PickerProps {
 
 function ModelPicker({
   title,
-  imagesOnly,
+  kind,
   connections,
   connectionId,
   model,
@@ -281,10 +283,12 @@ function ModelPicker({
     };
   }, [connectionId, known, t]);
 
-  const anyImageFlag = models?.some((m) => m.image) ?? false;
+  // A service that says what its models produce gets only the fitting ones offered:
+  // text models for text, drawing models for pictures. One that does not shows them all.
+  const kindsKnown = models?.some((m) => m.kind !== "unknown") ?? false;
   const anyPrice = models?.some((m) => m.free !== null) ?? false;
   const visible = (models ?? []).filter(
-    (m) => (!imagesOnly || !anyImageFlag || m.image) && (!freeOnly || m.free),
+    (m) => (!kindsKnown || m.kind === kind) && (!freeOnly || m.free),
   );
   const test = async () => {
     setFailed(false);
@@ -337,7 +341,7 @@ function ModelPicker({
                 : t("settings.models.loading")}
             </option>
             {/* Keep the saved model selectable even when a filter hides it. */}
-            {model && !visible.some((m) => m.id === model) && (
+            {model && !(models ?? []).some((m) => m.id === model) && (
               <option value={model}>{model}</option>
             )}
             {visible.map((m) => (
@@ -362,12 +366,15 @@ function ModelPicker({
               {t("settings.free.only")}
             </label>
           )}
-          {imagesOnly && models.length > 0 && !anyImageFlag && (
-            <span>{t("settings.image.unknown")}</span>
+          {models.length > 0 && !kindsKnown && (
+            <span>{t("settings.kind.unknown")}</span>
+          )}
+          {kindsKnown && visible.length === 0 && (
+            <span>{t(`settings.kind.none.${kind}` as MessageKey)}</span>
           )}
           <span className="spacer" />
           {/* Image models are exercised when the first picture is generated. */}
-          {!imagesOnly && (
+          {kind === "text" && (
             <button className="btn small" disabled={!model} onClick={test}>
               {t("settings.test")}
             </button>

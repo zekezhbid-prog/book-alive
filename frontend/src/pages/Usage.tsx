@@ -47,9 +47,7 @@ export default function Usage() {
               {usage.rows.map((row, i) => (
                 <tr key={i}>
                   <td>{operation(row.operation)}</td>
-                  <td className="muted">
-                    {row.connection_name} · {row.model}
-                  </td>
+                  <td className="muted">{row.model}</td>
                   <td className="num">{number(row.calls)}</td>
                   <td className="num">{number(row.input_tokens)}</td>
                   <td className="num">{number(row.output_tokens)}</td>

@@ -13,7 +13,9 @@ import {
 import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
+import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
+import { useView } from '../view'
 import { ask } from '../dialogs'
 
 const POLL_MS = 2000
@@ -32,6 +34,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   // null: closed. Otherwise the chapters ticked when the dialog opens (empty = all).
   const [choosing, setChoosing] = useState<string[] | null>(null)
   const [staleChapters, setStaleChapters] = useState<string[]>([])
+  const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
   const [error, setError] = useState('')
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
@@ -145,6 +148,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 }}
                 onError={fail}
                 gallery={
+                  view === 'writer' ? null : (
                   <Gallery
                     key={entity.id}
                     projectId={projectId}
@@ -153,7 +157,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                     chapters={project.chapters}
                     hasStyle={Boolean(project.style_id)}
                   />
+                  )
                 }
+                writing={view === 'writer'}
               />
             )}
           </div>
@@ -184,11 +190,13 @@ interface CardProps {
   onError: (error: unknown) => void
   /** The card's references, shown between the name and the description. */
   gallery: ReactNode
+  /** A writer describes the card in words; pictures belong to the illustrator. */
+  writing: boolean
 }
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ entity, projectId, others, onChanged, onError, gallery }: CardProps) {
+function Card({ entity, projectId, others, onChanged, onError, gallery, writing }: CardProps) {
   const { t } = useI18n()
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
@@ -241,6 +249,15 @@ function Card({ entity, projectId, others, onChanged, onError, gallery }: CardPr
           </div>
         )}
       </div>
+      {writing && (
+        <DescriptionEditor
+          key={entity.id}
+          value={entity.description}
+          label={t('description.title')}
+          placeholder={t(`description.${entity.kind}.placeholder`)}
+          onSave={(text) => api.saveEntityDescription(entity.id, text)}
+        />
+      )}
       <h4>{t('entities.profile')}</h4>
       {entity.profile.length + entity.permanent.length === 0 && (
         <p className="faint">{t('entities.profile.none')}</p>

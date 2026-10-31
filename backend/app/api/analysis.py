@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.analysis import entities as analysis
@@ -70,6 +70,7 @@ class EntityOut(BaseModel):
     kind: str
     name: str
     aliases: list[str]
+    description: str
     profile: list[FactOut]
     permanent: list[FactOut]
     timeline: list[ChapterFacts]
@@ -77,6 +78,10 @@ class EntityOut(BaseModel):
 
 class MergeRequest(BaseModel):
     other_id: str
+
+
+class DescriptionPatch(BaseModel):
+    text: str = Field(max_length=6000)
 
 
 class SplitRequest(BaseModel):
@@ -281,10 +286,22 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         kind=entity.kind,
         name=entity.name,
         aliases=entity.aliases,
+        description=entity.description,
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),
     )
+
+
+@router.put("/entities/{entity_id}/description")
+def save_description(entity_id: str, body: DescriptionPatch, session: SessionDep) -> EntityOut:
+    """The author's own description of a card; searches never touch it."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    entity.description = body.text.strip()
+    session.commit()
+    return get_entity(entity_id, session)
 
 
 @router.post("/entities/{entity_id}/merge")

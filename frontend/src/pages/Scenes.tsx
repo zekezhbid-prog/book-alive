@@ -12,7 +12,9 @@ import {
 import { ImageDialog } from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
+import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
+import { useView } from '../view'
 import { ask } from '../dialogs'
 import { CopyIcon, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
 
@@ -27,6 +29,7 @@ export default function Scenes() {
   const [list, setList] = useState<SceneBrief[] | null>(null)
   const [scene, setScene] = useState<Scene | null>(null)
   const [error, setError] = useState('')
+  const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const loadList = useCallback(() => api.scenes(projectId).then(setList, fail), [projectId, fail])
@@ -43,6 +46,7 @@ export default function Scenes() {
   }, [activeId, fail])
 
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
+  const writing = view === 'writer'
 
   const remove = async () => {
     if (!scene || !(await ask(t('scene.delete.confirm')))) return
@@ -65,6 +69,7 @@ export default function Scenes() {
                 scene={scene}
                 hasStyle={Boolean(project.style_id)}
                 chapters={project.chapters}
+                writing={writing}
                 onChange={(next) => {
                   setScene(next)
                   loadList()
@@ -84,11 +89,13 @@ interface ViewProps {
   scene: Scene
   hasStyle: boolean
   chapters: ChapterBrief[]
+  /** A writer describes the scene in words; pictures and video belong to the illustrator. */
+  writing: boolean
   onChange: (scene: Scene) => void
   onDelete: () => void
 }
 
-function SceneView({ projectId, scene, hasStyle, chapters, onChange, onDelete }: ViewProps) {
+function SceneView({ projectId, scene, hasStyle, chapters, writing, onChange, onDelete }: ViewProps) {
   const { t } = useI18n()
   const [prompt, setPrompt] = useState(scene.prompt)
   const [note, setNote] = useState('')
@@ -175,7 +182,16 @@ function SceneView({ projectId, scene, hasStyle, chapters, onChange, onDelete }:
           </Link>
         ))}
       </div>
-      {scene.summary && <p className="muted">{scene.summary}</p>}
+      {writing ? (
+        <DescriptionEditor
+          value={scene.summary}
+          label={t('description.title')}
+          placeholder={t('description.scene.placeholder')}
+          onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
+        />
+      ) : (
+        scene.summary && <p className="muted">{scene.summary}</p>
+      )}
       <details>
         <summary className="muted">{t('scene.text')}</summary>
         {scene.text.split('\n\n').map((paragraph, i) => (
@@ -183,6 +199,8 @@ function SceneView({ projectId, scene, hasStyle, chapters, onChange, onDelete }:
         ))}
       </details>
 
+      {!writing && (
+        <>
       <h4>{t('scene.references')}</h4>
       {!hasStyle && <p className="faint small">{t('scene.references.no_style')}</p>}
       <div className="refs">
@@ -331,6 +349,8 @@ function SceneView({ projectId, scene, hasStyle, chapters, onChange, onDelete }:
             {busy === 'prompt' ? t('scene.build.busy') : t('scene.build')}
           </button>
         </div>
+      )}
+        </>
       )}
       {error && <p className="error">{error}</p>}
     </>
