@@ -31,7 +31,8 @@ backend/app/
   db.py              engine, session, embedded PostgreSQL when DATABASE_URL is empty
   models.py          SQLAlchemy models
   crypto.py          encryption of stored API keys
-  auth.py            one shared password for a hosted instance (off when APP_PASSWORD is empty)
+  auth.py            accounts (e-mail + password, registration only for ALLOWED_EMAILS, mailed
+                     reset), owner check on every API call; off when ALLOWED_EMAILS is empty
   importing/         file -> paragraphs -> chapters, no AI
   services/versions.py  whole-book commits and rollback
   llm/registry.py    the only place that builds chat models and lists provider models

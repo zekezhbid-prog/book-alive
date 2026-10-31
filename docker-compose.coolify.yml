@@ -5,8 +5,8 @@
 # To move to a plain pgvector server instead, use docker-compose.yml (own `db` container)
 # or point DATABASE_URL at any PostgreSQL with pgvector and leave DB_SCHEMA empty.
 #
-# Set in Coolify: DATABASE_URL, DB_SCHEMA=lorebook, SECRET_KEY, APP_PASSWORD, SUPABASE_NETWORK,
-# HUBRIS_API_KEY.
+# Set in Coolify: DATABASE_URL, DB_SCHEMA=lorebook, SECRET_KEY, SUPABASE_NETWORK, HUBRIS_API_KEY,
+# ALLOWED_EMAILS, OWNER_EMAILS, PUBLIC_URL, SMTP_USER, SMTP_PASSWORD.
 
 services:
   app:
@@ -20,8 +20,18 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
       # The model provider; the Hubris connection is created from it at startup.
       HUBRIS_API_KEY: ${HUBRIS_API_KEY:-}
-      # The one password that opens the app: anyone who reaches it can spend model credits.
-      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD}
+      # Accounts: only these addresses may register (comma separated). Never run a public
+      # instance without it: anyone who reaches the app could spend your model credits.
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?set ALLOWED_EMAILS}
+      # Administrators (may change model connections); the first one owns the books that
+      # existed before accounts did.
+      OWNER_EMAILS: ${OWNER_EMAILS:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Mail for password resets (Gmail: an app password, not the account password).
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # The embedding model would otherwise use every core of a shared server.
       OMP_NUM_THREADS: "2"
       ORT_NUM_THREADS: "2"

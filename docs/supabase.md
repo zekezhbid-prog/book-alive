@@ -30,7 +30,7 @@ the role cannot install extensions, and the app only checks for it.
 | `DATABASE_URL` | `postgresql://lorebook:<password>@supabase-db-<id>:5432/postgres` |
 | `DB_SCHEMA` | `lorebook` |
 | `SUPABASE_NETWORK` | the Docker network name of the Supabase service |
-| `SECRET_KEY`, `APP_PASSWORD` | as in the README |
+| `SECRET_KEY`, `ALLOWED_EMAILS`, `OWNER_EMAILS`, `PUBLIC_URL`, `SMTP_*` | as in the README |
 
 ## Moving to a plain pgvector server
 

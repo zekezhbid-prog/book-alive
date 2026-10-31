@@ -99,8 +99,16 @@ POSTGRES_PASSWORD=
 # Long random string. Encrypts stored API keys and signs sessions.
 # python -c "import secrets; print(secrets.token_urlsafe(48))"
 SECRET_KEY=
-# The one password that opens the app.
-APP_PASSWORD=
+# Addresses that may register (comma separated); everyone else is turned away.
+ALLOWED_EMAILS=
+# Administrators (may change model connections). The first one owns books made earlier.
+OWNER_EMAILS=
+# Public address of the site: the link in the password reset mail.
+PUBLIC_URL=
+# Mail for password resets. Gmail: SMTP_USER is the address, SMTP_PASSWORD an app password
+# (needs 2-step verification). Without them reset mails are not sent.
+SMTP_USER=
+SMTP_PASSWORD=
 # Port on the host.
 PORT=8000
 ```
@@ -109,9 +117,10 @@ PORT=8000
 docker compose up -d --build
 ```
 
-The app has no user accounts. `APP_PASSWORD` is one shared password that keeps strangers
-from spending your model credits; put the app behind HTTPS when it is reachable from the
-internet. Set `HUBRIS_API_KEY` in the same `.env` to connect the model provider.
+Users sign in with e-mail and password. Only the addresses in `ALLOWED_EMAILS` can register,
+a forgotten password is reset by a mailed link, and everyone sees only their own books. This
+keeps strangers from spending your model credits; put the app behind HTTPS when it is
+reachable from the internet. Without `ALLOWED_EMAILS` (a local run) there is no login. Set `HUBRIS_API_KEY` in the same `.env` to connect the model provider.
 
 On a server, add `DOMAIN` to `.env` (a bare IP works through sslip.io:
 `203-0-113-7.sslip.io`) and start with Caddy in front, which gets the certificate itself:

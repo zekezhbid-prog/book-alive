@@ -26,6 +26,27 @@ def text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String(320), unique=True)  # lower case
+    password_hash: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class PasswordReset(Base):
+    """A one-time link sent by mail. Only the hash of the token is stored."""
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -33,6 +54,11 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(300))
     author: Mapped[str] = mapped_column(String(300), default="")
     mode: Mapped[str] = mapped_column(String(10))
+    # Whose book it is. Empty on a machine without accounts, and for books made before
+    # accounts existed: the owner's e-mail claims those when they register.
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, default=None
+    )
     source_filename: Mapped[str] = mapped_column(String(300), default="")
     # How chapters were found on import: headings | pattern | sections | manual
     split_method: Mapped[str] = mapped_column(String(20), default="manual")

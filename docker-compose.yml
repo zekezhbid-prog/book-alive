@@ -29,7 +29,18 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       # The one password that opens the app. Never run a public instance without it:
       # anyone who reaches the app can spend your model credits.
-      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+      # Accounts: only these addresses may register (comma separated). Never run a public
+      # instance without it: anyone who reaches the app could spend your model credits.
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?set ALLOWED_EMAILS in .env}
+      # Administrators (may change model connections); the first one owns the books that
+      # existed before accounts did.
+      OWNER_EMAILS: ${OWNER_EMAILS:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Mail for password resets (Gmail: an app password, not the account password).
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       HUBRIS_API_KEY: ${HUBRIS_API_KEY:-}
     volumes:
       - data:/data

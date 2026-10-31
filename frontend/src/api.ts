@@ -350,13 +350,23 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export interface SessionInfo {
-  password_required: boolean
+  accounts: boolean // false: no login at all (the owner's own machine)
   authenticated: boolean
+  email: string
+  is_admin: boolean
 }
 
 export const api = {
   session: () => request<SessionInfo>('GET', '/session'),
-  login: (password: string) => request<SessionInfo>('POST', '/login', { password }),
+  login: (email: string, password: string) =>
+    request<SessionInfo>('POST', '/login', { email, password }),
+  register: (email: string, password: string) =>
+    request<SessionInfo>('POST', '/register', { email, password }),
+  forgotPassword: (email: string) => request<{ ok: boolean }>('POST', '/password/forgot', { email }),
+  resetPassword: (token: string, password: string) =>
+    request<SessionInfo>('POST', '/password/reset', { token, password }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<SessionInfo>('POST', '/password/change', { current_password, new_password }),
   logout: () => request<SessionInfo>('POST', '/logout'),
   projects: () => request<ProjectBrief[]>('GET', '/projects'),
   createProject: (mode: Mode, title: string, file: File | null) => {

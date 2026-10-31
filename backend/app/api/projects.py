@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import PurePath
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -218,7 +218,7 @@ def _project_out(session: Session, project: Project) -> ProjectOut:
 
 
 @router.get("/projects")
-def list_projects(session: SessionDep) -> list[ProjectBrief]:
+def list_projects(request: Request, session: SessionDep) -> list[ProjectBrief]:
     # Sizes are computed in the database: loading every chapter's text for a list is wasteful.
     sizes = {
         project_id: (count, chars)
@@ -228,7 +228,10 @@ def list_projects(session: SessionDep) -> list[ProjectBrief]:
             )
         )
     }
-    projects = session.scalars(select(Project).order_by(Project.created_at.desc())).all()
+    query = select(Project).order_by(Project.created_at.desc())
+    if request.state.user_id:  # with accounts, only the user's own books
+        query = query.where(Project.owner_id == request.state.user_id)
+    projects = session.scalars(query).all()
     return [
         ProjectBrief(
             id=p.id,
@@ -245,6 +248,7 @@ def list_projects(session: SessionDep) -> list[ProjectBrief]:
 
 @router.post("/projects")
 def create_project(
+    request: Request,
     session: SessionDep,
     mode: Annotated[str, Form()],
     title: Annotated[str, Form()] = "",
@@ -255,7 +259,7 @@ def create_project(
     if mode == MODE_READER and file is None:
         raise HTTPException(422, "book_file_required")
 
-    project = Project(title=_title(title), mode=mode)
+    project = Project(title=_title(title), mode=mode, owner_id=request.state.user_id)
     if file is not None:
         data = file.file.read(MAX_UPLOAD_BYTES + 1)
         if len(data) > MAX_UPLOAD_BYTES:

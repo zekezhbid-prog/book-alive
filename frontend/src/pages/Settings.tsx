@@ -17,12 +17,14 @@ export default function Settings() {
   const [connections, setConnections] = useState<Connection[]>([])
   const [settings, setSettings] = useState<ModelSettings | null>(null)
   const [error, setError] = useState('')
+  const [accounts, setAccounts] = useState(false)
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const loadConnections = useCallback(() => api.connections().then(setConnections, fail), [fail])
   useEffect(() => {
     loadConnections()
     api.settings().then(setSettings, fail)
+    api.session().then((info) => setAccounts(info.accounts), fail)
   }, [loadConnections, fail])
 
   const save = (patch: Partial<ModelSettings>) => {
@@ -96,6 +98,7 @@ export default function Settings() {
           />
         </section>
       )}
+      {accounts && <ChangePassword />}
     </main>
   )
 }
@@ -313,5 +316,51 @@ function ModelPicker({ title, imagesOnly, connections, connectionId, model, onCh
       )}
       {status && <p className={failed ? 'error' : 'ok'}>{status}</p>}
     </div>
+  )
+}
+
+function ChangePassword() {
+  const { t } = useI18n()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    api.changePassword(current, next).then(
+      () => {
+        setCurrent('')
+        setNext('')
+        setMessage(t('settings.password.done'))
+      },
+      (e) => setError(errorText(t, e)),
+    )
+  }
+  return (
+    <section className="panel pad stack">
+      <h2>{t('settings.password.title')}</h2>
+      <form className="stack subform" onSubmit={submit}>
+        <label className="field">
+          {t('settings.password.current')}
+          <input className="input" type="password" autoComplete="current-password" value={current}
+            onChange={(e) => setCurrent(e.target.value)} />
+        </label>
+        <label className="field">
+          {t('settings.password.new')}
+          <input className="input" type="password" autoComplete="new-password" value={next}
+            onChange={(e) => setNext(e.target.value)} />
+          <span className="faint">{t('auth.password.hint')}</span>
+        </label>
+        {error && <p className="error">{error}</p>}
+        {message && <p className="notice">{message}</p>}
+        <div className="row">
+          <button className="btn primary" disabled={!current || !next}>
+            {t('settings.password.submit')}
+          </button>
+        </div>
+      </form>
+    </section>
   )
 }
