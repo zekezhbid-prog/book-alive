@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.llm import registry
-from app.models import KIND_CLAUDE_CLI, AppSetting, Connection, UsageEvent
+from app.models import AppSetting, Connection, UsageEvent
 
 
 class ModelNotConfigured(RuntimeError):
@@ -32,8 +32,7 @@ class TextModel:
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
-        # The Claude Code CLI wraps every request in its own system prompt.
-        self.request_overhead = 5000 if connection.kind == KIND_CLAUDE_CLI else 0
+        self.request_overhead = 0  # tokens the connection adds to every request on its own
         self.model_name = model.value
         self.llm: BaseChatModel = registry.chat_model(connection, model.value)
 
@@ -59,7 +58,7 @@ class TextModel:
         self, operation: str, messages: list[BaseMessage], schema: type[T]
     ) -> T:
         """Structured output through plain JSON in the reply. Tool calling would be neater,
-        but free models and the subscription CLI do not support it reliably."""
+        but free models do not support it reliably."""
         reply = self.invoke(operation, messages)
         try:
             return _parse(reply, schema)

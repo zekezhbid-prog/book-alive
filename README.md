@@ -78,11 +78,10 @@ cd frontend && npm install && npm run build && cd ..
 cd backend && uv sync && uv run uvicorn app.main:app --port 8000
 ```
 
-Open http://127.0.0.1:8000 and add a connection in Settings:
-
-- **Address and key**: any OpenAI-compatible API. OpenRouter and OmniRoute have presets.
-- **Claude subscription**: uses the Claude Code CLI installed on the same machine, so text
-  work is covered by the subscription. Text only.
+Open http://127.0.0.1:8000 and add a connection in Settings: an address and key of an
+OpenAI-compatible API (Hubris has a preset). Or set `HUBRIS_API_KEY` in `.env` (or in the
+container environment): the "Hubris" connection is then created at startup and only the
+model is left to choose. The app talks to API providers only.
 
 To try it without your own book, create a project from `demo/lighthouse.txt`.
 
@@ -112,8 +111,7 @@ docker compose up -d --build
 
 The app has no user accounts. `APP_PASSWORD` is one shared password that keeps strangers
 from spending your model credits; put the app behind HTTPS when it is reachable from the
-internet. The Claude subscription connection is not offered in a container: there is no
-Claude Code CLI there. Use any OpenAI-compatible endpoint with a key (OpenRouter, Hubris).
+internet. Set `HUBRIS_API_KEY` in the same `.env` to connect the model provider.
 
 On a server, add `DOMAIN` to `.env` (a bare IP works through sslip.io:
 `203-0-113-7.sslip.io`) and start with Caddy in front, which gets the certificate itself:

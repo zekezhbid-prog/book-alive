@@ -38,7 +38,7 @@ backend/app/
   llm/calls.py       TextModel: the configured text model, JSON output, usage journal
   analysis/          LangGraph loop that finds characters and locations, its prompts,
                      the background runner
-  llm/claude_cli.py  LangChain chat model over the local Claude Code CLI (subscription)
+  llm/provision.py   the Hubris connection created from HUBRIS_API_KEY at startup
   rag/               local embeddings, chunk index and hybrid search, chat with citations
   images/            project style, image prompt from a card, image generation client
   scenes/            scene split, references for a scene, video prompt, archive

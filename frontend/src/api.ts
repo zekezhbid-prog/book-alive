@@ -77,7 +77,7 @@ export interface SearchHit {
   snippet: string
 }
 
-export type ConnectionKind = 'openai' | 'claude_cli'
+export type ConnectionKind = 'openai'
 
 export interface Connection {
   id: string
@@ -501,7 +501,6 @@ export const api = {
   sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
   usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
 
-  system: () => request<{ claude_cli: boolean }>('GET', '/system'),
   connections: () => request<Connection[]>('GET', '/connections'),
   createConnection: (body: {
     name: string

@@ -12,7 +12,6 @@ MODE_READER = "reader"  # finished book: illustrator tools only, text is read-on
 MODE_WRITER = "writer"  # book in progress: editor, versions, plus illustrator tools
 
 KIND_OPENAI = "openai"  # any OpenAI-compatible endpoint (OpenRouter, OmniRoute, ...)
-KIND_CLAUDE_CLI = "claude_cli"  # local Claude Code CLI, billed to the user's subscription
 
 
 def new_id() -> str:

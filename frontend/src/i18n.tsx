@@ -366,10 +366,6 @@ const ru = {
   'settings.add': 'Добавить подключение',
   'settings.kind': 'Тип',
   'settings.kind.openai': 'Адрес и ключ (OpenAI-совместимый API)',
-  'settings.kind.claude_cli': 'Подписка Claude (через Claude Code на этом компьютере)',
-  'settings.kind.claude_cli.hint':
-    'Запросы идут через установленный Claude Code и расходуют лимиты вашей подписки, отдельной оплаты нет. Работает только на компьютере, где Claude Code установлен и выполнен вход; на хостинге недоступно. Только текст, без картинок.',
-  'settings.kind.claude_cli.missing': 'Claude Code на этом компьютере не найден.',
   'settings.name': 'Название',
   'settings.url': 'Адрес',
   'settings.key': 'API-ключ',
@@ -403,7 +399,6 @@ const ru = {
   'error.nothing_to_commit': 'Изменений нет, фиксировать нечего.',
   'error.no_next_chapter': 'Это последняя глава.',
   'error.bad_base_url': 'Адрес должен начинаться с http:// или https://',
-  'error.claude_cli_missing': 'Claude Code на этом компьютере не найден.',
   'error.provider_error': 'Сервис ответил ошибкой: {detail}',
   'error.text_model_not_configured':
     'Не выбрана модель для текста. Откройте Настройки и выберите подключение и модель.',
@@ -797,10 +792,6 @@ const en: Record<keyof typeof ru, string> = {
   'settings.add': 'Add connection',
   'settings.kind': 'Type',
   'settings.kind.openai': 'Address and key (OpenAI-compatible API)',
-  'settings.kind.claude_cli': 'Claude subscription (through Claude Code on this computer)',
-  'settings.kind.claude_cli.hint':
-    'Requests go through the installed Claude Code and use your subscription limits, with no separate billing. Works only on a computer where Claude Code is installed and signed in; not available when hosted. Text only, no images.',
-  'settings.kind.claude_cli.missing': 'Claude Code was not found on this computer.',
   'settings.name': 'Name',
   'settings.url': 'Address',
   'settings.key': 'API key',
@@ -833,7 +824,6 @@ const en: Record<keyof typeof ru, string> = {
   'error.nothing_to_commit': 'Nothing has changed, nothing to commit.',
   'error.no_next_chapter': 'This is the last chapter.',
   'error.bad_base_url': 'The address must start with http:// or https://',
-  'error.claude_cli_missing': 'Claude Code was not found on this computer.',
   'error.provider_error': 'The service returned an error: {detail}',
   'error.text_model_not_configured':
     'No text model is selected. Open Settings and choose a connection and a model.',

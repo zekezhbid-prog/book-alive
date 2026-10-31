@@ -8,8 +8,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 from app.crypto import decrypt
-from app.llm.claude_cli import CLI_MODELS, ChatClaudeCLI, cli_path
-from app.models import KIND_CLAUDE_CLI, Connection
+from app.models import Connection
 
 
 @dataclass
@@ -21,11 +20,6 @@ class ModelInfo:
 
 
 def chat_model(connection: Connection, model: str, **kwargs) -> BaseChatModel:
-    if connection.kind == KIND_CLAUDE_CLI:
-        if model not in CLI_MODELS:
-            # The name becomes a command-line argument: only known values pass.
-            raise ValueError(f"Unknown Claude CLI model: {model}")
-        return ChatClaudeCLI(model=model)
     return ChatOpenAI(
         model=model,
         base_url=connection.base_url.rstrip("/"),
@@ -37,10 +31,6 @@ def chat_model(connection: Connection, model: str, **kwargs) -> BaseChatModel:
 
 
 def list_models(connection: Connection) -> list[ModelInfo]:
-    if connection.kind == KIND_CLAUDE_CLI:
-        if not cli_path():
-            raise RuntimeError("Claude Code CLI is not installed on this machine")
-        return [ModelInfo(id=m, name=f"Claude {m.capitalize()}", free=True) for m in CLI_MODELS]
     key = decrypt(connection.api_key_encrypted)
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     response = httpx.get(f"{connection.base_url.rstrip('/')}/models", headers=headers, timeout=20)

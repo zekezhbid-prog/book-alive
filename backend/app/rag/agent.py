@@ -4,7 +4,7 @@ and two tools: search the book, and open a whole chapter. It decides what to loo
 until it has enough, then answers from what it has read.
 
 A LangGraph loop of one decision node and the two tools. Tool calls go through plain
-JSON in the reply, as everywhere in the app: the subscription CLI has no tool calling.
+JSON in the reply, as everywhere in the app: not every provider supports tool calling.
 """
 
 from typing import Literal, TypedDict
@@ -21,8 +21,7 @@ from app.llm.calls import BadModelOutput, TextModel
 from app.models import KIND_LOCATION, Entity, EntityFact, Project
 from app.rag.index import search
 
-# Decisions per question, the last one forced to be an answer. Each is a model call,
-# which over the subscription CLI takes several seconds.
+# Decisions per question, the last one forced to be an answer. Each is a model call.
 MAX_STEPS = 4
 # A chapter longer than this is opened only in part; search reaches the rest.
 READ_CHARS = 60_000

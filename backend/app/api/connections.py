@@ -8,8 +8,7 @@ from sqlalchemy.orm import Session
 from app.crypto import KeyUnreadable, decrypt, encrypt, mask
 from app.db import SessionDep
 from app.llm import registry
-from app.llm.claude_cli import cli_path
-from app.models import KIND_CLAUDE_CLI, KIND_OPENAI, AppSetting, Connection
+from app.models import KIND_OPENAI, AppSetting, Connection
 
 router = APIRouter(prefix="/api", tags=["connections"])
 
@@ -62,10 +61,6 @@ class SettingsBody(BaseModel):
     image_model: str = ""
 
 
-class SystemInfo(BaseModel):
-    claude_cli: bool
-
-
 def _hint(connection: Connection) -> str:
     try:
         return mask(decrypt(connection.api_key_encrypted))
@@ -91,17 +86,10 @@ def _connection(session: Session, connection_id: str) -> Connection:
 
 
 def _validate(kind: str, base_url: str) -> None:
-    if kind not in (KIND_OPENAI, KIND_CLAUDE_CLI):
+    if kind != KIND_OPENAI:
         raise HTTPException(422, "bad_connection_kind")
-    if kind == KIND_CLAUDE_CLI and cli_path() is None:
-        raise HTTPException(422, "claude_cli_missing")
-    if kind == KIND_OPENAI and not base_url.strip().startswith(("http://", "https://")):
+    if not base_url.strip().startswith(("http://", "https://")):
         raise HTTPException(422, "bad_base_url")
-
-
-@router.get("/system")
-def system_info() -> SystemInfo:
-    return SystemInfo(claude_cli=cli_path() is not None)
 
 
 @router.get("/connections")

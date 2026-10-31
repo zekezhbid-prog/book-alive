@@ -5,7 +5,7 @@ PostgreSQL, isolated from everything else:
 
 - its own **schema** `lorebook` (all tables, the Alembic version table);
 - its own **role** `lorebook`: owns that schema only, no superuser, no access to `public`
-  or any other schema, at most 8 connections;
+  or any other schema, at most 5 connections;
 - the app connects directly to the `supabase-db-...` container over Supabase's Docker network
   (nothing is published to the internet), keeps a pool of 4 connections, and sets
   `search_path=lorebook,extensions,public` (pgvector lives in `extensions` in Supabase).

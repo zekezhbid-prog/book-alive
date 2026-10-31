@@ -10,6 +10,7 @@ from app.analysis import runner
 from app.api import analysis, chat, connections, images, projects, review, scenes
 from app.config import settings
 from app.db import get_engine, init_db
+from app.llm.provision import ensure_hubris
 
 
 @asynccontextmanager
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
     init_db()
     with Session(get_engine()) as session:
         runner.mark_interrupted(session)
+        ensure_hubris(session)
     yield
 
 

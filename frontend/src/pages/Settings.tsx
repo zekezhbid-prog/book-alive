@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   api,
   type Connection,
-  type ConnectionKind,
   type ModelInfo,
   type ModelSettings,
 } from '../api'
@@ -10,16 +9,13 @@ import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 
 const PRESETS = [
-  { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1' },
   { name: 'Hubris', url: 'https://api.hubris.pw/v1' },
-  { name: 'OmniRoute', url: 'http://127.0.0.1:20128/v1' },
 ]
 
 export default function Settings() {
   const { t } = useI18n()
   const [connections, setConnections] = useState<Connection[]>([])
   const [settings, setSettings] = useState<ModelSettings | null>(null)
-  const [hasCli, setHasCli] = useState(false)
   const [error, setError] = useState('')
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
@@ -27,7 +23,6 @@ export default function Settings() {
   useEffect(() => {
     loadConnections()
     api.settings().then(setSettings, fail)
-    api.system().then((info) => setHasCli(info.claude_cli), fail)
   }, [loadConnections, fail])
 
   const save = (patch: Partial<ModelSettings>) => {
@@ -59,13 +54,11 @@ export default function Settings() {
             <div className="grow">
               <b>{connection.name}</b>
               <div className="muted small">
-                {connection.kind === 'claude_cli'
-                  ? t('settings.kind.claude_cli')
-                  : `${connection.base_url} · ${
-                      connection.api_key_hint
-                        ? t('settings.key.stored', { hint: connection.api_key_hint })
-                        : t('settings.key.none')
-                    }`}
+                {`${connection.base_url} · ${
+                  connection.api_key_hint
+                    ? t('settings.key.stored', { hint: connection.api_key_hint })
+                    : t('settings.key.none')
+                }`}
               </div>
             </div>
             <button className="btn ghost small danger" onClick={() => remove(connection)}>
@@ -73,7 +66,7 @@ export default function Settings() {
             </button>
           </div>
         ))}
-        <AddConnection hasCli={hasCli} onAdded={loadConnections} />
+        <AddConnection onAdded={loadConnections} />
       </section>
 
       {settings && (
@@ -94,8 +87,7 @@ export default function Settings() {
           <ModelPicker
             title={t('settings.models.image')}
             imagesOnly
-            // The subscription connection is text-only.
-            connections={connections.filter((c) => c.kind !== 'claude_cli')}
+            connections={connections}
             connectionId={settings.image_connection_id}
             model={settings.image_model}
             onChange={(connectionId, model) =>
@@ -108,10 +100,9 @@ export default function Settings() {
   )
 }
 
-function AddConnection({ hasCli, onAdded }: { hasCli: boolean; onAdded: () => void }) {
+function AddConnection({ onAdded }: { onAdded: () => void }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<ConnectionKind>('openai')
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [key, setKey] = useState('')
@@ -131,10 +122,10 @@ function AddConnection({ hasCli, onAdded }: { hasCli: boolean; onAdded: () => vo
     setError('')
     try {
       await api.createConnection({
-        kind,
-        name: name || (kind === 'claude_cli' ? 'Claude' : ''),
-        base_url: kind === 'openai' ? url : '',
-        api_key: kind === 'openai' ? key : '',
+        kind: 'openai',
+        name,
+        base_url: url,
+        api_key: key,
       })
       setOpen(false)
       setName('')
@@ -147,20 +138,7 @@ function AddConnection({ hasCli, onAdded }: { hasCli: boolean; onAdded: () => vo
   }
   return (
     <form className="stack subform" onSubmit={submit}>
-      <label className="field">
-        {t('settings.kind')}
-        <select className="input" value={kind} onChange={(e) => setKind(e.target.value as ConnectionKind)}>
-          <option value="openai">{t('settings.kind.openai')}</option>
-          {/* A hosted server has no Claude Code, so the subscription is offered only locally. */}
-          {hasCli && <option value="claude_cli">{t('settings.kind.claude_cli')}</option>}
-        </select>
-      </label>
-      {kind === 'claude_cli' ? (
-        <p className={hasCli ? 'muted small' : 'error'}>
-          {hasCli ? t('settings.kind.claude_cli.hint') : t('settings.kind.claude_cli.missing')}
-        </p>
-      ) : (
-        <>
+      {        <>
           <div className="row">
             {PRESETS.map((preset) => (
               <button
@@ -198,14 +176,14 @@ function AddConnection({ hasCli, onAdded }: { hasCli: boolean; onAdded: () => vo
             <span className="faint">{t('settings.key.hint')}</span>
           </label>
         </>
-      )}
+      }
       <label className="field">
         {t('settings.name')}
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       {error && <p className="error">{error}</p>}
       <div className="row">
-        <button className="btn primary" disabled={kind === 'claude_cli' && !hasCli}>
+        <button className="btn primary">
           {t('app.save')}
         </button>
         <button type="button" className="btn" onClick={() => setOpen(false)}>

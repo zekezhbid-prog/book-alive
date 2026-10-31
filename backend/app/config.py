@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     db_schema: str = ""
     # Connections kept to a shared PostgreSQL; small on purpose.
     db_pool_size: int = 5
+    # The model provider. With a key here the "Hubris" connection is created (and its key
+    # kept current) on every start, so the key never has to be typed into the interface.
+    hubris_api_key: str = ""
+    hubris_base_url: str = "https://api.hubris.pw/v1"
     data_dir: Path = REPO_ROOT / "data"
     # Key for encrypting API keys at rest. Empty means "generate and keep in data_dir".
     secret_key: str = ""

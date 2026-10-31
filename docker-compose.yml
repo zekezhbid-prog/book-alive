@@ -30,6 +30,7 @@ services:
       # The one password that opens the app. Never run a public instance without it:
       # anyone who reaches the app can spend your model credits.
       APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+      HUBRIS_API_KEY: ${HUBRIS_API_KEY:-}
     volumes:
       - data:/data
     ports:
