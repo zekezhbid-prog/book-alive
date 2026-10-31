@@ -70,8 +70,15 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   useEffect(() => {
     if (!find || !loaded) return
     setSearchParams({}, { replace: true })
-    if (!running) setChoosing([])
-  }, [find, loaded, running, setSearchParams])
+    if (running) return
+    let last: string | null = null
+    try {
+      last = localStorage.getItem(`lastChapter:${projectId}`)
+    } catch {
+      /* the dialog falls back to the first chapter */
+    }
+    setChoosing(project?.chapters.some((c) => c.id === last) && last ? [last] : [])
+  }, [find, loaded, running, setSearchParams, project, projectId])
 
   const activeId = list?.some((e) => e.id === entityId) ? entityId : undefined
   useEffect(() => {
@@ -234,17 +241,19 @@ function Card({ entity, projectId, others, onChanged, onError, gallery }: CardPr
           </div>
         )}
       </div>
-      {gallery}
-      <h4>{t('entities.permanent')}</h4>
-      {entity.permanent.length === 0 && <p className="faint">{t('entities.permanent.none')}</p>}
+      <h4>{t('entities.profile')}</h4>
+      {entity.profile.length + entity.permanent.length === 0 && (
+        <p className="faint">{t('entities.profile.none')}</p>
+      )}
       <ul className="facts">
-        {entity.permanent.map((fact, i) => (
+        {[...entity.profile, ...entity.permanent].map((fact, i) => (
           <li key={i}>
             {fact.text} {fact.stale && stale}
             {source(fact)}
           </li>
         ))}
       </ul>
+      {gallery}
       <h4>{t('entities.timeline')}</h4>
       {entity.timeline.map((entry) => (
         <div key={entry.chapter_id} className="timeline-entry">
@@ -285,7 +294,7 @@ interface DialogProps {
 function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) {
   const { t } = useI18n()
   const [selected, setSelected] = useState(
-    () => new Set(initial.length ? initial : project.chapters.map((c) => c.id)),
+    () => new Set(initial.length ? initial : project.chapters.slice(0, 1).map((c) => c.id)),
   )
   const [estimate, setEstimate] = useState<Estimate | null>(null)
   const [error, setError] = useState('')

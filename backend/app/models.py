@@ -158,6 +158,7 @@ KIND_LOCATION = "location"
 
 FACT_PERMANENT = "permanent"  # face, build, age, scars: true for the whole book
 FACT_STATE = "state"  # clothes, wounds, carried objects: true in one chapter
+FACT_PROFILE = "profile"  # who they are, what they do, likes: the general description
 
 RUN_RUNNING = "running"
 RUN_DONE = "done"

@@ -3,7 +3,7 @@
 from app.models import KIND_CHARACTER
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 _SUBJECT = {
     "character": {
@@ -12,6 +12,9 @@ _SUBJECT = {
         "lasting traits of personality",
         "state": "clothes, hairstyle, injuries, dirt or blood, weapons and objects they "
         "carry, a visible change of form or condition",
+        "profile": "lasting traits of behaviour and character that show again and again "
+        "(habits, manner of speech and acting, what they love or fear), their role and "
+        "occupation",
     },
     "location": {
         "what": "locations (places where the action happens or that are described)",
@@ -19,6 +22,8 @@ _SUBJECT = {
         "surroundings, landmarks",
         "state": "time of day, weather, season, light, damage, crowds or emptiness, "
         "sounds and smells",
+        "profile": "what the place is for, who lives or works there, what happens there, "
+        "its history and role in the story",
     },
 }
 
@@ -35,11 +40,14 @@ many others can be called that.
 - If it is one of the already known entries below, use exactly that name.
 - List everyone/everything that takes part in the chapter, even with no described details \
 (then "facts" is an empty list). Skip passing mentions and unnamed background.
-- Facts are what an illustrator needs to draw this: looks, not actions, speech or plot. \
-At most 8 per entry, the most visual ones.
+- Looks facts ("permanent" and "state") are what an illustrator needs to draw this: looks, \
+not actions, speech or plot. At most 8 per entry, the most visual ones.
+- "profile" facts are the general description of the entry, not looks. At most 4 per entry, \
+outside the limit of 8, each short and plain, only what this chapter says.
 - Each fact is one detail:
   - "category": "permanent" for what stays the same through the book ({permanent}); \
-"state" for what is true at this point of the story ({state}).
+"state" for what is true at this point of the story ({state}); \
+"profile" for the general description ({profile}).
   - "text": the detail, written in the language of the chapter.
   - "quote": the phrase from the chapter that supports it, copied character for character, \
 under 200 characters.

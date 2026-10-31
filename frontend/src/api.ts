@@ -157,6 +157,7 @@ export interface Entity {
   kind: EntityKind
   name: string
   aliases: string[]
+  profile: Fact[]
   permanent: Fact[]
   timeline: ChapterFacts[]
 }

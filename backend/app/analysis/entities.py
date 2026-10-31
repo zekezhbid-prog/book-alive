@@ -41,7 +41,7 @@ PROMPT_OVERHEAD_TOKENS = 500
 
 
 class ExtractedFact(BaseModel):
-    category: Literal["permanent", "state"] = FACT_STATE
+    category: Literal["permanent", "state", "profile"] = FACT_STATE
     text: str
     quote: str = ""
 

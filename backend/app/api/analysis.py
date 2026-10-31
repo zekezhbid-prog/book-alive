@@ -10,6 +10,7 @@ from app.db import SessionDep
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import (
     FACT_PERMANENT,
+    FACT_PROFILE,
     FACT_STATE,
     KIND_CHARACTER,
     KIND_LOCATION,
@@ -69,6 +70,7 @@ class EntityOut(BaseModel):
     kind: str
     name: str
     aliases: list[str]
+    profile: list[FactOut]
     permanent: list[FactOut]
     timeline: list[ChapterFacts]
 
@@ -279,6 +281,7 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         kind=entity.kind,
         name=entity.name,
         aliases=entity.aliases,
+        profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),
     )

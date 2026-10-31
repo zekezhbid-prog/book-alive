@@ -261,3 +261,30 @@ def test_stale_chapters_are_listed_and_deleted_ones_forgotten(client, session, p
         "orphaned_facts": 0,
     }
     assert set(cast(session, project)) == {"Рыхташ"}  # "Люта" lived only in the deleted chapter
+
+
+class ProfileModel(FakeModel):
+    """Adds a general-description fact to one answer."""
+
+    def invoke_json(self, operation, messages, schema):
+        result = super().invoke_json(operation, messages, schema)
+        if schema is analysis.ChapterEntities and 'Chapter "Мельница"' in messages[-1].content:
+            for item in result.entities:
+                if item.name == "Рыхташ":
+                    item.facts.append(
+                        analysis.ExtractedFact(category="profile", text="старый мельник, живёт один")
+                    )
+        return result
+
+
+def test_profile_facts_go_to_the_top_of_the_card_not_to_looks_or_timeline(
+    session, project, client
+):
+    run(session, project, ProfileModel())
+    rykhtash = cast(session, project)["Рыхташ"]
+    card = client.get(f"/api/entities/{rykhtash.id}").json()
+    assert [f["text"] for f in card["profile"]] == ["старый мельник, живёт один"]
+    assert "старый мельник, живёт один" not in [f["text"] for f in card["permanent"]]
+    assert all(
+        f["text"] != "старый мельник, живёт один" for e in card["timeline"] for f in e["facts"]
+    )

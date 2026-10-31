@@ -33,6 +33,15 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   const { pathname } = useLocation()
   const { entityId, sceneId } = useParams()
   const base = `/projects/${project.id}`
+  // The search dialogs start from the chapter the user was last reading.
+  useEffect(() => {
+    if (!activeChapter) return
+    try {
+      localStorage.setItem(`lastChapter:${project.id}`, activeChapter)
+    } catch {
+      /* private mode: the dialog falls back to the first chapter */
+    }
+  }, [activeChapter, project.id])
   const current: Section =
     SECTIONS.find((s) => s !== 'chapters' && pathname.startsWith(`${base}/${s}`)) ?? 'chapters'
 
