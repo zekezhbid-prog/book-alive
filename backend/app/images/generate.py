@@ -19,7 +19,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.crypto import decrypt
-from app.models import AppSetting, Connection, UsageEvent
+from app.llm import prefs
+from app.models import Connection, UsageEvent
 
 TIMEOUT = httpx.Timeout(300, connect=20)
 
@@ -54,15 +55,15 @@ class ImageModel:
     def __init__(
         self, session: Session, project_id: str, transport: httpx.BaseTransport | None = None
     ):
-        connection_id = session.get(AppSetting, "image_connection_id")
-        model = session.get(AppSetting, "image_model")
-        connection = session.get(Connection, connection_id.value) if connection_id else None
-        if connection is None or model is None or not model.value:
+        connection_id = prefs.for_project(session, project_id, "image_connection_id")
+        model_name = prefs.for_project(session, project_id, "image_model")
+        connection = session.get(Connection, connection_id) if connection_id else None
+        if connection is None or not model_name:
             raise ImageModelNotConfigured("image_model_not_configured")
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
-        self.model_name = model.value
+        self.model_name = model_name
         key = decrypt(connection.api_key_encrypted)
         self.client = httpx.Client(
             base_url=connection.base_url.rstrip("/"),

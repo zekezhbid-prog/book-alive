@@ -209,18 +209,20 @@ async def require_login(request: Request, call_next):
     model connections are for administrators, and a book is open to its owner only."""
     path = request.url.path
     request.state.user_id = None
+    request.state.is_admin = True  # without accounts there is one person
     if not path.startswith("/api/") or not accounts_enabled() or path in OPEN_PATHS:
         return await call_next(request)
     with Session(get_engine()) as db:
         user = _user_from_cookie(request, db)
         if user is None:
             return JSONResponse({"detail": "login_required"}, status_code=401)
-        admin_only = path.startswith("/api/connections") or path == "/api/settings"
+        admin_only = path.startswith("/api/connections")
         if admin_only and request.method not in ("GET", "HEAD") and not is_admin(user):
             return JSONResponse({"detail": "admin_only"}, status_code=403)
         if _owner_denied(db, user, path):
             return JSONResponse({"detail": "project_not_found"}, status_code=404)
         request.state.user_id = user.id
+        request.state.is_admin = is_admin(user)
     return await call_next(request)
 
 

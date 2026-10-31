@@ -1,84 +1,113 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   api,
   type Connection,
   type ModelInfo,
   type ModelSettings,
-} from '../api'
-import { errorText, useI18n } from '../i18n'
-import { ask } from '../dialogs'
+} from "../api";
+import { errorText, useI18n } from "../i18n";
+import { ask } from "../dialogs";
 
-const PRESETS = [
-  { name: 'Hubris', url: 'https://api.hubris.pw/v1' },
-]
+const PRESETS = [{ name: "Hubris", url: "https://api.hubris.pw/v1" }];
 
 export default function Settings() {
-  const { t } = useI18n()
-  const [connections, setConnections] = useState<Connection[]>([])
-  const [settings, setSettings] = useState<ModelSettings | null>(null)
-  const [error, setError] = useState('')
-  const [accounts, setAccounts] = useState(false)
+  const { t } = useI18n();
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [settings, setSettings] = useState<ModelSettings | null>(null);
+  const [error, setError] = useState("");
+  const [accounts, setAccounts] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const navigate = useNavigate();
 
-  const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
-  const loadConnections = useCallback(() => api.connections().then(setConnections, fail), [fail])
+  const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t]);
+  const loadConnections = useCallback(
+    () => api.connections().then(setConnections, fail),
+    [fail],
+  );
   useEffect(() => {
-    loadConnections()
-    api.settings().then(setSettings, fail)
-    api.session().then((info) => setAccounts(info.accounts), fail)
-  }, [loadConnections, fail])
+    loadConnections();
+    api.settings().then(setSettings, fail);
+    api.session().then((info) => {
+      setAccounts(info.accounts);
+      setIsAdmin(info.is_admin);
+    }, fail);
+  }, [loadConnections, fail]);
 
   const save = (patch: Partial<ModelSettings>) => {
-    if (!settings) return
-    const next = { ...settings, ...patch }
-    setSettings(next)
-    api.saveSettings(next).catch(fail)
-  }
+    if (!settings) return;
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    api.saveSettings(next).catch(fail);
+  };
   const remove = async (connection: Connection) => {
-    if (!(await ask(t('settings.delete.confirm', { name: connection.name })))) return
-    await api.deleteConnection(connection.id).catch(fail)
-    loadConnections()
-    api.settings().then(setSettings, fail)
-  }
+    if (!(await ask(t("settings.delete.confirm", { name: connection.name }))))
+      return;
+    await api.deleteConnection(connection.id).catch(fail);
+    loadConnections();
+    api.settings().then(setSettings, fail);
+  };
 
   return (
     <main className="page narrow stack">
-      <h1>{t('settings.title')}</h1>
+      <div className="row">
+        <h1 className="grow">{t("settings.title")}</h1>
+        <button
+          className="btn ghost"
+          title={t("settings.close")}
+          aria-label={t("settings.close")}
+          onClick={() =>
+            window.history.length > 1 ? navigate(-1) : navigate("/")
+          }
+        >
+          ✕
+        </button>
+      </div>
       {error && <p className="error">{error}</p>}
 
-      <section className="panel pad stack">
-        <div>
-          <h2>{t('settings.connections')}</h2>
-          <p className="muted">{t('settings.connections.hint')}</p>
-        </div>
-        {connections.length === 0 && <p className="faint">{t('settings.connections.empty')}</p>}
-        {connections.map((connection) => (
-          <div key={connection.id} className="row connection">
-            <div className="grow">
-              <b>{connection.name}</b>
-              <div className="muted small">
-                {`${connection.base_url} · ${
-                  connection.api_key_hint
-                    ? t('settings.key.stored', { hint: connection.api_key_hint })
-                    : t('settings.key.none')
-                }`}
-              </div>
-            </div>
-            <button className="btn ghost small danger" onClick={() => remove(connection)}>
-              {t('app.delete')}
-            </button>
+      {isAdmin && (
+        <section className="panel pad stack">
+          <div>
+            <h2>{t("settings.connections")}</h2>
+            <p className="muted">{t("settings.connections.hint")}</p>
           </div>
-        ))}
-        <AddConnection onAdded={loadConnections} />
-      </section>
+          {connections.length === 0 && (
+            <p className="faint">{t("settings.connections.empty")}</p>
+          )}
+          {connections.map((connection) => (
+            <div key={connection.id} className="row connection">
+              <div className="grow">
+                <b>{connection.name}</b>
+                <div className="muted small">
+                  {`${connection.base_url} · ${
+                    connection.api_key_hint
+                      ? t("settings.key.stored", {
+                          hint: connection.api_key_hint,
+                        })
+                      : t("settings.key.none")
+                  }`}
+                </div>
+              </div>
+              <button
+                className="btn ghost small danger"
+                onClick={() => remove(connection)}
+              >
+                {t("app.delete")}
+              </button>
+            </div>
+          ))}
+          <AddConnection onAdded={loadConnections} />
+        </section>
+      )}
 
       {settings && (
         <section className="panel pad stack">
           <div>
-            <h2>{t('settings.models')}</h2>
-            <p className="muted">{t('settings.models.hint')}</p>
+            <h2>{t("settings.models")}</h2>
+            <p className="muted">{t("settings.models.hint")}</p>
           </div>
           <ModelPicker
-            title={t('settings.models.text')}
+            title={t("settings.models.text")}
             connections={connections}
             connectionId={settings.text_connection_id}
             model={settings.text_model}
@@ -87,7 +116,7 @@ export default function Settings() {
             }
           />
           <ModelPicker
-            title={t('settings.models.image')}
+            title={t("settings.models.image")}
             imagesOnly
             connections={connections}
             connectionId={settings.image_connection_id}
@@ -96,52 +125,62 @@ export default function Settings() {
               save({ image_connection_id: connectionId, image_model: model })
             }
           />
+          <ModelPicker
+            title={t("settings.models.video")}
+            connections={connections}
+            connectionId={settings.video_connection_id}
+            model={settings.video_model}
+            onChange={(connectionId, model) =>
+              save({ video_connection_id: connectionId, video_model: model })
+            }
+          />
         </section>
       )}
       {accounts && <ChangePassword />}
     </main>
-  )
+  );
 }
 
 function AddConnection({ onAdded }: { onAdded: () => void }) {
-  const { t } = useI18n()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
-  const [key, setKey] = useState('')
-  const [error, setError] = useState('')
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [error, setError] = useState("");
 
   if (!open) {
     return (
       <div>
         <button className="btn" onClick={() => setOpen(true)}>
-          + {t('settings.add')}
+          + {t("settings.add")}
         </button>
       </div>
-    )
+    );
   }
   const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setError('')
+    event.preventDefault();
+    setError("");
     try {
       await api.createConnection({
-        kind: 'openai',
+        kind: "openai",
         name,
         base_url: url,
         api_key: key,
-      })
-      setOpen(false)
-      setName('')
-      setUrl('')
-      setKey('')
-      onAdded()
+      });
+      setOpen(false);
+      setName("");
+      setUrl("");
+      setKey("");
+      onAdded();
     } catch (e) {
-      setError(errorText(t, e))
+      setError(errorText(t, e));
     }
-  }
+  };
   return (
     <form className="stack subform" onSubmit={submit}>
-      {        <>
+      {
+        <>
           <div className="row">
             {PRESETS.map((preset) => (
               <button
@@ -149,8 +188,8 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
                 type="button"
                 className="btn small"
                 onClick={() => {
-                  setName(preset.name)
-                  setUrl(preset.url)
+                  setName(preset.name);
+                  setUrl(preset.url);
                 }}
               >
                 {preset.name}
@@ -158,7 +197,7 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
             ))}
           </div>
           <label className="field">
-            {t('settings.url')}
+            {t("settings.url")}
             <input
               className="input"
               value={url}
@@ -168,7 +207,7 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
             />
           </label>
           <label className="field">
-            {t('settings.key')}
+            {t("settings.key")}
             <input
               className="input"
               type="password"
@@ -176,98 +215,107 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
               value={key}
               onChange={(e) => setKey(e.target.value)}
             />
-            <span className="faint">{t('settings.key.hint')}</span>
+            <span className="faint">{t("settings.key.hint")}</span>
           </label>
         </>
       }
       <label className="field">
-        {t('settings.name')}
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        {t("settings.name")}
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </label>
       {error && <p className="error">{error}</p>}
       <div className="row">
-        <button className="btn primary">
-          {t('app.save')}
-        </button>
+        <button className="btn primary">{t("app.save")}</button>
         <button type="button" className="btn" onClick={() => setOpen(false)}>
-          {t('app.cancel')}
+          {t("app.cancel")}
         </button>
       </div>
     </form>
-  )
+  );
 }
 
 interface PickerProps {
-  title: string
-  imagesOnly?: boolean
-  connections: Connection[]
-  connectionId: string
-  model: string
-  onChange: (connectionId: string, model: string) => void
+  title: string;
+  imagesOnly?: boolean;
+  connections: Connection[];
+  connectionId: string;
+  model: string;
+  onChange: (connectionId: string, model: string) => void;
 }
 
-function ModelPicker({ title, imagesOnly, connections, connectionId, model, onChange }: PickerProps) {
-  const { t } = useI18n()
-  const [models, setModels] = useState<ModelInfo[] | null>(null)
-  const [freeOnly, setFreeOnly] = useState(false)
-  const [status, setStatus] = useState('')
-  const [failed, setFailed] = useState(false)
-  const known = connections.some((c) => c.id === connectionId)
+function ModelPicker({
+  title,
+  imagesOnly,
+  connections,
+  connectionId,
+  model,
+  onChange,
+}: PickerProps) {
+  const { t } = useI18n();
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [status, setStatus] = useState("");
+  const [failed, setFailed] = useState(false);
+  const known = connections.some((c) => c.id === connectionId);
 
   useEffect(() => {
-    setModels(null)
-    setStatus('')
-    if (!known) return
-    let stale = false
+    setModels(null);
+    setStatus("");
+    if (!known) return;
+    let stale = false;
     api.models(connectionId).then(
       (list) => !stale && setModels(list),
       (e) => {
-        if (stale) return
-        setModels([])
-        setFailed(true)
-        setStatus(errorText(t, e))
+        if (stale) return;
+        setModels([]);
+        setFailed(true);
+        setStatus(errorText(t, e));
       },
-    )
+    );
     return () => {
-      stale = true
-    }
-  }, [connectionId, known, t])
+      stale = true;
+    };
+  }, [connectionId, known, t]);
 
-  const anyImageFlag = models?.some((m) => m.image) ?? false
-  const anyPrice = models?.some((m) => m.free !== null) ?? false
+  const anyImageFlag = models?.some((m) => m.image) ?? false;
+  const anyPrice = models?.some((m) => m.free !== null) ?? false;
   const visible = (models ?? []).filter(
     (m) => (!imagesOnly || !anyImageFlag || m.image) && (!freeOnly || m.free),
-  )
+  );
   const test = async () => {
-    setFailed(false)
-    setStatus(t('settings.testing'))
+    setFailed(false);
+    setStatus(t("settings.testing"));
     try {
-      const result = await api.testModel(connectionId, model)
+      const result = await api.testModel(connectionId, model);
       setStatus(
-        t('settings.test.ok', {
+        t("settings.test.ok", {
           reply: result.reply,
           input: result.input_tokens,
           output: result.output_tokens,
         }),
-      )
+      );
     } catch (e) {
-      setFailed(true)
-      setStatus(errorText(t, e))
+      setFailed(true);
+      setStatus(errorText(t, e));
     }
-  }
+  };
 
   return (
     <div className="stack subform">
       <h3>{title}</h3>
       <div className="row wrap">
         <label className="field grow">
-          {t('settings.connection')}
+          {t("settings.connection")}
           <select
             className="input"
-            value={known ? connectionId : ''}
-            onChange={(e) => onChange(e.target.value, '')}
+            value={known ? connectionId : ""}
+            onChange={(e) => onChange(e.target.value, "")}
           >
-            <option value="">{t('settings.connection.none')}</option>
+            <option value="">{t("settings.connection.none")}</option>
             {connections.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -276,20 +324,26 @@ function ModelPicker({ title, imagesOnly, connections, connectionId, model, onCh
           </select>
         </label>
         <label className="field grow">
-          {t('settings.model')}
+          {t("settings.model")}
           <select
             className="input"
             value={model}
             disabled={!known || !models}
             onChange={(e) => onChange(connectionId, e.target.value)}
           >
-            <option value="">{models || !known ? t('settings.model.none') : t('settings.models.loading')}</option>
+            <option value="">
+              {models || !known
+                ? t("settings.model.none")
+                : t("settings.models.loading")}
+            </option>
             {/* Keep the saved model selectable even when a filter hides it. */}
-            {model && !visible.some((m) => m.id === model) && <option value={model}>{model}</option>}
+            {model && !visible.some((m) => m.id === model) && (
+              <option value={model}>{model}</option>
+            )}
             {visible.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name === m.id ? m.id : `${m.name} (${m.id})`}
-                {m.free ? ` · ${t('settings.free')}` : ''}
+                {m.free ? ` · ${t("settings.free")}` : ""}
               </option>
             ))}
           </select>
@@ -297,70 +351,113 @@ function ModelPicker({ title, imagesOnly, connections, connectionId, model, onCh
       </div>
       {known && models && (
         <div className="row wrap small muted">
-          <span>{t('settings.models.count', { n: visible.length })}</span>
+          <span>{t("settings.models.count", { n: visible.length })}</span>
           {anyPrice && (
             <label className="row">
-              <input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />
-              {t('settings.free.only')}
+              <input
+                type="checkbox"
+                checked={freeOnly}
+                onChange={(e) => setFreeOnly(e.target.checked)}
+              />
+              {t("settings.free.only")}
             </label>
           )}
-          {imagesOnly && models.length > 0 && !anyImageFlag && <span>{t('settings.image.unknown')}</span>}
+          {imagesOnly && models.length > 0 && !anyImageFlag && (
+            <span>{t("settings.image.unknown")}</span>
+          )}
           <span className="spacer" />
           {/* Image models are exercised when the first picture is generated. */}
           {!imagesOnly && (
             <button className="btn small" disabled={!model} onClick={test}>
-              {t('settings.test')}
+              {t("settings.test")}
             </button>
           )}
         </div>
       )}
-      {status && <p className={failed ? 'error' : 'ok'}>{status}</p>}
+      {status && <p className={failed ? "error" : "ok"}>{status}</p>}
     </div>
-  )
+  );
 }
 
 function ChangePassword() {
-  const { t } = useI18n()
-  const [current, setCurrent] = useState('')
-  const [next, setNext] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="panel pad row">
+      <h2 className="grow">{t("settings.password.title")}</h2>
+      <button className="btn" onClick={() => setOpen(true)}>
+        {t("settings.password.submit")}
+      </button>
+      {open && <PasswordDialog onClose={() => setOpen(false)} />}
+    </section>
+  );
+}
+
+function PasswordDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const submit = (event: FormEvent) => {
-    event.preventDefault()
-    setError('')
-    setMessage('')
+    event.preventDefault();
+    setError("");
+    setMessage("");
     api.changePassword(current, next).then(
       () => {
-        setCurrent('')
-        setNext('')
-        setMessage(t('settings.password.done'))
+        setCurrent("");
+        setNext("");
+        setMessage(t("settings.password.done"));
       },
       (e) => setError(errorText(t, e)),
-    )
-  }
+    );
+  };
   return (
-    <section className="panel pad stack">
-      <h2>{t('settings.password.title')}</h2>
-      <form className="stack subform" onSubmit={submit}>
+    <div
+      className="overlay"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form className="dialog stack" onSubmit={submit}>
+        <div className="row">
+          <h2 className="grow">{t("settings.password.title")}</h2>
+          <button
+            type="button"
+            className="btn ghost"
+            aria-label={t("settings.close")}
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
         <label className="field">
-          {t('settings.password.current')}
-          <input className="input" type="password" autoComplete="current-password" value={current}
-            onChange={(e) => setCurrent(e.target.value)} />
+          {t("settings.password.current")}
+          <input
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+          />
         </label>
         <label className="field">
-          {t('settings.password.new')}
-          <input className="input" type="password" autoComplete="new-password" value={next}
-            onChange={(e) => setNext(e.target.value)} />
-          <span className="faint">{t('auth.password.hint')}</span>
+          {t("settings.password.new")}
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+          />
+          <span className="faint">{t("auth.password.hint")}</span>
         </label>
         {error && <p className="error">{error}</p>}
         {message && <p className="notice">{message}</p>}
         <div className="row">
           <button className="btn primary" disabled={!current || !next}>
-            {t('settings.password.submit')}
+            {t("settings.password.submit")}
           </button>
         </div>
       </form>
-    </section>
-  )
+    </div>
+  );
 }

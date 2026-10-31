@@ -99,6 +99,8 @@ export interface ModelSettings {
   text_model: string
   image_connection_id: string
   image_model: string
+  video_connection_id: string
+  video_model: string
 }
 
 export interface TestResult {

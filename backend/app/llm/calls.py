@@ -8,8 +8,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from app.llm import registry
-from app.models import AppSetting, Connection, UsageEvent
+from app.llm import prefs, registry
+from app.models import Connection, UsageEvent
 
 
 class ModelNotConfigured(RuntimeError):
@@ -24,17 +24,17 @@ class TextModel:
     """The text model chosen in Settings, bound to a project for usage accounting."""
 
     def __init__(self, session: Session, project_id: str | None):
-        connection_id = session.get(AppSetting, "text_connection_id")
-        model = session.get(AppSetting, "text_model")
-        connection = session.get(Connection, connection_id.value) if connection_id else None
-        if connection is None or model is None or not model.value:
+        connection_id = prefs.for_project(session, project_id, "text_connection_id")
+        model_name = prefs.for_project(session, project_id, "text_model")
+        connection = session.get(Connection, connection_id) if connection_id else None
+        if connection is None or not model_name:
             raise ModelNotConfigured("text_model_not_configured")
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
         self.request_overhead = 0  # tokens the connection adds to every request on its own
-        self.model_name = model.value
-        self.llm: BaseChatModel = registry.chat_model(connection, model.value)
+        self.model_name = model_name
+        self.llm: BaseChatModel = registry.chat_model(connection, model_name)
 
     def invoke(self, operation: str, messages: list[BaseMessage]) -> str:
         answer: AIMessage = self.llm.invoke(messages)

@@ -211,10 +211,25 @@ def test_books_from_before_accounts_go_to_the_owner(client, accounts):
     client.cookies.clear()
 
 
-def test_model_settings_are_for_administrators(owner, guest):
+def test_connections_are_for_administrators_but_everyone_picks_their_own_models(owner, guest):
     guest.post("/api/register", json={"email": GUEST, "password": PASSWORD})
-    assert guest.get("/api/settings").status_code == 200
-    denied = guest.put("/api/settings", json={})
-    assert (denied.status_code, denied.json()["detail"]) == (403, "admin_only")
     assert guest.post("/api/connections", json={"name": "x"}).status_code == 403
-    assert owner.put("/api/settings", json={}).status_code == 200
+    made = owner.post(
+        "/api/connections",
+        json={"name": "Hub", "base_url": "https://api.example/v1", "api_key": "secret-1234"},
+    ).json()
+    # A guest sees the connection by name only: no address, no key hint.
+    seen = guest.get("/api/connections").json()
+    assert [(c["name"], c["base_url"], c["api_key_hint"]) for c in seen] == [("Hub", "", "")]
+    assert owner.get("/api/connections").json()[0]["base_url"] == "https://api.example/v1"
+
+    mine = {"text_connection_id": made["id"], "text_model": "model-a", "video_model": "clip-1"}
+    assert guest.put("/api/settings", json=mine).status_code == 200
+    # Their choice is theirs: the administrator's own settings are untouched.
+    assert guest.get("/api/settings").json()["text_model"] == "model-a"
+    assert guest.get("/api/settings").json()["video_model"] == "clip-1"
+    assert owner.get("/api/settings").json()["text_model"] == ""
+    # Deleting the connection clears everyone's choice that used it.
+    assert owner.delete(f"/api/connections/{made['id']}").status_code == 204
+    cleared = guest.get("/api/settings").json()
+    assert (cleared["text_connection_id"], cleared["text_model"]) == ("", "")

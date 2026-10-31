@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.crypto import KeyUnreadable, decrypt, encrypt, mask
 from app.db import SessionDep
-from app.llm import registry
+from app.llm import prefs, registry
 from app.models import KIND_OPENAI, AppSetting, Connection
 
 router = APIRouter(prefix="/api", tags=["connections"])
 
 # Which connection and model each kind of work uses.
-SETTING_KEYS = ("text_connection_id", "text_model", "image_connection_id", "image_model")
+SETTING_KEYS = prefs.NAMES
 
 
 class ConnectionOut(BaseModel):
@@ -59,6 +59,9 @@ class SettingsBody(BaseModel):
     text_model: str = ""
     image_connection_id: str = ""
     image_model: str = ""
+    # Chosen now, used once video generation exists.
+    video_connection_id: str = ""
+    video_model: str = ""
 
 
 def _hint(connection: Connection) -> str:
@@ -93,9 +96,14 @@ def _validate(kind: str, base_url: str) -> None:
 
 
 @router.get("/connections")
-def list_connections(session: SessionDep) -> list[ConnectionOut]:
+def list_connections(request: Request, session: SessionDep) -> list[ConnectionOut]:
     rows = session.scalars(select(Connection).order_by(Connection.created_at)).all()
-    return [_out(c) for c in rows]
+    out = [_out(c) for c in rows]
+    if not request.state.is_admin:  # others only pick from the list: no address, no key hint
+        for item in out:
+            item.base_url = ""
+            item.api_key_hint = ""
+    return out
 
 
 @router.post("/connections")
@@ -131,13 +139,14 @@ def update_connection(
 @router.delete("/connections/{connection_id}", status_code=204)
 def delete_connection(connection_id: str, session: SessionDep) -> None:
     connection = _connection(session, connection_id)
-    for prefix in ("text", "image"):
-        chosen = session.get(AppSetting, f"{prefix}_connection_id")
-        if chosen is not None and chosen.value == connection.id:
-            chosen.value = ""
-            model = session.get(AppSetting, f"{prefix}_model")
-            if model is not None:
-                model.value = ""
+    # The shared choice and every person's own one that pointed at it.
+    for row in session.scalars(select(AppSetting).where(AppSetting.value == connection.id)).all():
+        if not row.key.endswith("_connection_id"):
+            continue
+        row.value = ""
+        model = session.get(AppSetting, row.key.removesuffix("_connection_id") + "_model")
+        if model is not None:
+            model.value = ""
     session.delete(connection)
     session.commit()
 
@@ -176,14 +185,18 @@ def test_connection(connection_id: str, body: TestRequest, session: SessionDep) 
 
 
 @router.get("/settings")
-def get_settings(session: SessionDep) -> SettingsBody:
-    rows = {s.key: s.value for s in session.scalars(select(AppSetting)).all()}
-    return SettingsBody(**{key: rows.get(key, "") for key in SETTING_KEYS})
+def get_settings(request: Request, session: SessionDep) -> SettingsBody:
+    """The caller's own choice of models, with the shared default where they chose nothing."""
+    user_id = request.state.user_id
+    return SettingsBody(**{key: prefs.value(session, user_id, key) or "" for key in SETTING_KEYS})
 
 
 @router.put("/settings")
-def put_settings(body: SettingsBody, session: SessionDep) -> SettingsBody:
+def put_settings(body: SettingsBody, request: Request, session: SessionDep) -> SettingsBody:
+    """Everyone picks their own models; without accounts there is one shared choice."""
+    user_id = request.state.user_id
     for key in SETTING_KEYS:
-        session.merge(AppSetting(key=key, value=getattr(body, key)))
+        name = prefs.personal_key(user_id, key) if user_id else key
+        session.merge(AppSetting(key=name, value=getattr(body, key)))
     session.commit()
     return body
