@@ -1,9 +1,10 @@
+import logging
 from collections.abc import Iterator
 from datetime import datetime
 from typing import Annotated, ClassVar
 
 from fastapi import Depends
-from sqlalchemy import DateTime, create_engine, inspect, text
+from sqlalchemy import DateTime, create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -47,8 +48,53 @@ def get_engine() -> Engine:
             }
             options["pool_size"] = settings.db_pool_size
             options["max_overflow"] = 0
+            # A busy pool answers with an error quickly instead of keeping a request waiting.
+            options["pool_timeout"] = settings.db_pool_timeout
         _engine = create_engine(url, pool_pre_ping=True, **options)
     return _engine
+
+
+# ---------- giving the connection back while waiting for someone else ----------
+#
+# A session keeps its connection from the first query until commit or rollback. A request
+# that then waits half a minute for a model would keep one of a handful of pooled
+# connections all that time. `release_connection` ends a transaction that has only read,
+# so nothing is held while the model answers; objects already loaded stay usable (sessions
+# here do not expire on commit) and anything loaded later simply takes a connection again.
+# A transaction that has written is left alone: committing it early would change what the
+# caller meant to be atomic.
+
+_WROTE = "lorebook_wrote"
+_log = logging.getLogger(__name__)
+
+
+@event.listens_for(Session, "after_flush")
+def _remember_flush(session: Session, _flush_context) -> None:
+    session.info[_WROTE] = True
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _remember_statement(state) -> None:
+    if not state.is_select:
+        state.session.info[_WROTE] = True
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _forget_writes(session: Session, transaction) -> None:
+    if transaction.parent is None:
+        session.info.pop(_WROTE, None)
+
+
+def release_connection(session: Session) -> None:
+    """Return the session's connection to the pool if its transaction has only read."""
+    if not session.in_transaction():
+        return
+    if session.new or session.dirty or session.deleted or session.info.get(_WROTE):
+        # Not an error, but the connection stays taken for the whole wait: worth seeing
+        # in the logs, since writing only after the model has answered avoids it.
+        _log.warning("a connection is held while waiting: the transaction has written")
+        return
+    session.commit()
 
 
 BASELINE = "0001"  # the schema as it was when migrations were introduced

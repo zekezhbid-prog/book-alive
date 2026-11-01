@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     db_schema: str = ""
     # Connections kept to a shared PostgreSQL; small on purpose.
     db_pool_size: int = 5
+    # Seconds a request may wait for a free connection before it fails.
+    db_pool_timeout: int = 10
     # The model provider. With a key here the "Hubris" connection is created (and its key
     # kept current) on every start, so the key never has to be typed into the interface.
     hubris_api_key: str = ""

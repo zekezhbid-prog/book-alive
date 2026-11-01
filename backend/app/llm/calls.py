@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
+from app.db import release_connection
 from app.llm import prefs, registry
 from app.models import Connection, UsageEvent
 
@@ -29,6 +30,7 @@ class TextModel:
         connection = session.get(Connection, connection_id) if connection_id else None
         if connection is None or not model_name:
             raise ModelNotConfigured("text_model_not_configured")
+        self.session = session
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
@@ -37,6 +39,7 @@ class TextModel:
         self.llm: BaseChatModel = registry.chat_model(connection, model_name)
 
     def invoke(self, operation: str, messages: list[BaseMessage]) -> str:
+        release_connection(self.session)  # nothing held while the model answers
         answer: AIMessage = self.llm.invoke(messages)
         usage = answer.usage_metadata or {}
         # Its own session: tokens are spent whatever happens to the caller's transaction.

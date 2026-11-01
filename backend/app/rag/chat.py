@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
-from app.models import FACT_PERMANENT, ChatMessage, Entity, Project
+from app.models import FACT_PERMANENT, ChatMessage, Entity, Project, now
 from app.rag import agent
 from app.rag.index import BookRetriever, index_project, search
 from app.scenes.service import entities_in
@@ -65,11 +65,12 @@ def ask_events(
     # A follow-up ("and what then?") only makes sense with the question before it.
     previous = next((m.content for m in reversed(earlier) if m.role == "user"), "")
 
-    asked = ChatMessage(project_id=project.id, role="user", content=question)
-    session.add(asked)
+    # Saved together with the reply, at the end: a pending write would keep the database
+    # connection for as long as the model thinks (see `db.release_connection`).
+    asked = ChatMessage(project_id=project.id, role="user", content=question, created_at=now())
     if not any(c.text.strip() for c in project.chapters):
         reply = ChatMessage(project_id=project.id, role="assistant", content="", citations=[])
-        session.add(reply)
+        session.add_all([asked, reply])
         session.commit()
         yield Reply(asked, reply)
         return
@@ -124,7 +125,7 @@ def ask_events(
         content=decision.answer,
         citations=_citations(project, decision, state["sources"]),
     )
-    session.add(reply)
+    session.add_all([asked, reply])
     session.commit()
     yield Reply(asked, reply)
 
@@ -203,11 +204,11 @@ def suggest(
     index_project(session, project)
     chapter = next((c for c in project.chapters if c.id == chapter_id), None)
     tail = (chapter.text if chapter else "")[-TAIL_CHARS:]
-    asked = ChatMessage(project_id=project.id, role="user", content=request)
-    session.add(asked)
+    # As in `ask_events`: nothing is written until the model has answered.
+    asked = ChatMessage(project_id=project.id, role="user", content=request, created_at=now())
     if not tail.strip():
         reply = ChatMessage(project_id=project.id, role="assistant", content="", citations=[])
-        session.add(reply)
+        session.add_all([asked, reply])
         session.commit()
         return asked, reply
 
@@ -237,6 +238,6 @@ def suggest(
         for n, option in enumerate(answer.options[:3], 1)
     )
     reply = ChatMessage(project_id=project.id, role="assistant", content=content, citations=[])
-    session.add(reply)
+    session.add_all([asked, reply])
     session.commit()
     return asked, reply

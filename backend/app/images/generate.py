@@ -19,6 +19,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.crypto import decrypt
+from app.db import release_connection
 from app.llm import prefs
 from app.models import Connection, UsageEvent
 
@@ -60,6 +61,7 @@ class ImageModel:
         connection = session.get(Connection, connection_id) if connection_id else None
         if connection is None or not model_name:
             raise ImageModelNotConfigured("image_model_not_configured")
+        self.session = session
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
@@ -78,6 +80,7 @@ class ImageModel:
         references = references or []
         if size and size not in SIZES:
             raise ValueError(f"unknown size {size!r}")
+        release_connection(self.session)  # a picture can take minutes
         try:
             image, usage = self._via_chat(prompt, references, size)
             if image is None and not references:

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.crypto import KeyUnreadable, decrypt, encrypt, mask
-from app.db import SessionDep
+from app.db import SessionDep, release_connection
 from app.llm import prefs, registry
 from app.models import KIND_OPENAI, AppSetting, Connection
 
@@ -155,6 +155,7 @@ def delete_connection(connection_id: str, session: SessionDep) -> None:
 @router.get("/connections/{connection_id}/models")
 def connection_models(connection_id: str, session: SessionDep) -> list[ModelOut]:
     connection = _connection(session, connection_id)
+    release_connection(session)  # the provider may take a while to answer
     try:
         models = registry.list_models(connection)
     except httpx.HTTPStatusError as exc:
@@ -170,6 +171,7 @@ def connection_models(connection_id: str, session: SessionDep) -> list[ModelOut]
 def test_connection(connection_id: str, body: TestRequest, session: SessionDep) -> TestResult:
     """One tiny real request, so the user knows the key and the model work."""
     connection = _connection(session, connection_id)
+    release_connection(session)  # the provider may take a while to answer
     try:
         llm = registry.chat_model(connection, body.model)
         answer = llm.invoke([HumanMessage("Reply with the single word: ready")])

@@ -80,6 +80,12 @@ demo/                a short original story used for demos and end-to-end checks
 - Every UI string goes through `i18n.tsx` in both languages. The server returns error
   codes (`reader_mode_readonly`), the frontend translates them.
 - Book text and anything from `_private/` never goes into the repository.
+- The hosted pool is tiny (4 connections). Never touch the database on the event loop
+  (async code goes through `run_in_threadpool`), and call `db.release_connection(session)`
+  before any wait on a model or provider; `TextModel` and `ImageModel` already do. It can
+  only give back a transaction that has not written, so add rows after the model has
+  answered, not before (as the chat does with the question). The
+  healthcheck is `/api/health` and must not use the database.
 
 ## Build order
 

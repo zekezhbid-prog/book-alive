@@ -19,7 +19,6 @@ from app.models import (
     Project,
 )
 
-
 # A model now and then answers with broken JSON or the service hiccups. Instead of stopping
 # the whole run the same pass is simply started again: chapters already read are served from
 # the database, so only the one that failed is asked once more.

@@ -14,6 +14,7 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update
@@ -38,6 +39,7 @@ WINDOW_SECONDS = 300
 _failures: dict[str, deque[float]] = defaultdict(deque)
 _last_reset_mail: dict[str, float] = {}
 OPEN_PATHS = {
+    "/api/health",
     "/api/session",
     "/api/login",
     "/api/logout",
@@ -212,6 +214,17 @@ async def require_login(request: Request, call_next):
     request.state.is_admin = True  # without accounts there is one person
     if not path.startswith("/api/") or not accounts_enabled() or path in OPEN_PATHS:
         return await call_next(request)
+    # The database is reached from a worker thread. Waiting for a pooled connection here,
+    # on the event loop, would stop every other request, including the ones that are
+    # about to give their connections back: the whole site would hang.
+    refused = await run_in_threadpool(_check_access, request)
+    if refused is not None:
+        return refused
+    return await call_next(request)
+
+
+def _check_access(request: Request) -> JSONResponse | None:
+    path = request.url.path
     with Session(get_engine()) as db:
         user = _user_from_cookie(request, db)
         if user is None:
@@ -223,10 +236,17 @@ async def require_login(request: Request, call_next):
             return JSONResponse({"detail": "project_not_found"}, status_code=404)
         request.state.user_id = user.id
         request.state.is_admin = is_admin(user)
-    return await call_next(request)
+    return None
 
 
 # ---------- routes ----------
+
+
+@router.get("/health")
+def health() -> dict[str, bool]:
+    """For the container healthcheck: the process answers. It does not touch the database,
+    so a moment of a busy pool does not take the whole site off the proxy."""
+    return {"ok": True}
 
 
 @router.get("/session")

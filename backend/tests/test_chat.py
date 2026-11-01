@@ -266,3 +266,37 @@ def test_suggestions_are_for_writer_projects_only(client, session, project):
     session.commit()
     response = client.post(f"/api/projects/{project.id}/chat/suggest", json={"question": "x"})
     assert (response.status_code, response.json()["detail"]) == (409, "reader_mode_readonly")
+
+
+class ReleasingModel(FakeModel):
+    """Like `TextModel`: gives the connection back before the model answers, and records
+    whether it could."""
+
+    def __init__(self, session, *replies: dict):
+        super().__init__(*replies)
+        self.session = session
+        self.held: list[bool] = []
+
+    def invoke_json(self, operation, messages, schema):
+        from app.db import release_connection
+
+        release_connection(self.session)
+        self.held.append(self.session.in_transaction())
+        return super().invoke_json(operation, messages, schema)
+
+
+def test_chat_holds_no_connection_while_the_model_answers(session, project):
+    answer = {"found": True, "answer": "Посох [1].", "citations": []}
+    model = ReleasingModel(session, answer)
+    asked, reply = chat.ask(session, project, model, "Что было в руках у Люты?")
+    assert model.held and not any(model.held)
+    assert asked.created_at <= reply.created_at
+    roles = [m.role for m in chat.history(session, project.id)]
+    assert roles[-2:] == ["user", "assistant"]
+
+
+def test_plot_suggestions_hold_no_connection_while_the_model_answers(session, project):
+    options = {"options": [{"title": "А", "text": "Б"}]}
+    model = ReleasingModel(session, options)
+    chat.suggest(session, project, model, "Что дальше?", project.chapters[-1].id)
+    assert model.held == [False]
