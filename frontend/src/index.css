@@ -358,3 +358,4 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .lang-select { width: auto; padding: 6px 8px; font-weight: 700; cursor: pointer; }
 .rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text); }
 .summary { line-height: 1.6; color: var(--text); margin: 0; }
+h2.chapter-title:hover { border-bottom-color: transparent; }

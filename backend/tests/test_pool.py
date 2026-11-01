@@ -155,3 +155,42 @@ def test_requests_name_the_connection_holder(client, monkeypatch, caplog):
         assert client.get("/api/projects").status_code == 200
     held = [r.getMessage() for r in caplog.records if "held" in r.getMessage()]
     assert any("GET /api/projects" in m for m in held)
+
+
+def _loop_in_thread():
+    import threading
+
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    return loop, thread
+
+
+def test_watchdog_measures_a_free_loop():
+    from app import slowlog
+
+    loop, thread = _loop_in_thread()
+    try:
+        lag, busy = slowlog.sample(loop, timeout=5)
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(5)
+    assert lag is not None and lag < 1
+    assert busy is not None and busy >= 0
+
+
+def test_watchdog_reports_a_blocked_loop(caplog):
+    import time as _time
+
+    from app import slowlog
+
+    loop, thread = _loop_in_thread()
+    loop.call_soon_threadsafe(_time.sleep, 1.5)  # the loop is stuck in sync code
+    try:
+        with caplog.at_level("WARNING", logger="app.slowlog"):
+            slowlog.check(loop, timeout=0.5)
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(5)
+    messages = [r.getMessage() for r in caplog.records if r.name == "app.slowlog"]
+    assert any("event loop" in m for m in messages)

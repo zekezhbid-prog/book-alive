@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
-import { ask, askText } from '../dialogs'
+import { ask } from '../dialogs'
 
 export interface NamedEntity {
   id: string
@@ -19,31 +19,25 @@ interface Props {
   highlighted?: number
   /** The search that led here: its matches are marked in the text. */
   found?: string
-  onStructureChange: (goTo?: string) => void
   onError: (error: unknown) => void
 }
 
-const TITLE_MAX = 300
-
-/** Read-only chapter with the tools for fixing chapter boundaries after import. */
+/** The chapter as read: nothing in it can be changed here, only scenes picked from it. */
 export default function ChapterReader({
   project,
   chapter,
   names,
   highlighted,
   found,
-  onStructureChange,
   onError,
 }: Props) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const [title, setTitle] = useState(chapter.title)
   const [splitting, setSplitting] = useState(false)
   // Paragraphs covered by the current text selection: a scene the user can mark.
   const [picked, setPicked] = useState<[number, number] | null>(null)
   const target = useRef<HTMLParagraphElement>(null)
   const paragraphs = chapter.text ? chapter.text.split('\n\n') : []
-  const isLast = project.chapters.at(-1)?.id === chapter.id
   const linker = useMemo<Linker>(() => {
     const link = buildLinker(project.id, names)
     return (text, key) => markMatches(text, found, (part, sub) => link(part, `${key}${sub}`))
@@ -53,19 +47,6 @@ export default function ChapterReader({
     target.current?.scrollIntoView({ block: 'center' })
   }, [highlighted, chapter.id])
 
-  const rename = async () => {
-    if (title.trim() === chapter.title) return
-    await api.updateChapter(chapter.id, { title }).then(() => onStructureChange(chapter.id), onError)
-  }
-  const merge = async () => {
-    if (!(await ask(t('chapter.merge.confirm')))) return
-    await api.mergeNext(chapter.id).then(() => onStructureChange(chapter.id), onError)
-  }
-  const remove = async () => {
-    const name = chapter.title || t('book.untitled')
-    if (!(await ask(t('chapter.delete.confirm', { title: name })))) return
-    await api.deleteChapter(chapter.id).then(() => onStructureChange(), onError)
-  }
   const splitIntoScenes = async () => {
     try {
       const estimate = await api.splitEstimate(chapter.id)
@@ -100,16 +81,6 @@ export default function ChapterReader({
       .markScene(chapter.id, picked[0], picked[1])
       .then((scene) => navigate(`/projects/${project.id}/scenes/${scene.id}`), onError)
   }
-  const split = async (index: number) => {
-    const paragraph = paragraphs[index]
-    // A short line without a full stop is most likely the heading itself.
-    const looksLikeHeading = paragraph.length <= 80 && !/[.!?…]$/.test(paragraph)
-    const entered = await askText(t('chapter.split.title'), looksLikeHeading ? paragraph : '')
-    if (entered === null) return
-    await api
-      .split(chapter.id, index, entered, looksLikeHeading && entered.trim() === paragraph)
-      .then(([, tail]) => onStructureChange(tail.id), onError)
-  }
 
   return (
     <article className="chapter" onMouseUp={readSelection}>
@@ -119,24 +90,8 @@ export default function ChapterReader({
         <button className="btn small" disabled={splitting || !paragraphs.length} onClick={splitIntoScenes}>
           {splitting ? t('scenes.split.busy') : t('scenes.split')}
         </button>
-        {!isLast && (
-          <button className="btn ghost small" onClick={merge}>
-            {t('chapter.merge')}
-          </button>
-        )}
-        <button className="btn ghost small danger" onClick={remove}>
-          {t('chapter.delete')}
-        </button>
       </div>
-      <input
-        className="chapter-title"
-        value={title}
-        maxLength={TITLE_MAX}
-        placeholder={t('chapter.title.placeholder')}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={rename}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      />
+      <h2 className="chapter-title">{chapter.title || t('book.untitled')}</h2>
       {paragraphs.map((paragraph, index) => (
         <p
           key={index}
@@ -144,11 +99,6 @@ export default function ChapterReader({
           ref={index === highlighted ? target : undefined}
           className={index === highlighted ? 'highlighted' : ''}
         >
-          {index > 0 && (
-            <button className="split" title={t('chapter.split.here')} onClick={() => split(index)}>
-              ✂
-            </button>
-          )}
           {renderInline(paragraph, linker)}
         </p>
       ))}

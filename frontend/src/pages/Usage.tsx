@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type Project, type Usage as UsageData } from '../api'
+import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n, type MessageKey } from '../i18n'
 
@@ -29,7 +30,10 @@ export default function Usage() {
     <>
       <ProjectHeader project={project} />
       <main className="page narrow stack">
-        <h1>{t('usage.title')}</h1>
+        <div className="page-head">
+          <h1 className="grow">{t('usage.title')}</h1>
+          <PageClose fallback={`/projects/${projectId}`} />
+        </div>
         {error && <p className="error">{error}</p>}
         {usage?.rows.length === 0 && <p className="muted">{t('usage.empty')}</p>}
         {usage && usage.rows.length > 0 && (

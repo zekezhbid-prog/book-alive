@@ -142,7 +142,6 @@ export default function Book() {
               names={names}
               highlighted={highlighted}
               found={searchParams.get('q') ?? undefined}
-              onStructureChange={afterStructureChange}
               onError={fail}
             />
           )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type Project, type StylePreset } from '../api'
 import Gallery from '../components/Gallery'
+import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n, type MessageKey } from '../i18n'
 import { ask } from '../dialogs'
@@ -42,9 +43,12 @@ export default function Style() {
     <>
       <ProjectHeader project={project} />
       <main className="page narrow stack">
-        <div>
-          <h1>{t('style.title')}</h1>
-          <p className="muted">{t('style.hint')}</p>
+        <div className="page-head">
+          <div className="grow">
+            <h1>{t('style.title')}</h1>
+            <p className="muted">{t('style.hint')}</p>
+          </div>
+          <PageClose fallback={`/projects/${projectId}`} />
         </div>
         {error && <p className="error">{error}</p>}
         <div className="style-grid">

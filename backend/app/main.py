@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     with Session(get_engine()) as session:
         runner.mark_interrupted(session)
         ensure_hubris(session)
+    slowlog.start_watchdog(asyncio.get_running_loop())
     yield
 
 
