@@ -43,6 +43,11 @@ services:
     networks:
       - default
       - supabase
+    labels:
+      # The container sits in two networks. Without this the proxy may pick its address in
+      # the Supabase network, which it cannot reach: requests then hang until they time out
+      # while the app itself is fine. Coolify names the default network after the resource.
+      - traefik.docker.network=${COOLIFY_NETWORK:-i4okgookssk0ccgoosswo0wg}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
       interval: 30s
