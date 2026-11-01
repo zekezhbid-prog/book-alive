@@ -110,3 +110,48 @@ def test_a_write_inside_a_savepoint_still_counts():
         release_connection(session)
         assert session.in_transaction()
         session.rollback()
+
+
+# ---------- what holds the pool: visible in the logs ----------
+
+
+def test_a_long_held_connection_is_logged_with_its_holder(monkeypatch, caplog):
+    from app import db
+
+    monkeypatch.setattr(db, "HOLD_WARN_SECONDS", 0)
+    token = db.current_holder.set("GET /api/test-holder")
+    try:
+        with caplog.at_level("WARNING", logger="app.db"), get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+    finally:
+        db.current_holder.reset(token)
+    held = [r.getMessage() for r in caplog.records if "held" in r.getMessage()]
+    assert held, "a connection held past the limit was not reported"
+    assert "GET /api/test-holder" in held[-1]
+
+
+def test_a_short_hold_is_not_logged(caplog):
+    with caplog.at_level("WARNING", logger="app.db"), get_engine().connect() as conn:
+        conn.execute(text("SELECT 1"))
+    assert not [r for r in caplog.records if "held" in r.getMessage()]
+
+
+def test_a_slow_request_is_logged_with_the_pool_state(client, monkeypatch, caplog):
+    from app import slowlog
+
+    monkeypatch.setattr(slowlog, "SLOW_REQUEST_SECONDS", 0)
+    with caplog.at_level("WARNING", logger="app.slowlog"):
+        assert client.get("/api/projects").status_code == 200
+    slow = [r.getMessage() for r in caplog.records if r.name == "app.slowlog"]
+    assert slow and "GET /api/projects" in slow[-1]
+    assert "pool" in slow[-1]
+
+
+def test_requests_name_the_connection_holder(client, monkeypatch, caplog):
+    from app import db
+
+    monkeypatch.setattr(db, "HOLD_WARN_SECONDS", 0)
+    with caplog.at_level("WARNING", logger="app.db"):
+        assert client.get("/api/projects").status_code == 200
+    held = [r.getMessage() for r in caplog.records if "held" in r.getMessage()]
+    assert any("GET /api/projects" in m for m in held)

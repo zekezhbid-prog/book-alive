@@ -1,5 +1,8 @@
 import logging
+import threading
+import time
 from collections.abc import Iterator
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Annotated, ClassVar
 
@@ -15,6 +18,7 @@ class Base(DeclarativeBase):
     type_annotation_map: ClassVar = {datetime: DateTime(timezone=True)}
 
 
+_log = logging.getLogger(__name__)
 _engine: Engine | None = None
 _embedded_server = None  # keeps the embedded PostgreSQL alive for the process lifetime
 
@@ -51,7 +55,44 @@ def get_engine() -> Engine:
             # A busy pool answers with an error quickly instead of keeping a request waiting.
             options["pool_timeout"] = settings.db_pool_timeout
         _engine = create_engine(url, pool_pre_ping=True, **options)
+        event.listen(_engine, "checkout", _on_checkout)
+        event.listen(_engine, "checkin", _on_checkin)
     return _engine
+
+
+# ---------- who holds the pool: written to the log ----------
+#
+# With a handful of pooled connections one long holder makes every other request wait
+# for a free one (up to `db_pool_timeout`). A connection kept longer than this is
+# reported with whoever took it: the request ("GET /api/...") or the background thread.
+
+HOLD_WARN_SECONDS = 3.0
+current_holder: ContextVar[str | None] = ContextVar("lorebook_db_holder", default=None)
+_TAKEN = "lorebook_taken"
+
+
+def _on_checkout(_dbapi_connection, record, _proxy) -> None:
+    holder = current_holder.get() or f"thread {threading.current_thread().name}"
+    record.info[_TAKEN] = (time.monotonic(), holder)
+
+
+def _on_checkin(_dbapi_connection, record) -> None:
+    taken = record.info.pop(_TAKEN, None) if record is not None else None
+    if taken is None:
+        return
+    started, holder = taken
+    held = time.monotonic() - started
+    if held >= HOLD_WARN_SECONDS:
+        _log.warning("db connection held %.1f s by %s", held, holder)
+
+
+def pool_state() -> str:
+    """One line for the log: how many pooled connections are taken right now."""
+    pool = get_engine().pool
+    try:
+        return f"pool {pool.checkedout()}/{pool.size()} taken"
+    except AttributeError:  # a pool without a fixed size
+        return "pool " + pool.status()
 
 
 # ---------- giving the connection back while waiting for someone else ----------
@@ -65,7 +106,6 @@ def get_engine() -> Engine:
 # caller meant to be atomic.
 
 _WROTE = "lorebook_wrote"
-_log = logging.getLogger(__name__)
 
 
 @event.listens_for(Session, "after_flush")

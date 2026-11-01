@@ -335,7 +335,26 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// Pages and the left menu often ask for the same list at the same moment; while one such
+// GET is on its way the others wait for it instead of taking more database connections.
+const inFlight = new Map<string, Promise<unknown>>()
+
+function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (method !== 'GET') {
+    // A GET sent before this change may answer with the old state: later ones start afresh.
+    inFlight.clear()
+    return send<T>(method, path, body)
+  }
+  const pending = inFlight.get(path)
+  if (pending) return pending as Promise<T>
+  const started = send<T>(method, path).finally(() => {
+    if (inFlight.get(path) === started) inFlight.delete(path)
+  })
+  inFlight.set(path, started)
+  return started
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const init: RequestInit = { method }
   if (body instanceof FormData) {
     init.body = body

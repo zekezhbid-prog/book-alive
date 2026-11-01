@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from app import auth
+from app import auth, slowlog
 from app.analysis import runner
 from app.api import analysis, chat, connections, images, projects, review, scenes
 from app.config import settings
@@ -31,6 +31,8 @@ app = FastAPI(
     redoc_url=None,
 )
 app.middleware("http")(auth.require_login)
+# Added last, so it runs first: the time it reports includes the login check.
+app.middleware("http")(slowlog.log_slow_requests)
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(connections.router)

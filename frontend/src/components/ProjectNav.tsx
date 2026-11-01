@@ -56,12 +56,18 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     scenes?: SceneBrief[]
   }>({})
   const [error, setError] = useState('')
+  // A list the page passes in (even while it is still loading) is not fetched again here.
+  const hasCharacters = given.characters !== undefined
+  const hasLocations = given.locations !== undefined
+  const hasScenes = given.scenes !== undefined
   useEffect(() => {
     const fail = (e: unknown) => setError(errorText(t, e))
-    api.entities(project.id, 'character').then((characters) => setFetched((f) => ({ ...f, characters })), fail)
-    api.entities(project.id, 'location').then((locations) => setFetched((f) => ({ ...f, locations })), fail)
-    api.scenes(project.id).then((scenes) => setFetched((f) => ({ ...f, scenes })), fail)
-  }, [project.id, t])
+    if (!hasCharacters)
+      api.entities(project.id, 'character').then((characters) => setFetched((f) => ({ ...f, characters })), fail)
+    if (!hasLocations)
+      api.entities(project.id, 'location').then((locations) => setFetched((f) => ({ ...f, locations })), fail)
+    if (!hasScenes) api.scenes(project.id).then((scenes) => setFetched((f) => ({ ...f, scenes })), fail)
+  }, [project.id, t, hasCharacters, hasLocations, hasScenes])
   const characters = given.characters ?? fetched.characters
   const locations = given.locations ?? fetched.locations
   const scenes = given.scenes ?? fetched.scenes
