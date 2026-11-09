@@ -7,7 +7,8 @@ import { ask } from '../dialogs'
 export default function Projects() {
   const { t } = useI18n()
   const [projects, setProjects] = useState<ProjectBrief[] | null>(null)
-  const [creating, setCreating] = useState(false)
+  // null: closed; otherwise the mode the new-project dialog opens with.
+  const [creating, setCreating] = useState<Mode | null>(null)
   const [error, setError] = useState('')
 
   const load = () =>
@@ -31,13 +32,26 @@ export default function Projects() {
       <div className="page-head">
         <h1>{t('projects.title')}</h1>
         <span className="spacer" />
-        <button className="btn primary" onClick={() => setCreating(true)}>
+        <button className="btn primary" onClick={() => setCreating('reader')}>
           {t('projects.new')}
         </button>
       </div>
       {error && <p className="error">{error}</p>}
       {projects === null && !error && <p className="muted">{t('app.loading')}</p>}
-      {projects?.length === 0 && <p className="muted">{t('projects.empty')}</p>}
+      {/* The first visit: the two ways to start, each opening the dialog in its mode. */}
+      {projects?.length === 0 && (
+        <div className="start-grid">
+          {(['reader', 'writer'] as const).map((mode) => (
+            <div key={mode} className="card start-card">
+              <h3>{t(`projects.start.${mode}.title`)}</h3>
+              <p className="muted">{t(`projects.start.${mode}.body`)}</p>
+              <button className={`btn ${mode === 'reader' ? 'primary' : ''}`} onClick={() => setCreating(mode)}>
+                {t(`projects.start.${mode}.button`)}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="grid">
         {projects?.map((project) => (
           <div key={project.id} className="card project-card">
@@ -56,15 +70,15 @@ export default function Projects() {
           </div>
         ))}
       </div>
-      {creating && <NewProject onClose={() => setCreating(false)} />}
+      {creating && <NewProject initialMode={creating} onClose={() => setCreating(null)} />}
     </main>
   )
 }
 
-function NewProject({ onClose }: { onClose: () => void }) {
+function NewProject({ initialMode, onClose }: { initialMode: Mode; onClose: () => void }) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<Mode>('reader')
+  const [mode, setMode] = useState<Mode>(initialMode)
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)

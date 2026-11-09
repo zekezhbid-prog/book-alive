@@ -359,3 +359,50 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text); }
 .summary { line-height: 1.6; color: var(--text); margin: 0; }
 h2.chapter-title:hover { border-bottom-color: transparent; }
+
+/* ---------- UX review 09.11.2026: empty states, AI notice, style step, phones ---------- */
+.empty-state { align-items: flex-start; }
+.empty-state .btn svg { flex: none; }
+.ai-notice { flex-wrap: wrap; gap: 12px; }
+.ai-notice .grow { min-width: min(260px, 100%); }
+/* The first visit: two ways to start, on dark cards so the text stays readable over the photo. */
+.start-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.start-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 28px; background: rgba(16, 14, 9, 0.9); }
+.start-card h3 { font-size: 22px; }
+.start-card p { flex: 1; margin: 0; line-height: 1.55; }
+/* The editor's tool row: the counter gives way, the buttons never shrink or wrap. */
+.chapter-tools .btn { flex-shrink: 0; }
+.chapter-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-flag { width: auto; color: var(--accent); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  /* One column: the menu, then the text, then the chat or the writer's panel. */
+  .workspace:has(> .project-nav),
+  .workspace.with-side:has(> .project-nav) { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .workspace > * { overflow: visible; }
+  .workspace > .project-nav { flex-direction: column; overflow: visible; }
+  .workspace > .reading { order: 1; }
+  .workspace > .side { order: 2; border-left: 0; border-top: 1px solid var(--line); min-height: 70vh; }
+  .nav-rail, .nav-list { width: auto; }
+  .nav-list { max-height: 45vh; overflow-y: auto; }
+  /* The parts of the book as a compact two-column block instead of a tall list. */
+  .nav-sections { display: grid; grid-template-columns: 1fr 1fr; }
+  .nav-footer { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
+  /* The left menu already holds the parts: the tabs in the bar would only repeat them. */
+  .topbar .tabs { display: none; }
+  /* The project's own controls (title, checks, versions, writer/illustrator) drop to a second row. */
+  .topbar { position: static; height: auto; min-height: var(--topbar); flex-wrap: wrap; row-gap: 6px; padding-block: 8px; }
+  .topbar > .lang-select { margin-left: auto; }
+  .topbar-slot { order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
+  .book-title { flex: 1 1 100%; max-width: 100%; font-size: 17px; }
+  .topbar-slot .btn.ghost { padding: 6px 8px; font-size: 13px; }
+  .chapter-title { font-size: 26px; }
+}
+@media (max-width: 480px) {
+  .topbar .brand-name { display: none; }
+}
+/* Fingers need bigger targets than a mouse. */
+@media (pointer: coarse) {
+  .btn.small, .lang-select, .nav-add, .chapter-link { min-height: 44px; }
+  .btn.icon { min-width: 44px; min-height: 44px; }
+}

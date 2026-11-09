@@ -3,6 +3,7 @@ import { api, type Chapter, type Project } from '../api'
 import { useI18n } from '../i18n'
 import { enqueueSave, savesSettled } from '../saveQueue'
 import { ask } from '../dialogs'
+import { TrashIcon } from './icons'
 
 interface Props {
   project: Project
@@ -102,10 +103,10 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
   return (
     <article className="chapter editor">
       <div className="chapter-tools">
-        <span className="faint small">
+        {/* The formatting hint lives in the tooltip, so the row never wraps and squeezes the buttons. */}
+        <span className="faint small chapter-status" title={t('chapter.format.hint')}>
           {t('app.chars', { n: text.length.toLocaleString() })} ·{' '}
-          <span className={status === 'unsaved' ? 'error' : ''}>{t(`app.${status}`)}</span> ·{' '}
-          {t('chapter.format.hint')}
+          <span className={status === 'unsaved' ? 'error' : ''}>{t(`app.${status}`)}</span>
         </span>
         <span className="spacer" />
         <button className="btn ghost small" disabled={index <= 0} onClick={() => move(-1)}>
@@ -114,8 +115,13 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
         <button className="btn ghost small" disabled={index >= ids.length - 1} onClick={() => move(1)}>
           ↓ {t('chapter.down')}
         </button>
-        <button className="btn ghost small danger" onClick={remove}>
-          {t('chapter.delete')}
+        <button
+          className="btn ghost small icon danger"
+          title={t('chapter.delete')}
+          aria-label={t('chapter.delete')}
+          onClick={remove}
+        >
+          <TrashIcon />
         </button>
       </div>
       <input

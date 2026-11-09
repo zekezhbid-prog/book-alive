@@ -8,6 +8,18 @@ export const LANGS: Lang[] = ['ru', 'by', 'en']
 
 const ru = {
   'app.settings': 'Настройки',
+  'projects.start.reader.title': 'Иллюстрировать готовую книгу',
+  'projects.start.reader.body':
+    'Загрузите книгу (TXT, EPUB, FB2, DOCX, PDF): сервис разобьёт её на главы, найдёт персонажей, локации и сцены и соберёт промпты для картинок и видео с одними и теми же героями.',
+  'projects.start.reader.button': 'Загрузить книгу',
+  'projects.start.writer.title': 'Писать книгу',
+  'projects.start.writer.body':
+    'Начните с чистого листа или загрузите черновик: редактор, версии всей книги, проверка текста и чат по книге.',
+  'projects.start.writer.button': 'Начать писать',
+  'ai.missing':
+    'ИИ ещё не подключён: в Настройках не выбрана модель для текста. Без неё не работают поиск персонажей и локаций, чат и сборка промптов.',
+  'ai.missing.open': 'Выбрать модель',
+  'style.not_chosen': 'не выбран',
   'app.projects': 'Проекты',
   'nav.my_projects': 'Мои проекты',
   'app.loading': 'Загрузка…',
@@ -131,8 +143,8 @@ const ru = {
   'nav.scenes': 'Сцены',
   'nav.add.characters': 'Добавить персонажа вручную',
   'nav.add.locations': 'Добавить локацию вручную',
-  'nav.find.characters': 'Выгрузить персонажей из книги',
-  'nav.find.locations': 'Выгрузить локации из книги',
+  'nav.find.characters': 'Найти персонажей в книге',
+  'nav.find.locations': 'Найти локации в книге',
   'tabs.character': 'Персонажи',
   'tabs.location': 'Локации',
   'tabs.usage': 'Расход',
@@ -362,7 +374,7 @@ const ru = {
 
   'tabs.scenes': 'Сцены',
   'scenes.empty':
-    'Сцен пока нет. Откройте главу на вкладке «Книга»: там можно разбить её на сцены или выделить мышью нужный кусок текста.',
+    'Сцен пока нет. Откройте главу в разделе «Главы»: там можно разбить её на сцены или выделить мышью нужный кусок текста.',
   'scenes.select': 'Выберите сцену слева.',
   'scenes.vivid': 'Яркая сцена',
   'scenes.vivid.toggle': '★ Яркие сцены',
@@ -389,7 +401,7 @@ const ru = {
   'scene.ref.prev': 'Предыдущая картинка',
   'scene.ref.next': 'Следующая картинка',
   'scene.references.no_style':
-    'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его на вкладке «Стиль».',
+    'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его в разделе «Стиль».',
   'scene.look': 'облик',
   'scene.prompt': 'Промпт для видео',
   'scene.note.placeholder': 'Пожелания к сцене (необязательно): что показать, откуда камера',
@@ -475,7 +487,7 @@ const ru = {
     'Модель ответила не в том виде, который ожидался. Попробуйте ещё раз или выберите другую модель.',
   'error.image_model_not_configured':
     'Не выбрана модель для картинок. Откройте Настройки, добавьте подключение с ключом и выберите модель. Промпт можно скопировать и нарисовать в другом сервисе, а результат загрузить сюда.',
-  'error.style_not_chosen': 'Сначала выберите стиль проекта на вкладке «Стиль».',
+  'error.style_not_chosen': 'Сначала выберите стиль проекта в разделе «Стиль».',
   'error.not_an_image': 'Это не картинка. Подходят PNG, JPEG и WebP.',
   'error.style_text_required': 'Опишите свой стиль.',
   'error.image_not_found': 'Такой картинки больше нет.',
@@ -490,6 +502,18 @@ const ru = {
 
 const en: Record<keyof typeof ru, string> = {
   'app.settings': 'Settings',
+  'projects.start.reader.title': 'Illustrate a finished book',
+  'projects.start.reader.body':
+    'Upload a book (TXT, EPUB, FB2, DOCX, PDF): the service splits it into chapters, finds characters, locations and scenes, and builds prompts for pictures and video that keep the same characters throughout.',
+  'projects.start.reader.button': 'Upload a book',
+  'projects.start.writer.title': 'Write a book',
+  'projects.start.writer.body':
+    'Start from a blank page or upload a draft: editor, whole-book versions, text checks and a chat about the book.',
+  'projects.start.writer.button': 'Start writing',
+  'ai.missing':
+    'AI is not connected yet: no text model is chosen in Settings. Without it, finding characters and locations, the chat and prompt building do not work.',
+  'ai.missing.open': 'Choose a model',
+  'style.not_chosen': 'not chosen',
   'app.projects': 'Projects',
   'nav.my_projects': 'My projects',
   'app.loading': 'Loading…',
@@ -613,8 +637,8 @@ const en: Record<keyof typeof ru, string> = {
   'nav.scenes': 'Scenes',
   'nav.add.characters': 'Add a character by hand',
   'nav.add.locations': 'Add a location by hand',
-  'nav.find.characters': 'Extract characters from the book',
-  'nav.find.locations': 'Extract locations from the book',
+  'nav.find.characters': 'Find characters in the book',
+  'nav.find.locations': 'Find locations in the book',
   'tabs.character': 'Characters',
   'tabs.location': 'Locations',
   'tabs.usage': 'Usage',
@@ -844,7 +868,7 @@ const en: Record<keyof typeof ru, string> = {
 
   'tabs.scenes': 'Scenes',
   'scenes.empty':
-    'No scenes yet. Open a chapter on the Book tab: split it into scenes there, or select the stretch of text you want.',
+    'No scenes yet. Open a chapter in the Chapters section: split it into scenes there, or select the stretch of text you want.',
   'scenes.select': 'Pick a scene on the left.',
   'scenes.vivid': 'A vivid scene',
   'scenes.vivid.toggle': '★ Vivid scenes',
@@ -871,7 +895,7 @@ const en: Record<keyof typeof ru, string> = {
   'scene.ref.prev': 'Previous picture',
   'scene.ref.next': 'Next picture',
   'scene.references.no_style':
-    'No project style is chosen, so references are not picked. Choose one on the Style tab.',
+    'No project style is chosen, so references are not picked. Choose one in the Style section.',
   'scene.look': 'look',
   'scene.prompt': 'Video prompt',
   'scene.note.placeholder': 'Wishes for the scene (optional): what to show, where the camera is',
@@ -957,7 +981,7 @@ const en: Record<keyof typeof ru, string> = {
     'The model replied in an unexpected form. Try again or choose another model.',
   'error.image_model_not_configured':
     'No image model is selected. Open Settings, add a connection with a key and choose a model. You can copy the prompt, draw it in another service and upload the result here.',
-  'error.style_not_chosen': 'Choose the project style on the Style tab first.',
+  'error.style_not_chosen': 'Choose the project style in the Style section first.',
   'error.not_an_image': 'This is not a picture. PNG, JPEG and WebP are accepted.',
   'error.style_text_required': 'Describe your style.',
   'error.image_not_found': 'This picture no longer exists.',

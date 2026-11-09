@@ -266,11 +266,22 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
               <span className="nav-chevron">{section === current && open ? '‹' : '›'}</span>
             </button>
           ))}
+          {/* The style is a step of the illustrator's work (references and frames wait for it),
+              so it stands with the parts of the book, flagged while it is not chosen. */}
+          {illustrating && (
+            <Link
+              to={`${base}/style`}
+              className={`nav-head ${pathname.startsWith(`${base}/style`) ? 'current' : ''}`}
+            >
+              <span className="grow">{t('tabs.style')}</span>
+              {!project.style_id && <span className="nav-count nav-flag">{t('style.not_chosen')}</span>}
+              <span className="nav-chevron">›</span>
+            </Link>
+          )}
         </nav>
         {/* The project's own links and the app's settings, at the foot of the first column. */}
         <nav className="nav-footer">
           <Link to="/">{t('nav.my_projects')}</Link>
-          {illustrating && <Link to={`${base}/style`}>{t('tabs.style')}</Link>}
           <Link to={`${base}/usage`}>{t('tabs.usage')}</Link>
           <Link to="/settings">{t('app.settings')}</Link>
           {accounts && (

@@ -14,6 +14,8 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import DescriptionEditor from '../components/DescriptionEditor'
+import AiNotice, { useTextModelReady } from '../components/AiNotice'
+import { SparklesIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -70,9 +72,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   // "Find characters / locations" at the bottom of the left menu opens the run dialog here.
   const find = searchParams.has('find')
   const loaded = list !== null
-  useEffect(() => {
-    if (!find || !loaded) return
-    setSearchParams({}, { replace: true })
+  const openFind = useCallback(() => {
     if (running) return
     let last: string | null = null
     try {
@@ -81,7 +81,13 @@ export default function Entities({ kind }: { kind: EntityKind }) {
       /* the dialog falls back to the first chapter */
     }
     setChoosing(project?.chapters.some((c) => c.id === last) && last ? [last] : [])
-  }, [find, loaded, running, setSearchParams, project, projectId])
+  }, [running, project, projectId])
+  useEffect(() => {
+    if (!find || !loaded) return
+    setSearchParams({}, { replace: true })
+    openFind()
+  }, [find, loaded, setSearchParams, openFind])
+  const aiReady = useTextModelReady()
 
   const activeId = list?.some((e) => e.id === entityId) ? entityId : undefined
   useEffect(() => {
@@ -133,8 +139,14 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {run?.status === 'cancelled' && (
               <p className="notice">{t('run.cancelled', { done: run.done, total: run.total })}</p>
             )}
+            <AiNotice ready={aiReady} />
             {list?.length === 0 && !running && (
-              <p className="muted">{t(`entities.empty.${kind}`)}</p>
+              <div className="empty-state stack">
+                <p className="muted">{t(`entities.empty.${kind}`)}</p>
+                <button className="btn primary" onClick={openFind}>
+                  <SparklesIcon /> {t(`nav.find.${section}`)}
+                </button>
+              </div>
             )}
             {list && list.length > 0 && !entity && <p className="muted">{t('entities.select')}</p>}
             {entity && (
@@ -167,6 +179,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
       </div>
       {choosing && (
         <RunDialog
+          aiReady={aiReady}
           project={project}
           kind={kind}
           initial={choosing}
@@ -307,6 +320,8 @@ function Card({ entity, projectId, others, onChanged, onError, gallery, writing 
 }
 
 interface DialogProps {
+  /** False when no text model is chosen: the dialog says so and "Start" stays off. */
+  aiReady: boolean | null
   project: Project
   kind: EntityKind
   /** Chapters ticked at the start; empty means the whole book. */
@@ -316,7 +331,7 @@ interface DialogProps {
 }
 
 /** Pick chapters, see what it will cost, then start. Nothing is spent before "Start". */
-function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) {
+function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: DialogProps) {
   const { t } = useI18n()
   const [selected, setSelected] = useState(
     () => new Set(initial.length ? initial : project.chapters.slice(0, 1).map((c) => c.id)),
@@ -407,13 +422,14 @@ function RunDialog({ project, kind, initial, onClose, onStarted }: DialogProps) 
             </>
           )}
         </div>
+        <AiNotice ready={aiReady} />
         {error && <p className="error">{error}</p>}
         <div className="row">
           <span className="spacer" />
           <button className="btn" onClick={onClose}>
             {t('app.cancel')}
           </button>
-          <button className="btn primary" disabled={!idsKey || !estimate} onClick={start}>
+          <button className="btn primary" disabled={!idsKey || !estimate || aiReady === false} onClick={start}>
             {t('run.start')}
           </button>
         </div>

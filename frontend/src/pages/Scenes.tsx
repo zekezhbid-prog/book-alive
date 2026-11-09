@@ -16,6 +16,7 @@ import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
+import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import { CopyIcon, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
 
 type Participant = Scene['participants'][number]
@@ -97,6 +98,7 @@ interface ViewProps {
 
 function SceneView({ projectId, scene, hasStyle, chapters, writing, onChange, onDelete }: ViewProps) {
   const { t } = useI18n()
+  const aiReady = useTextModelReady()
   const [prompt, setPrompt] = useState(scene.prompt)
   const [note, setNote] = useState('')
   const [change, setChange] = useState('')
@@ -339,11 +341,12 @@ function SceneView({ projectId, scene, hasStyle, chapters, writing, onChange, on
           </div>
         </>
       )}
+      {!scene.prompt && <AiNotice ready={aiReady} />}
       {!scene.prompt && (
         <div className="row wrap">
           <button
             className="btn primary"
-            disabled={busy !== ''}
+            disabled={busy !== '' || aiReady === false}
             onClick={() => run('prompt', () => api.buildScenePrompt(scene.id, note))}
           >
             {busy === 'prompt' ? t('scene.build.busy') : t('scene.build')}

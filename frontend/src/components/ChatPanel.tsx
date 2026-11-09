@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type ChatMessage, type ChatStatus, type Citation } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
+import AiNotice, { useTextModelReady } from './AiNotice'
 
 interface Props {
   projectId: string
@@ -15,6 +16,7 @@ interface Props {
 /** Questions about the book. Answers come only from its text, with links to the source. */
 export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
   const { t } = useI18n()
+  const aiReady = useTextModelReady()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [question, setQuestion] = useState('')
   const [waiting, setWaiting] = useState(false)
@@ -98,6 +100,7 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
         {waiting && <Waiting status={status} />}
         <div ref={end} />
       </div>
+      <AiNotice ready={aiReady} />
       {error && <p className="error small">{error}</p>}
       {canSuggest && (
         <button className="btn small" disabled={waiting || !chapterId} onClick={suggest}>

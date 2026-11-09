@@ -1,6 +1,18 @@
 /** Belarusian. A key missing here shows its Russian text (see `dictionaries` in i18n.tsx). */
 export const by: Record<string, string> = {
   'app.settings': 'Налады',
+  'projects.start.reader.title': 'Ілюстраваць гатовую кнігу',
+  'projects.start.reader.body':
+    'Загрузіце кнігу (TXT, EPUB, FB2, DOCX, PDF): сэрвіс разаб’е яе на раздзелы, знойдзе герояў, лакацыі і сцэны і збярэ промпты для малюнкаў і відэа з адными і тымі ж героямі.',
+  'projects.start.reader.button': 'Загрузіць кнігу',
+  'projects.start.writer.title': 'Пісаць кнігу',
+  'projects.start.writer.body':
+    'Пачніце з чыстага аркуша або загрузіце чарнавік: рэдактар, версіі ўсёй кнігі, праверка тэксту і чат па кнізе.',
+  'projects.start.writer.button': 'Пачаць пісаць',
+  'ai.missing':
+    'ШІ яшчэ не падключаны: у Наладах не абрана мадэль для тэксту. Без яе не працуюць пошук герояў і лакацый, чат і зборка промптаў.',
+  'ai.missing.open': 'Абраць мадэль',
+  'style.not_chosen': 'не абраны',
   'app.projects': 'Праекты',
   'nav.my_projects': 'Мае праекты',
   'app.loading': 'Загрузка…',
@@ -124,8 +136,8 @@ export const by: Record<string, string> = {
   'nav.scenes': 'Сцэны',
   'nav.add.characters': 'Дадаць героя ўручную',
   'nav.add.locations': 'Дадаць лакацыю ўручную',
-  'nav.find.characters': 'Выгрузіць герояў з кнігі',
-  'nav.find.locations': 'Выгрузіць лакацыі з кнігі',
+  'nav.find.characters': 'Знайсці герояў у кнізе',
+  'nav.find.locations': 'Знайсці лакацыі ў кнізе',
   'tabs.character': 'Героі',
   'tabs.location': 'Лакацыі',
   'tabs.usage': 'Расход',
@@ -356,7 +368,7 @@ export const by: Record<string, string> = {
 
   'tabs.scenes': 'Сцэны',
   'scenes.empty':
-    'Сцэн пакуль няма. Адкрыйце раздзел на ўкладцы «Кніга»: там можна разбіць яго на сцэны або вылучыць мышшу патрэбны кавалак тэксту.',
+    'Сцэн пакуль няма. Адкрыйце раздзел у частцы «Раздзелы»: там можна разбіць яго на сцэны або вылучыць мышшу патрэбны кавалак тэксту.',
   'scenes.select': 'Выберыце сцэну злева.',
   'scenes.vivid': 'Яркая сцэна',
   'scenes.vivid.toggle': '★ Яркія сцэны',
@@ -383,7 +395,7 @@ export const by: Record<string, string> = {
   'scene.ref.prev': 'Папярэдняя карцінка',
   'scene.ref.next': 'Наступная карцінка',
   'scene.references.no_style':
-    'Стыль праекта не абраны, таму рэферэнсы не падбіраюцца. Абярыце яго на ўкладцы «Стыль».',
+    'Стыль праекта не абраны, таму рэферэнсы не падбіраюцца. Абярыце яго у частцы «Стыль».',
   'scene.look': 'аблічча',
   'scene.prompt': 'Промпт для відэа',
   'scene.note.placeholder': 'Пажаданні да сцэны (неабавязкова): што паказаць, адкуль камера',
@@ -468,7 +480,7 @@ export const by: Record<string, string> = {
     'Мадэль адказала не ў тым выглядзе, які чакаўся. Паспрабуйце яшчэ раз або абярыце іншую мадэль.',
   'error.image_model_not_configured':
     'Не абрана мадэль для карцінак. Адкрыйце Налады, дадайце падключэнне з ключом і абярыце мадэль. Промпт можна скапіяваць і намаляваць у іншым сервісе, а вынік загрузіць сюды.',
-  'error.style_not_chosen': 'Спачатку абярыце стыль праекта на ўкладцы «Стыль».',
+  'error.style_not_chosen': 'Спачатку абярыце стыль праекта у частцы «Стыль».',
   'error.not_an_image': 'Гэта не карцінка. Падыходзяць PNG, JPEG і WebP.',
   'error.style_text_required': 'Апішыце свой стыль.',
   'error.image_not_found': 'Такой карцінкі больш няма.',
