@@ -5,6 +5,7 @@ import type { Project } from '../api'
 import { useI18n } from '../i18n'
 import { useSide, useView, type Side } from '../view'
 import BookSearch from './BookSearch'
+import { HistoryIcon, ReviewIcon } from './icons'
 import ChatDock from './ChatDock'
 
 interface Props {
@@ -29,14 +30,17 @@ export default function ProjectHeader({ project, children, chat }: Props) {
   // Checks and versions are the writer's tools: they open beside the text of the book.
   const writerTool = (tool: Side) => (
     <button
-      className={`btn ghost ${side === tool ? 'active' : ''}`}
+      className={`btn ghost icon tool-icon ${side === tool ? 'active' : ''}`}
+      title={t(`side.${tool}`)}
+      aria-label={t(`side.${tool}`)}
+      aria-pressed={side === tool}
       onClick={() => {
         setSide(side === tool ? 'chat' : tool)
         if (!location.pathname.startsWith(`${base}/chapters/`) && location.pathname !== base) navigate(base)
       }}
     >
-      {t(`side.${tool}`)}
-      {tool === 'versions' && project.changes?.dirty && <span className="dot" />}
+      {tool === 'review' ? <ReviewIcon /> : <HistoryIcon />}
+      {tool === 'versions' && project.changes?.dirty && <span className="dot tool-dot" />}
     </button>
   )
   const bar = createPortal(

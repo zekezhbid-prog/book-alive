@@ -482,3 +482,10 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
   .chat-fab { padding: 12px; }
   .chat-fab-label { display: none; }
 }
+
+/* The writer's tools and the writer / illustrator switch: icons with a tooltip. */
+.topbar .btn.ghost.tool-icon { position: relative; padding: 0; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.tool-icon svg, .segmented.icons svg { width: 18px; height: 18px; flex: none; }
+.tool-icon.active { color: var(--accent); background: var(--accent-soft); }
+.tool-dot { position: absolute; top: 5px; right: 5px; }
+.topbar .segmented.icons button { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }

@@ -6,6 +6,7 @@ import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
 import ReviewPanel from '../components/ReviewPanel'
 import ProjectNav from '../components/ProjectNav'
+import { ImageIcon, PenIcon } from '../components/icons'
 import VersionsPanel from '../components/VersionsPanel'
 import { errorText, useI18n } from '../i18n'
 import { savesSettled } from '../saveQueue'
@@ -100,12 +101,17 @@ export default function Book() {
     <>
       <ProjectHeader project={project} chat={{ chapterId: activeId, canSuggest: writing }}>
         {project.mode === 'writer' && (
-          <div className="segmented">
+          <div className="segmented icons" role="group">
             {(['writer', 'illustrator'] as const).map((option) => (
-              <button key={option} className={(writing ? 'writer' : 'illustrator') === option ? 'active' : ''}
+              <button
+                key={option}
+                className={(writing ? 'writer' : 'illustrator') === option ? 'active' : ''}
+                title={t(`book.view.${option}`)}
+                aria-label={t(`book.view.${option}`)}
+                aria-pressed={(writing ? 'writer' : 'illustrator') === option}
                 onClick={() => setView(option)}
               >
-                {t(`book.view.${option}`)}
+                {option === 'writer' ? <PenIcon /> : <ImageIcon />}
               </button>
             ))}
           </div>

@@ -152,3 +152,40 @@ export function ChatIcon() {
     </svg>
   )
 }
+
+export function ReviewIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <path d="M14 3v6h6M9 15l2 2 4-4" />
+    </svg>
+  )
+}
+
+export function HistoryIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+  )
+}
+
+export function PenIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  )
+}
+
+export function ImageIcon() {
+  return (
+    <svg {...stroke}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  )
+}
