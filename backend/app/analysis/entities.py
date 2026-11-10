@@ -433,7 +433,103 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
         for other in others:
             absorb(session, main, other)
     session.commit()
+    adopt_uncertain(session, model, run.project_id, run.kind)
     return {}
+
+
+class Adoption(BaseModel):
+    number: int
+    candidate: str = ""
+
+
+class Adoptions(BaseModel):
+    matches: list[Adoption] = Field(default_factory=list)
+
+
+ADOPT_BATCH = 8
+ADOPT_CANDIDATES = 5
+LETTERS = "ABCDEFGHIJ"
+
+
+def adopt_uncertain(session: Session, model: TextModel, project_id: str, kind: str) -> None:
+    """After the whole cast is merged: each card without a proper name ("the old man", "the
+    mentor") is weighed against the named ones most likely to be it - those who appear in
+    its chapters or with the same people - by sex, age, looks, role and acquaintances. A
+    batch whose answer cannot be read changes nothing."""
+    cards = [e for e in _entities(session, project_id, kind) if not e.standalone]
+    unnamed = [e for e in cards if e.uncertain and e.facts]
+    named = [e for e in cards if not e.uncertain and e.facts]
+    if not unnamed or not named:
+        return
+    chapters = {
+        c.id: c for c in session.scalars(select(Chapter).where(Chapter.project_id == project_id))
+    }
+    where = {e.id: {f.chapter_id for f in e.facts if f.chapter_id in chapters} for e in cards}
+
+    def around(entity: Entity) -> set[str]:
+        """Named cards met in the same chapters."""
+        return {o.id for o in named if o is not entity and where[o.id] & where[entity.id]}
+
+    def candidates(entity: Entity) -> list[Entity]:
+        mine, people = where[entity.id], around(entity)
+        scored = [
+            (len(where[o.id] & mine) + len(around(o) & people), o)
+            for o in named
+            if where[o.id] & mine or around(o) & people
+        ]
+        scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+        return [o for _, o in scored[:ADOPT_CANDIDATES]]
+
+    names = {e.id: e.name for e in cards}
+
+    def describe(entity: Entity, quotes: bool) -> str:
+        chapter_numbers = sorted(chapters[c].position + 1 for c in where[entity.id])
+        people = sorted(names[o] for o in around(entity))[:6]
+        facts = [
+            _fact_line(f, "about" if f.category == FACT_PROFILE else "looks")
+            if quotes
+            else f"- {f.text.strip()}"
+            for f in entity.facts
+            if f.text.strip() and f.category in (FACT_PROFILE, FACT_PERMANENT, FACT_STATE)
+        ][: 10 if quotes else 6]
+        head = f"chapters {', '.join(map(str, chapter_numbers[:12]))}"
+        if people:
+            head += f"; with {', '.join(people)}"
+        return "\n".join([head, *facts])
+
+    work = [(e, candidates(e)) for e in sorted(unnamed, key=lambda e: e.name)]
+    work = [(e, found) for e, found in work if found]
+    for start in range(0, len(work), ADOPT_BATCH):
+        batch = work[start : start + ADOPT_BATCH]
+        blocks = []
+        for number, (entity, found) in enumerate(batch, 1):
+            blocks.append(f"[{number}] {entity.name} (no proper name)\n{describe(entity, True)}")
+            for letter, candidate in zip(LETTERS, found, strict=False):
+                also = f" (also: {', '.join(candidate.aliases)})" if candidate.aliases else ""
+                blocks.append(
+                    f"  {letter}) {candidate.name}{also}\n"
+                    + "\n".join(f"  {line}" for line in describe(candidate, False).split("\n"))
+                )
+        try:
+            answer = model.invoke_json(
+                f"adopt_{kind}s",
+                [SystemMessage(prompts.adopt_system(kind)), HumanMessage("\n\n".join(blocks))],
+                Adoptions,
+            )
+        except BadModelOutput:
+            continue
+        done: set[int] = set()
+        for match in answer.matches:
+            letter = match.candidate.strip().upper()[:1]
+            if not 1 <= match.number <= len(batch) or match.number in done or not letter:
+                continue
+            entity, found = batch[match.number - 1]
+            index = LETTERS.find(letter)
+            if not 0 <= index < len(found) or session.get(Entity, found[index].id) is None:
+                continue
+            done.add(match.number)
+            absorb(session, found[index], entity)
+        session.commit()
 
 
 SUMMARY_BATCH = 4

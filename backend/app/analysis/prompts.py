@@ -106,6 +106,30 @@ Reply with one JSON object and nothing else:
 Use an empty list when nothing should be merged."""
 
 
+ADOPT_SYSTEM = """Below are numbered {noun} that a book never calls by a proper name (the old \
+man, the mentor, a girl), each with the chapters it appears in, the named ones it appears \
+with, and what the text says about it with the book's own words. Under each are lettered \
+candidates: named ones from the same book who may be the same.
+
+For each numbered entry decide whether it is one of its candidates. It is the same one when \
+the signs agree and nothing contradicts them:
+- sex and age fit, and the looks fit;
+- the role, occupation or title fits;
+- it appears with the people the candidate is with (friends, family, master, servants, \
+enemies), and what it does fits the candidate's part in the story.
+It is not the same one when anything clearly contradicts (sex, age, looks, role), or when \
+it acts beside the candidate as a different person in the same scene. A crowd or a group is \
+never one person. When in doubt, choose nothing: a wrong merge is worse than a card left \
+apart.
+
+Reply with one JSON object and nothing else, listing only the entries that match:
+{{"matches": [{{"number": 1, "candidate": "B"}}]}}"""
+
+
+def adopt_system(kind: str) -> str:
+    return ADOPT_SYSTEM.format(noun=_noun(kind))
+
+
 SUMMARY_SYSTEM = """Below are numbered cards of {noun} from one book. Each lists the chapters where \
 it appears, the texts written for it so far (if any) and facts taken from the text, chapter \
 by chapter: "about" facts tell who or what it is, "looks" facts how it looks (with the words \

@@ -573,3 +573,38 @@ def test_summary_facts_come_from_every_chapter_in_turn():
     ]
     picked = analysis._spread(facts, {"a": 0, "b": 1, "c": 2}, 4, set())
     assert [f.text for f in picked] == ["a-0", "b-0", "c-0", "a-1"]
+
+
+def test_a_card_without_a_name_joins_the_named_one_it_matches(session, project):
+    first, second = project.chapters
+
+    def card(name, chapter, text, uncertain=False):
+        entity = Entity(project_id=project.id, kind="character", name=name, aliases=[])
+        entity.uncertain = uncertain
+        entity.facts = [
+            EntityFact(chapter_id=chapter.id, chapter_hash="", category="permanent", text=text)
+        ]
+        session.add(entity)
+        return entity
+
+    named = card("Рыхташ", first, "седая борода")
+    card("Люта", second, "красное платье")
+    card("Люта", first, "рыжая").name = "Зіхцінка"
+    old = card("старик", second, "седая борода", uncertain=True)
+    session.commit()
+    asked = []
+
+    class Judge:
+        def invoke_json(self, operation, messages, schema):
+            asked.append(messages[-1].content)
+            return analysis.Adoptions(matches=[analysis.Adoption(number=1, candidate="A")])
+
+    analysis.adopt_uncertain(session, Judge(), project.id, "character")
+    listing = asked[0]
+    # The candidates are the named ones sharing its chapters or its company, best first.
+    assert listing.startswith("[1] старик (no proper name)") and "A) Люта" in listing
+    assert session.get(Entity, old.id) is None
+    lyuta = next(
+        e for e in analysis._entities(session, project.id, "character") if e.name == "Люта"
+    )
+    assert "старик" in lyuta.aliases and named.id
