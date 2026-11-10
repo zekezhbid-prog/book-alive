@@ -258,7 +258,8 @@ function Card({ entity, projectId, others, onChanged, onError, gallery }: CardPr
           </div>
         )}
       </div>
-      <GeneralDescription key={entity.id} entity={entity} />
+      {/* Its own key: the gallery beside it is keyed by the card id too. */}
+      <GeneralDescription key={`description-${entity.id}`} entity={entity} />
       {entity.profile.length + entity.permanent.length > 0 && (
         <details>
           <summary className="muted">{t('entities.facts')}</summary>
