@@ -15,7 +15,7 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from pydantic import ConfigDict
-from sqlalchemy import Integer, delete, func, or_, select
+from sqlalchemy import Integer, delete, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Chapter, Chunk, Project
@@ -163,8 +163,46 @@ def search(
         )
     best = sorted(scores, key=scores.get, reverse=True)[:limit]
     hits = session.scalars(select(Chunk).where(Chunk.id.in_(best))).all()
-    hits = sorted(hits, key=lambda c: best.index(c.id))
+    return _widen(session, sorted(hits, key=lambda c: best.index(c.id)))
 
+
+MENTION_CHUNKS = 20
+
+
+def _name_stems(query: str) -> list[str]:
+    """Words written with a capital letter (names, in a search query of key words), cut
+    to a stem that survives case endings: "Журэі" -> "журэ", "Люты" -> "лют"."""
+    words = {w for w in re.findall(r"\w+", query) if len(w) >= 4 and w[0].isupper()}
+    return sorted({w.casefold()[: len(w) - (1 if len(w) <= 5 else 2)] for w in words})
+
+
+def mentions(
+    session: Session, project_id: str, query: str, chapter_ids: list[str] | None = None
+) -> list[Passage]:
+    """Every place the names of the query occur, not just the few best hits: a question
+    about someone ("her maid") is answered by what surrounds their name across the book.
+    Places that also share the other words of the query come first, then book order."""
+    names = _name_stems(query)
+    if not names:
+        return []
+    others = [s for s in _stems(query) if not any(s.startswith(n) for n in names)]
+    in_scope = [Chunk.project_id == project_id]
+    if chapter_ids:
+        in_scope.append(Chunk.chapter_id.in_(chapter_ids))
+    shared = sum((func.cast(Chunk.text.ilike(f"%{w}%"), Integer) for w in others), start=0)
+    rows = session.execute(
+        select(Chunk, Chapter.position)
+        .join(Chapter, Chapter.id == Chunk.chapter_id)
+        .where(*in_scope, or_(*(Chunk.text.ilike(f"%{n}%") for n in names)))
+        .order_by(desc(shared) if others else Chapter.position, Chapter.position, Chunk.position)
+        .limit(MENTION_CHUNKS)
+    ).all()
+    # Read in book order: the story of a person unfolds chapter by chapter.
+    return _widen(session, [c for c, _ in sorted(rows, key=lambda r: (r[1], r[0].position))])
+
+
+def _widen(session: Session, hits: list[Chunk]) -> list[Passage]:
+    """Each hit with the chunk before and after it, without repeating text."""
     passages: list[Passage] = []
     used: set[tuple[str, int]] = set()
     for hit in hits:

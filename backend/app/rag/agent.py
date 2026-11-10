@@ -35,7 +35,8 @@ book itself. You have its table of contents below and three tools:
 they are, the people around them (servants, family, friends, enemies), and the chapters \
 they appear in. The quickest way to learn a name the question does not give ("her maid", \
 "his brother") and where to look. A card is not a source: confirm what it says in the \
-chapters and cite those.
+chapters and cite those. Only the names listed in the table of contents have cards; \
+for anyone else, search.
 - search: finds short passages by meaning and by words. Good for a name, an object, a \
 particular moment.
 - read: opens a whole chapter by its number. Use it when the answer depends on events, \
@@ -54,8 +55,10 @@ Rules:
 "This chapter" is the one marked "open now".
 - Otherwise everything in the table of contents is in scope. Do not settle for fragments when the question \
 needs more: read the chapters they come from.
-- When the question is about a character or place, or about someone tied to them, look \
-at their card first.
+- Each step makes the reader wait several seconds. When the sources you have already \
+answer the question, answer at once; take a step only for what is still missing.
+- When the question is about someone tied to a character with a card, and the sources do \
+not name them yet, look at that card.
 - Plan with the table of contents: it lists who and what appears in each chapter. Open \
 the chapters where the people, places or things of the question appear; when the question \
 is about how something began or developed, start from the earliest of them.
@@ -198,6 +201,8 @@ def decide(state: State, config: RunnableConfig) -> dict:
         + ("Cards (not sources, do not cite):\n\n" + "\n\n".join(notes) + "\n\n" if notes else "")
         + f"Sources:\n\n{_sources_text(state['sources']) or '(none yet)'}"
     )
+    if c.get("language_note"):
+        request += f"\n\n{c['language_note']}"
     if steps >= MAX_STEPS:
         request += f"\n\n{FORCE_ANSWER}"
     messages: list[BaseMessage] = [SystemMessage(system), *c.get("history", [])]

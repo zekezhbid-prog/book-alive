@@ -507,3 +507,18 @@ def test_chat_model_falls_back_when_temperature_is_refused(session, project, mon
     model.llm = model._build()
     assert model.invoke("chat", []) == "{}"
     assert built == [0.0, None] and model.temperature is None
+
+
+def test_mentions_bring_every_place_a_name_occurs(session, project):
+    index_project(session, project)
+    from app.rag.index import mentions
+
+    found = mentions(session, project.id, "служанка Люты")  # another case ending
+    assert any("Люта шла" in p.text for p in found)
+    assert mentions(session, project.id, "служанка") == []  # no name, nothing extra
+
+
+def test_first_search_includes_the_places_of_the_names(session, project):
+    model = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
+    chat.ask(session, project, model, "Чем занят Рыхташ?")
+    assert "Рыхташ вошёл в старую мельницу" in model.prompts[0]

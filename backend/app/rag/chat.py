@@ -14,7 +14,7 @@ from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
 from app.models import FACT_PERMANENT, ChatMessage, ChatThread, Entity, Project, new_id, now
 from app.rag import agent
-from app.rag.index import BookRetriever, index_project, search
+from app.rag.index import BookRetriever, index_project, mentions, search
 from app.scenes.service import entities_in
 
 HISTORY_MESSAGES = 6
@@ -159,11 +159,20 @@ def ask_events(
     query = f"{previous}\n{question}".strip()
     sample = _book_sample(project)
     if needs_translation(query, sample):
-        query = _translate(model, query, sample, _book_names(session, project))
+        query = _translate(model, query, sample)
     yield Status("search", query)
+    found_passages = search(session, project.id, query, 6, focus, chapters or None)
+    # Everywhere the names of the question occur: "her maid" is found next to "her" name.
+    seen = {(p.chapter_id, p.paragraph) for p in found_passages}
+    found_passages += [
+        p
+        # The question too: a translation may garble a name the question spells well.
+        for p in mentions(session, project.id, f"{query} {question}", chapters or None)
+        if (p.chapter_id, p.paragraph) not in seen
+    ]
     sources = [
         agent.passage_document(p.chapter_id, p.chapter_title, p.paragraph, p.text)
-        for p in search(session, project.id, query, 6, focus, chapters or None)
+        for p in found_passages
     ]
     found = ", ".join(f"[{n}]" for n in range(1, len(sources) + 1)) or "nothing"
     state: agent.State = {
@@ -180,6 +189,10 @@ def ask_events(
             "model": model,
             "project": project,
             "open_chapter_id": focus,
+            # Sources in the book's language pull the answer into it; say it outright.
+            "language_note": (
+                LANGUAGE_NOTE.format(question) if needs_translation(question, sample) else ""
+            ),
             "scope": chapters,
             "history": [
                 HumanMessage(m.content) if m.role == "user" else AIMessage(m.content)
@@ -217,6 +230,12 @@ def ask_events(
     yield Reply(asked, reply)
 
 
+LANGUAGE_NOTE = (
+    "The question is not in the language of the book. Write the answer in the language of "
+    "the question, not of the book; quotes stay as the book has them. The question: «{}»"
+)
+
+
 class SearchQuery(BaseModel):
     query: str = ""
 
@@ -250,19 +269,7 @@ def needs_translation(question: str, sample: str) -> bool:
     return bool((asked & MARKER_LETTERS) - book)
 
 
-def _book_names(session: Session, project: Project) -> list[str]:
-    """Names from the cards, so a misspelt or foreign form in the question is put right."""
-    return list(
-        session.scalars(
-            select(Entity.name)
-            .where(Entity.project_id == project.id, Entity.uncertain.is_(False))
-            .order_by(Entity.name)
-            .limit(200)
-        )
-    )
-
-
-def _translate(model: TextModel, query: str, sample: str, names: list[str]) -> str:
+def _translate(model: TextModel, query: str, sample: str) -> str:
     """The question as a search query in the book's language; the question itself if the
     model cannot help."""
     try:
@@ -271,12 +278,12 @@ def _translate(model: TextModel, query: str, sample: str, names: list[str]) -> s
             [
                 SystemMessage(
                     "Rewrite the user's question as a short search query in the language of "
-                    "the book excerpt below. Write names as the book spells them: the user "
-                    "may misspell them or use another language's form. Reply with one JSON "
-                    'object: {"query": "..."}\n\n'
-                    + (f"Names in the book: {', '.join(names)}\n\n" if names else "")
-                    + "Book excerpt:\n"
-                    + sample[:1500]
+                    "the book excerpt below: the key words only (names, things, actions), "
+                    "not a whole question. Keep every name of the question, spelt in the "
+                    "book's alphabet and in its base form; never put another name in its "
+                    "place. "
+                    'Reply with one JSON object: {"query": "..."}\n\n'
+                    "Book excerpt:\n" + sample[:1500]
                 ),
                 HumanMessage(query),
             ],
