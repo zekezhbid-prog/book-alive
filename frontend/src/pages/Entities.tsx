@@ -262,7 +262,8 @@ function Card({ entity, projectId, others, onChanged, onError, gallery, writing 
           </div>
         )}
       </div>
-      {writing && (
+      {/* A writer describes any card; in a finished book only the user's own text is shown. */}
+      {(writing || entity.description) && (
         <DescriptionEditor
           key={entity.id}
           value={entity.description}
@@ -356,14 +357,21 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
   const ids = project.chapters.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
 
+  // The old estimate stays on screen while the new one is counted (by the server, from the
+  // text length, no model involved), so the dialog keeps its size under the mouse.
+  const [counting, setCounting] = useState(false)
   useEffect(() => {
-    setEstimate(null)
     if (!idsKey) return
     let stale = false
+    setCounting(true)
     const timer = setTimeout(
       () =>
         api.estimate(project.id, kind, idsKey.split(','), fresh).then(
-          (result) => !stale && setEstimate(result),
+          (result) => {
+            if (stale) return
+            setEstimate(result)
+            setCounting(false)
+          },
           (e) => !stale && setError(errorText(t, e)),
         ),
       300,
@@ -437,7 +445,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
             </label>
           ))}
         </div>
-        <div className="notice">
+        <div className={`notice estimate ${counting ? 'counting' : ''}`}>
           <b>{t('run.estimate')}</b>
           {!idsKey ? (
             <div>{t('error.no_chapters_selected')}</div>
@@ -468,7 +476,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
           <button className="btn" onClick={onClose}>
             {t('app.cancel')}
           </button>
-          <button className="btn primary" disabled={!idsKey || !estimate || aiReady === false} onClick={start}>
+          <button className="btn primary" disabled={!idsKey || !estimate || counting || aiReady === false} onClick={start}>
             {t('run.start')}
           </button>
         </div>

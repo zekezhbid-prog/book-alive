@@ -434,3 +434,33 @@ def test_dialog_knows_which_chapters_are_read_and_which_changed(client, session,
     status = client.get(url, params={"kind": "character"}).json()
     assert status == {"read": [], "changed": [first.id]}
     assert second.id not in status["read"]
+
+
+def test_a_wrong_alias_does_not_swallow_another_character(session, project):
+    """The model once gave a friend's name as a nickname: the friend keeps a card of his own."""
+
+    class Confused(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is analysis.ChapterEntities:
+                text = messages[-1].content
+                if 'Chapter "Мельница"' in text:
+                    return schema.model_validate(
+                        {"entities": [{"name": "Рыхташ", "aliases": ["Люта"], "facts": []}]}
+                    )
+                assert "Люта" not in text.split("Chapter")[0]  # not fed back as known
+                return schema.model_validate(
+                    {
+                        "entities": [
+                            {"name": "Рыхташ", "aliases": ["Люта"], "facts": []},
+                            {"name": "Люта", "facts": []},
+                        ]
+                    }
+                )
+            if schema is analysis.Groups:
+                return analysis.Groups(groups=[])
+            return super().invoke_json(operation, messages, schema)
+
+    run(session, project, Confused())
+    people = cast(session, project)
+    assert set(people) == {"Рыхташ", "Люта"}
+    assert people["Рыхташ"].aliases == []

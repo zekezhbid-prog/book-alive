@@ -379,6 +379,10 @@ const ru = {
   'generate.copy': 'Скопировать промпт',
   'generate.no_style': 'Стиль проекта не выбран: промпт будет без стиля, а рисовать нельзя.',
   'entities.add.prompt': 'Имя, как в книге:',
+  'add.title.character': 'Новый персонаж',
+  'add.title.location': 'Новая локация или предмет',
+  'add.description': 'Описание (можно оставить пустым)',
+  'add.create': 'Создать',
 
   'tabs.scenes': 'Сцены',
   'scenes.empty':
@@ -881,6 +885,10 @@ const en: Record<keyof typeof ru, string> = {
   'generate.no_style':
     'No project style is chosen: the prompt will have no style, and drawing is disabled.',
   'entities.add.prompt': 'Name, as in the book:',
+  'add.title.character': 'New character',
+  'add.title.location': 'New location or object',
+  'add.description': 'Description (optional)',
+  'add.create': 'Create',
 
   'tabs.scenes': 'Scenes',
   'scenes.empty':

@@ -4,7 +4,7 @@ import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, 
 import { errorText, useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
 import { HandIcon, PlusIcon, SparklesIcon } from './icons'
-import { askText } from '../dialogs'
+import { AddCardDialog } from './AddCardDialog'
 import { useSessionActions } from '../session'
 import { useView } from '../view'
 
@@ -117,16 +117,16 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   }
 
   // A card for someone the search has not reached yet, so pictures can be attached now.
-  const addCard = async (section: 'characters' | 'locations') => {
-    const name = (await askText(t('entities.add.prompt')))?.trim()
-    if (!name) return
-    try {
-      const created = await api.createEntity(project.id, KIND[section], name)
-      setFetched((f) => ({ ...f, [section]: [...(f[section] ?? []), created] }))
-      navigate(`${base}/${section}/${created.id}`)
-    } catch (e) {
-      setError(errorText(t, e))
-    }
+  const [adding, setAdding] = useState<'characters' | 'locations' | null>(null)
+  const addCard = (section: 'characters' | 'locations') => setAdding(section)
+  const added = (section: 'characters' | 'locations', created: EntityBrief) => {
+    setAdding(null)
+    setFetched((f) => {
+      const list = f[section] ?? []
+      // The server returns the existing card when the name is already taken.
+      return { ...f, [section]: list.some((e) => e.id === created.id) ? list : [...list, created] }
+    })
+    navigate(`${base}/${section}/${created.id}`)
   }
 
   const count = (section: Section) =>
@@ -237,23 +237,22 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     return (
       <span className="nav-actions">
         <button
-          className="nav-action"
+          className="btn primary nav-action"
           title={t(`nav.add.${section}`)}
           aria-label={t(`nav.add.${section}`)}
           onClick={() => addCard(section)}
         >
+          <PlusIcon />
           <HandIcon />
-          <span className="nav-action-plus">+</span>
         </button>
         {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
         <button
-          className="nav-action"
+          className="btn primary nav-action"
           title={t(`nav.find.${section}`)}
           aria-label={t(`nav.find.${section}`)}
           onClick={() => navigate(`${base}/${section}?find=1`)}
         >
           <SparklesIcon />
-          <span className="nav-action-plus">+</span>
         </button>
       </span>
     )
@@ -333,6 +332,14 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
             </>
           )}
         </div>
+      )}
+      {adding && (
+        <AddCardDialog
+          projectId={project.id}
+          kind={KIND[adding]}
+          onClose={() => setAdding(null)}
+          onCreated={(created) => added(adding, created)}
+        />
       )}
     </aside>
   )

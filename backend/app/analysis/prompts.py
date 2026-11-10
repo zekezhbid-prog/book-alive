@@ -3,7 +3,7 @@
 from app.models import KIND_CHARACTER
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 4
+PROMPT_VERSION = 5
 
 _SUBJECT = {
     "character": {
@@ -43,8 +43,9 @@ What to list: {what}.
 Rules:
 - Use only what this chapter states. Never invent details and never guess beyond the text.
 - "name": the fullest proper name the book uses. "aliases": other proper names and \
-nicknames of the same one. Never put common words there (girl, old man, guest, the smith): \
-many others can be called that.
+nicknames of the same one, only when the text makes plain that it is the same one. Never put \
+there the name of another entry, a friend, relative or companion. Never put common words \
+there (girl, old man, guest, the smith): many others can be called that.
 - Two different beings are two entries, even when they travel together or are related.
 - If it is one of the already known entries below, use exactly that name.
 - List everyone/everything that takes part in the chapter, even with no described details \

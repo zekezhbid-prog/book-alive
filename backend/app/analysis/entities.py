@@ -207,9 +207,9 @@ def extract(state: State, config: RunnableConfig) -> dict:
     if chapter is None or not chapter.text.strip() or _cached(session, chapter, run.kind):
         return {}
     known = _entities(session, run.project_id, run.kind)
-    known_text = "\n".join(
-        f"- {e.name}" + (f" (also: {', '.join(e.aliases)})" if e.aliases else "") for e in known
-    )
+    # Main names only: listing the aliases too would hand an earlier chapter's mistake
+    # (someone's friend given as their nickname) back to the model as a fact.
+    known_text = "\n".join(f"- {e.name}" for e in known)
     found: list[ExtractedEntity] = []
     for part in chunks(chapter.text):
         answer = model.invoke_json(
@@ -269,7 +269,11 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
         )
         for entity in existing:
             session.expire(entity, ["facts"])
-    by_key = {key: e for e in existing for key in {norm(e.name), *map(norm, e.aliases)}}
+    # A card is found only by its main name or a name the user merged into it by hand.
+    # Aliases the model suggested are not trusted for that: one wrong alias (a friend's
+    # name given as a nickname) would otherwise pull that friend into the card in every
+    # later chapter. A missed match is only a duplicate, which the merge pass handles.
+    by_key = {key: e for e in existing for key in {norm(e.name), *map(norm, e.pinned_names)}}
     cached = _cached(session, chapter, kind)
     paragraphs = chapter.text.split("\n\n")
 
@@ -285,14 +289,22 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
             paragraph=paragraph,
         )
 
-    for item in ChapterEntities.model_validate(cached.payload).entities if cached else []:
+    items = ChapterEntities.model_validate(cached.payload).entities if cached else []
+    # A name the model lists as an entry of its own is never also someone else's alias.
+    own_names = {norm(i.name) for i in items if i.name.strip()}
+    for item in items:
         name = item.name.strip()
         if not name:
             continue
         # Models still slip common nouns into aliases; proper names are capitalised.
-        names = [name, *(a.strip() for a in item.aliases if a.strip()[:1].isupper())]
-        # Only the entry's own name identifies it. Matching on aliases too would glue
-        # different characters together through one shared nickname.
+        names = [
+            name,
+            *(
+                a.strip()
+                for a in item.aliases
+                if a.strip()[:1].isupper() and norm(a) not in own_names
+            ),
+        ]
         entity = by_key.get(norm(name))
         if entity is None:
             entity = Entity(project_id=project_id, kind=kind, name=names[0], aliases=[])
@@ -304,8 +316,7 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
             if norm(n) not in taken and by_key.get(norm(n)) in (None, entity)
         ]
         entity.aliases = [*entity.aliases, *new_aliases]
-        for known_name in names:
-            by_key.setdefault(norm(known_name), entity)
+        by_key.setdefault(norm(name), entity)
         entity.facts.append(fact(FACT_MENTION))
         seen = set()
         for found in item.facts:
@@ -313,6 +324,17 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
                 seen.add(norm(found.text))
                 entity.facts.append(fact(found.category, found.text.strip(), found.quote.strip()))
     session.flush()
+    # An alias that is another card's main name was a mistake of an earlier chapter.
+    cards = _entities(session, project_id, kind)
+    main_names = {norm(e.name): e for e in cards}
+    for entity in cards:
+        kept = [
+            a
+            for a in entity.aliases
+            if main_names.get(norm(a), entity) is entity or a in entity.pinned_names
+        ]
+        if kept != entity.aliases:
+            entity.aliases = kept
     # An entity that existed only in the old version of this chapter is gone now.
     for entity in existing:
         session.refresh(entity, ["facts"])
