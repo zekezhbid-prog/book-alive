@@ -212,7 +212,7 @@ export const by: Record<string, string> = {
   'usage.op.video_prompt': 'Промпт для відэа',
   'usage.op.refine_prompt': 'Праўка промпта',
 
-  'chat.new': '+ Новы чат',
+  'chat.new': 'Новы чат',
   'chat.choose': 'Абраць чат',
   'chat.untitled': 'Новы чат',
   'chat.settings': 'Налады',

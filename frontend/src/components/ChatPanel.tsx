@@ -12,6 +12,7 @@ import {
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from './AiNotice'
+import { BoldPlusIcon, CloseIcon, GearIcon, SaveIcon, TrashIcon } from './icons'
 
 interface Props {
   projectId: string
@@ -168,12 +169,19 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
       <div className="row chat-head">
         <h4>{t('chat.title')}</h4>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={newChat} disabled={waiting}>
-          {t('chat.new')}
+        <button
+          className="btn primary nav-action"
+          onClick={newChat}
+          disabled={waiting}
+          title={t('chat.new')}
+          aria-label={t('chat.new')}
+        >
+          <BoldPlusIcon />
         </button>
       </div>
       {threads.length > 0 && (
         <div className="row chat-threads">
+          {/* Opens over the conversation, so the messages below never move. */}
           <select
             className="input small"
             value={threadId}
@@ -189,37 +197,40 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
           </select>
           {thread && (
             <button
-              className={`btn ghost small${settingsOpen ? ' active' : ''}`}
+              className="btn primary nav-action"
               onClick={() => setSettingsOpen((open) => !open)}
               disabled={waiting}
+              title={t('chat.settings')}
+              aria-label={t('chat.settings')}
+              aria-expanded={settingsOpen}
             >
-              {t('chat.settings')}
+              <GearIcon />
             </button>
+          )}
+          {thread && settingsOpen && (
+            <ThreadSettings
+              key={thread.id}
+              thread={thread}
+              chapters={chapters}
+              onCancel={() => setSettingsOpen(false)}
+              onDelete={remove}
+              onSave={async (fields) => {
+                try {
+                  const saved = await api.updateChat(projectId, thread.id, fields)
+                  setThreads((list) => list.map((th) => (th.id === saved.id ? saved : th)))
+                  setSettingsOpen(false)
+                } catch (e) {
+                  setError(errorText(t, e))
+                }
+              }}
+            />
           )}
         </div>
       )}
-      {thread && !settingsOpen && (
+      {thread && (
         <button className="chat-scope faint small" onClick={() => setSettingsOpen(true)}>
           {scopeText(thread)}
         </button>
-      )}
-      {thread && settingsOpen && (
-        <ThreadSettings
-          key={thread.id}
-          thread={thread}
-          chapters={chapters}
-          onCancel={() => setSettingsOpen(false)}
-          onDelete={remove}
-          onSave={async (fields) => {
-            try {
-              const saved = await api.updateChat(projectId, thread.id, fields)
-              setThreads((list) => list.map((th) => (th.id === saved.id ? saved : th)))
-              setSettingsOpen(false)
-            } catch (e) {
-              setError(errorText(t, e))
-            }
-          }}
-        />
       )}
       <div className="chat-log">
         {messages.length === 0 && !waiting && <p className="faint small">{t('chat.hint')}</p>}
@@ -286,6 +297,11 @@ function ThreadSettings({
   const [whole, setWhole] = useState(thread.chapter_ids.length === 0)
   const [chosen, setChosen] = useState<Set<string>>(new Set(thread.chapter_ids))
   const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    const close = (e: KeyboardEvent) => e.key === 'Escape' && onCancel()
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [onCancel])
   const toggle = (id: string) =>
     setChosen((set) => {
       const next = new Set(set)
@@ -304,7 +320,7 @@ function ThreadSettings({
     setSaving(false)
   }
   return (
-    <div className="chat-settings">
+    <div className="chat-settings" role="dialog" aria-label={t('chat.settings')}>
       <label className="small faint" htmlFor="chat-title">
         {t('chat.settings.name')}
       </label>
@@ -342,16 +358,32 @@ function ThreadSettings({
         </div>
       )}
       {!valid && <p className="error small">{t('chat.settings.none')}</p>}
-      <div className="row">
-        <button className="btn primary small" disabled={!valid || saving} onClick={save}>
-          {t('chat.settings.save')}
+      <div className="row chat-settings-actions">
+        <button
+          className="btn primary nav-action"
+          disabled={!valid || saving}
+          onClick={save}
+          title={t('chat.settings.save')}
+          aria-label={t('chat.settings.save')}
+        >
+          <SaveIcon />
         </button>
-        <button className="btn ghost small" onClick={onCancel}>
-          {t('app.cancel')}
+        <button
+          className="btn ghost icon"
+          onClick={onCancel}
+          title={t('app.cancel')}
+          aria-label={t('app.cancel')}
+        >
+          <CloseIcon />
         </button>
         <span className="spacer" />
-        <button className="btn ghost small danger" onClick={onDelete}>
-          {t('chat.delete')}
+        <button
+          className="btn ghost icon danger"
+          onClick={onDelete}
+          title={t('chat.delete')}
+          aria-label={t('chat.delete')}
+        >
+          <TrashIcon />
         </button>
       </div>
     </div>
