@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Project, type StylePreset } from '../api'
+import { api, peek, type Project, type StylePreset } from '../api'
 import Gallery from '../components/Gallery'
 import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
@@ -11,9 +11,9 @@ import { ask } from '../dialogs'
 export default function Style() {
   const { t } = useI18n()
   const { projectId = '' } = useParams()
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const [presets, setPresets] = useState<StylePreset[]>([])
-  const [custom, setCustom] = useState('')
+  const [custom, setCustom] = useState(() => peek.project(projectId)?.style_text ?? '')
   const [error, setError] = useState('')
 
   useEffect(() => {

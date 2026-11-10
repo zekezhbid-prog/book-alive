@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   api,
+  peek,
   type Entity,
   type EntityBrief,
   type EntityKind,
@@ -28,9 +29,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const section = kind === 'character' ? 'characters' : 'locations'
-  const [project, setProject] = useState<Project | null>(null)
-  const [list, setList] = useState<EntityBrief[] | null>(null)
-  const [entity, setEntity] = useState<Entity | null>(null)
+  // The last answers are shown at once (no blink when switching tabs), then refreshed.
+  const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
+  const [list, setList] = useState<EntityBrief[] | null>(() => peek.entities(projectId, kind) ?? null)
+  const [entity, setEntity] = useState<Entity | null>(() => (entityId && peek.entity(entityId)) || null)
   const [run, setRun] = useState<Run | null>(null)
   // null: closed. Otherwise the chapters ticked when the dialog opens (empty = all).
   const [choosing, setChoosing] = useState<string[] | null>(null)
@@ -44,7 +46,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
     return api.entities(projectId, kind).then(setList, fail)
   }, [projectId, kind, fail])
   useEffect(() => {
-    setList(null)
+    setList(peek.entities(projectId, kind) ?? null)
     setRun(null)
     api.project(projectId).then(setProject, fail)
     api.latestRun(projectId, kind).then(setRun, fail)

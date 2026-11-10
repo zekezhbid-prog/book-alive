@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   api,
+  peek,
   type Angle,
   type ChapterBrief,
   type ImageInfo,
@@ -26,9 +27,10 @@ export default function Scenes() {
   const { t } = useI18n()
   const { projectId = '', sceneId } = useParams()
   const navigate = useNavigate()
-  const [project, setProject] = useState<Project | null>(null)
-  const [list, setList] = useState<SceneBrief[] | null>(null)
-  const [scene, setScene] = useState<Scene | null>(null)
+  // The last answers are shown at once (no blink when switching tabs), then refreshed.
+  const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
+  const [list, setList] = useState<SceneBrief[] | null>(() => peek.scenes(projectId) ?? null)
+  const [scene, setScene] = useState<Scene | null>(() => (sceneId && peek.scene(sceneId)) || null)
   const [error, setError] = useState('')
   const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
 
@@ -42,7 +44,7 @@ export default function Scenes() {
   const activeId = list?.some((s) => s.id === sceneId) ? sceneId : undefined
   useEffect(() => {
     if (!activeId) return setScene(null)
-    setScene(null)
+    setScene((shown) => (shown?.id === activeId ? shown : (peek.scene(activeId) ?? null)))
     api.scene(activeId).then(setScene, fail)
   }, [activeId, fail])
 

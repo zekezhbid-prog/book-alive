@@ -365,6 +365,26 @@ export class ApiError extends Error {
   }
 }
 
+// The last answer to each GET. A page opened again (a tab of the top bar) shows it at once
+// and refreshes it in the background, instead of a blank "Loading…" that makes the screen
+// blink. Forgotten when the user signs in or out.
+const lastAnswers = new Map<string, unknown>()
+const cached = <T,>(path: string) => lastAnswers.get(path) as T | undefined
+
+/** What the server said the last time, or undefined: for the first frame of a page only. */
+export const peek = {
+  project: (id: string) => cached<Project>(`/projects/${id}`),
+  entities: (projectId: string, kind: EntityKind) =>
+    cached<EntityBrief[]>(`/projects/${projectId}/entities?kind=${kind}`),
+  scenes: (projectId: string) => cached<SceneBrief[]>(`/projects/${projectId}/scenes`),
+  chats: (projectId: string) => cached<ChatThread[]>(`/projects/${projectId}/chats`),
+  chapter: (id: string) => cached<Chapter>(`/chapters/${id}`),
+  entity: (id: string) => cached<Entity>(`/entities/${id}`),
+  scene: (id: string) => cached<Scene>(`/scenes/${id}`),
+  chatMessages: (projectId: string, threadId: string) =>
+    cached<ChatMessage[]>(`/projects/${projectId}/chats/${threadId}/messages`),
+}
+
 // Pages and the left menu often ask for the same list at the same moment; while one such
 // GET is on its way the others wait for it instead of taking more database connections.
 const inFlight = new Map<string, Promise<unknown>>()
@@ -377,9 +397,14 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   }
   const pending = inFlight.get(path)
   if (pending) return pending as Promise<T>
-  const started = send<T>(method, path).finally(() => {
-    if (inFlight.get(path) === started) inFlight.delete(path)
-  })
+  const started = send<T>(method, path)
+    .then((answer) => {
+      lastAnswers.set(path, answer)
+      return answer
+    })
+    .finally(() => {
+      if (inFlight.get(path) === started) inFlight.delete(path)
+    })
   inFlight.set(path, started)
   return started
 }
@@ -392,8 +417,10 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
     init.body = JSON.stringify(body)
     init.headers = { 'Content-Type': 'application/json' }
   }
+  if (['/login', '/logout', '/register', '/password/reset'].includes(path)) lastAnswers.clear()
   const response = await fetch(`/api${path}`, init)
   if (response.status === 401 && path !== '/login') {
+    lastAnswers.clear()
     // The session ended (or never started): the app shows the login screen.
     window.dispatchEvent(new Event('login-required'))
   }

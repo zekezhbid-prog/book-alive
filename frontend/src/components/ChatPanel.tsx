@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   api,
   ApiError,
+  peek,
   type ChapterBrief,
   type ChatMessage,
   type ChatStatus,
@@ -38,13 +39,26 @@ function useChatError() {
 /** Questions about the book. Answers come only from its text, with links to the source.
  * The book has several conversations; each keeps its own history and may be limited to
  * chosen chapters. */
+/** The conversation the reader has open in each project, for as long as the page lives. */
+const openThread = new Map<string, string>()
+/** The messages last shown per conversation, newer than the cached GET after a question. */
+const shownMessages = new Map<string, ChatMessage[]>()
+const lastMessages = (projectId: string, threadId: string) =>
+  shownMessages.get(threadId) ?? peek.chatMessages(projectId, threadId)
+
 export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, onClose }: Props) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
   const chatError = useChatError()
-  const [threads, setThreads] = useState<ChatThread[]>([])
-  const [threadId, setThreadId] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  // Every page of the project has its own panel: it starts from the conversation the
+  // reader had open and the last answers, so switching tabs does not blink.
+  const [threads, setThreads] = useState<ChatThread[]>(() => peek.chats(projectId) ?? [])
+  const [threadId, setThreadId] = useState(
+    () => openThread.get(projectId) ?? peek.chats(projectId)?.[0]?.id ?? '',
+  )
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => (threadId ? lastMessages(projectId, threadId) : undefined) ?? [],
+  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [question, setQuestion] = useState('')
   const [waiting, setWaiting] = useState(false)
@@ -71,18 +85,23 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, 
     [projectId],
   )
   useEffect(() => {
-    setThreadId('')
-    setMessages([])
-    // The most recent conversation opens first.
+    // The conversation open before stays open; otherwise the most recent one.
     reloadThreads().then(
-      (list) => setThreadId(list[0]?.id ?? ''),
+      (list) => setThreadId((open) => (list.some((th) => th.id === open) ? open : (list[0]?.id ?? ''))),
       (e) => setError(errorText(t, e)),
     )
   }, [reloadThreads, t])
   useEffect(() => {
+    if (threadId) openThread.set(projectId, threadId)
+  }, [projectId, threadId])
+  useEffect(() => {
+    if (threadId && messages.length) shownMessages.set(threadId, messages)
+  }, [threadId, messages])
+  useEffect(() => {
     setSettingsOpen(false)
     setResumed('')
     if (!threadId) return setMessages([])
+    setMessages(lastMessages(projectId, threadId) ?? [])
     let stopped = false
     let timer = 0
     const load = async () => {

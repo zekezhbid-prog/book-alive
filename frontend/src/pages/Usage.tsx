@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Project, type Usage as UsageData } from '../api'
+import { api, peek, type Project, type Usage as UsageData } from '../api'
 import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n, type MessageKey } from '../i18n'
@@ -9,7 +9,7 @@ import { errorText, useI18n, type MessageKey } from '../i18n'
 export default function Usage() {
   const { t, has } = useI18n()
   const { projectId = '' } = useParams()
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [error, setError] = useState('')
 

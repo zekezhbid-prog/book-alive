@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, ApiError, type Chapter, type EntityBrief, type Project } from '../api'
+import { api, ApiError, peek, type Chapter, type EntityBrief, type Project } from '../api'
 import ChapterEditor from '../components/ChapterEditor'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
@@ -17,13 +17,17 @@ export default function Book() {
   const { projectId = '', chapterId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [chapter, setChapter] = useState<Chapter | null>(null)
+  // Shown at once when the book was open before; the server's answer replaces it.
+  const [chapter, setChapter] = useState<Chapter | null>(() => {
+    const id = chapterId ?? peek.project(projectId)?.chapters[0]?.id
+    return (id && peek.chapter(id)) || null
+  })
   // Bumped whenever chapter text may have changed on the server behind the editor's back
   // (rollback, merge, split): the open chapter is refetched and its component remounted.
   const [epoch, setEpoch] = useState(0)
   const [names, setNames] = useState<NamedEntity[]>([])
   const [error, setError] = useState('')
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const view = useView({ id: projectId, mode: project?.mode ?? 'writer' })
   const [side] = useSide(projectId)
 

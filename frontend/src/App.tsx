@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { api, type SessionInfo } from './api'
 import { errorText, LANGS, useI18n, type Lang } from './i18n'
 import AccountMenu from './components/AccountMenu'
+import About from './pages/About'
 import Book from './pages/Book'
 import Entities from './pages/Entities'
 import Projects from './pages/Projects'
@@ -15,6 +16,7 @@ export default function App() {
   const { lang, setLang } = useI18n()
   // A hosted instance has accounts (e-mail and password); locally there is no login.
   const [session, setSession] = useState<SessionInfo | null>(null)
+  const { pathname } = useLocation()
 
   useEffect(() => {
     api.session().then(setSession, () => setSession({ accounts: false, authenticated: true, email: '', is_admin: true }))
@@ -42,16 +44,16 @@ export default function App() {
     return (
       <>
         <header className="topbar">
-          <span className="brand">
+          <Link to="/about" className="brand">
             <span className="brand-mark">
               <img src="/favicon.svg" alt="" />
             </span>
             <span className="brand-name">Lorebook</span>
-          </span>
+          </Link>
           <span className="spacer" />
           {languageButton}
         </header>
-        <Auth onDone={setSession} />
+        {pathname === '/about' ? <About signedIn={false} /> : <Auth onDone={setSession} />}
       </>
     )
   }
@@ -60,13 +62,14 @@ export default function App() {
       {/* The mark on the left, then the open book's title, tabs and search (pages put them
           into the slot); the name of the app and the account menu in the right corner. */}
       <header className="topbar">
-        <Link to="/" className="brand brand-mark-only" title="Lorebook">
+        {/* The name of the app leads to what it is; the projects are in the account menu. */}
+        <Link to="/about" className="brand brand-mark-only" title="Lorebook">
           <span className="brand-mark">
             <img src="/favicon.svg" alt="Lorebook" />
           </span>
         </Link>
         <div id="topbar-slot" className="topbar-slot" />
-        <Link to="/" className="brand brand-right">
+        <Link to="/about" className="brand brand-right">
           <span className="brand-name">Lorebook</span>
         </Link>
         <AccountMenu
@@ -99,6 +102,7 @@ export default function App() {
         <Route path="/projects/:projectId/style" element={<Style />} />
         <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/about" element={<About signedIn />} />
       </Routes>
     </>
   )

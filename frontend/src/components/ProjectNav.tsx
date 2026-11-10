@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief } from '../api'
+import { api, peek, type EntityBrief, type EntityKind, type Project, type SceneBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { BoldPlusIcon, PlusIcon, SparklesIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
@@ -47,7 +47,12 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     characters?: EntityBrief[]
     locations?: EntityBrief[]
     scenes?: SceneBrief[]
-  }>({})
+  }>(() => ({
+    // The last lists are shown at once (no blink when switching tabs), then refreshed.
+    characters: peek.entities(project.id, 'character'),
+    locations: peek.entities(project.id, 'location'),
+    scenes: peek.scenes(project.id),
+  }))
   const [error, setError] = useState('')
   // A list the page passes in (even while it is still loading) is not fetched again here.
   const hasCharacters = given.characters !== undefined

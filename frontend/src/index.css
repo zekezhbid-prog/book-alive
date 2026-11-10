@@ -489,3 +489,16 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .tool-icon.active { color: var(--accent); background: var(--accent-soft); }
 .tool-dot { position: absolute; top: 5px; right: 5px; }
 .topbar .segmented.icons button { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
+
+/* The About page behind the Lorebook name. */
+.about h1 { margin-bottom: 16px; }
+.about h2 { margin: 40px 0 16px; }
+.about-lead { font-size: 18px; line-height: 1.6; }
+.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.about-grid .card { padding: 20px 22px; }
+.about-grid .card h3 { margin-bottom: 8px; }
+.about-list { display: grid; gap: 14px; margin: 0; }
+.about-list dt { font-weight: 700; }
+.about-list dd { margin: 2px 0 0; }
+.about-steps { padding-left: 22px; display: grid; gap: 8px; margin: 0 0 32px; }
+.about .faint { margin-bottom: 20px; }
