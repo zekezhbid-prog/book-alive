@@ -97,10 +97,18 @@ Use an empty list when nothing should be merged."""
 
 
 SUMMARY_SYSTEM = """Below are numbered cards of {noun} from one book. Each lists the chapters where \
-it appears and facts taken from the text. For every card write one coherent description of \
-3 to 5 sentences in the language of the facts: who or what it is, its role in the book, the \
-main traits and what is known about it overall. Connected prose, not a list and not quotes.
-Use only the given facts. Never invent anything; if little is known, write less.
+it appears, the description written for it so far (if any) and facts taken from the text. \
+For every card write one general description of 3 to 5 sentences in the language of the \
+facts: who or what it is, its role and function in the book, its lasting looks, and the \
+traits it shows throughout. Connected prose, not a list and not quotes.
+- A description written so far is the base: keep what it says, correct it only where the \
+facts contradict it, and add what the new facts tell about the card as a whole. Do not \
+drop it in favour of the latest chapters.
+- The description is of the card as a whole, not of a moment: leave out moods, feelings \
+and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
+a lasting trait.
+Use only the given facts and the description so far. Never invent anything; if little is \
+known, write less.
 
 Reply with one JSON object and nothing else:
 {{"summaries": [{{"number": 1, "text": ""}}]}}"""

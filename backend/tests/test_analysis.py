@@ -8,7 +8,15 @@ from app.analysis import prompts, runner
 from app.api import analysis as analysis_api
 from app.db import get_engine
 from app.llm.calls import BadModelOutput, _parse, estimate_tokens
-from app.models import AnalysisRun, Chapter, ChapterExtraction, Entity, Project, text_hash
+from app.models import (
+    AnalysisRun,
+    Chapter,
+    ChapterExtraction,
+    Entity,
+    EntityFact,
+    Project,
+    text_hash,
+)
 
 CHAPTER_1 = (
     "Рыхташ вошёл в мельницу. На нём был чёрный плащ.\n\n"
@@ -520,3 +528,30 @@ def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(ses
     people = cast(session, project)
     assert set(people) == {"Рыхташ"}
     assert {f.text for f in people["Рыхташ"].facts if f.text} == {"седая борода", "кольчуга"}
+
+
+def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
+    run(session, project, FakeModel())
+    card = cast(session, project)["Рыхташ"]
+    card.summary = "Старый мельник, связной князя."
+    card.facts.append(
+        EntityFact(
+            category="state",
+            text="Сегодня злой и в мокром плаще",
+            chapter_id=card.facts[0].chapter_id,
+            chapter_hash=card.facts[0].chapter_hash,
+        )
+    )
+    session.commit()
+    seen = []
+
+    class Watching(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is analysis.Summaries:
+                seen.append(messages[-1].content)
+            return super().invoke_json(operation, messages, schema)
+
+    analysis.summarize_cards(session, Watching(), project.id, "character")
+    listing = next(text for text in seen if "Рыхташ" in text)
+    assert "description so far: Старый мельник, связной князя." in listing
+    assert "мокром плаще" not in listing  # one chapter's state, not the general description

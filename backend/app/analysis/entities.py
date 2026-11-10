@@ -438,11 +438,15 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
     lines = [f"[{number}] {entity.name}{also}"]
     if chapters:
         lines.append(f"chapters ({len(chapters)}): " + ", ".join(titles[c] for c in chapters[:12]))
-    # General description and lasting looks first, then what the chapters say in passing.
+    if entity.summary.strip():
+        lines.append(f"description so far: {entity.summary.strip()}")
+    # The general description and lasting looks. What is true in one chapter only (clothes,
+    # wounds) would make the description about a moment; it is used only when nothing else
+    # is known.
     order = {FACT_PROFILE: 0, FACT_PERMANENT: 1}
-    facts = sorted(
-        (f for f in entity.facts if f.text.strip()), key=lambda f: order.get(f.category, 2)
-    )
+    facts = [f for f in entity.facts if f.text.strip()]
+    lasting = [f for f in facts if f.category in order]
+    facts = sorted(lasting, key=lambda f: order[f.category]) if lasting else facts
     seen: set[str] = set()
     for fact in facts:
         if norm(fact.text) not in seen and len(seen) < SUMMARY_FACTS:
