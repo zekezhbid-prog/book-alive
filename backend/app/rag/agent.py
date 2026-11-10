@@ -47,18 +47,16 @@ Rules:
 "This chapter" is the one marked "open now".
 - Otherwise the whole book is in scope. Do not settle for fragments when the question \
 needs more: read the chapters they come from.
-- The table of contents lists who appears in each chapter. For a question about how, \
-where or when people met, or when something first happened, find there the first chapter \
-where they appear together and read it rather than searching again.
+- Plan with the table of contents: it lists who and what appears in each chapter. Open \
+the chapters where the people, places or things of the question appear; when the question \
+is about how something began or developed, start from the earliest of them.
 - Names in the question may be misspelt or given in another language: match them to the \
 names in the table of contents. Write search queries in the language of the book, as its \
 chapter titles and names show it, not in the language of the question.
-- Never say the book does not answer before you have read at least one chapter that is \
-likely to hold the answer.
-- When a question asks where or how people first met and the earliest chapter where both \
-appear shows them coming together, answer with that scene; say it is the first scene \
-the book shows them together. Do not answer "the book does not say" because no word \
-"met" is used.
+- Answer from what the text shows, even when it does not use the words of the question: \
+describe the scene or the facts that bear on it. Say the book does not answer only when \
+nothing you have read bears on the question, and never before reading at least one \
+chapter likely to hold the answer.
 - Earlier answers in this conversation may be wrong: check them against the sources.
 - You have {steps} replies in all for this question, so choose what to open carefully.
 - Answer only from the numbered sources you have gathered. Do not use anything you \
@@ -78,8 +76,7 @@ FORCE_ANSWER = "No more tools: answer now from the sources you have."
 READ_FIRST = (
     "You have not read any chapter yet, so you cannot know the book does not answer. "
     "Earlier answers in this conversation may be wrong too. Pick from the table of contents "
-    "the chapter most likely to hold the answer (for a meeting: the first chapter where "
-    'those people appear together) and reply {"action": "read", "chapter": N}.'
+    'the chapter most likely to hold the answer and reply {"action": "read", "chapter": N}.'
 )
 
 
