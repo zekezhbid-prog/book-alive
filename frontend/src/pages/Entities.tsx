@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   api,
@@ -17,7 +17,7 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon } from '../components/icons'
+import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, TrashIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -58,6 +58,16 @@ export default function Entities({ kind }: { kind: EntityKind }) {
 
   // While a run is going, cards appear chapter by chapter.
   const running = run?.status === 'running'
+  // A run seen running on this page and then done: say so, until the reader closes it.
+  const [finished, setFinished] = useState(false)
+  const wasRunning = useRef(false)
+  useEffect(() => {
+    if (running) wasRunning.current = true
+    else if (wasRunning.current && run?.status === 'done') {
+      wasRunning.current = false
+      setFinished(true)
+    }
+  }, [running, run?.status])
   useEffect(() => {
     if (!running) return
     const timer = setInterval(() => {
@@ -170,6 +180,16 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 {t('run.failed', { done: run.done, total: run.total, error: runError ?? '' })}
               </p>
             )}
+            {finished && run && (
+              <div className="notice row run-done">
+                <span className="grow">
+                  ✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}
+                </span>
+                <button className="btn ghost small" aria-label={t('app.close')} onClick={() => setFinished(false)}>
+                  ✕
+                </button>
+              </div>
+            )}
             {run?.status === 'cancelled' && (
               <p className="notice">{t('run.cancelled', { done: run.done, total: run.total })}</p>
             )}
@@ -210,6 +230,13 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 onChanged={(next) => {
                   loadList()
                   navigate(`/projects/${projectId}/${section}/${next.id}`)
+                }}
+                onDelete={async () => {
+                  if (!(await ask(t('entities.delete.confirm', { name: entity.name })))) return
+                  api.deleteEntity(entity.id).then(() => {
+                    loadList()
+                    navigate(`/projects/${projectId}/${section}`)
+                  }, fail)
                 }}
                 onError={fail}
                 gallery={
@@ -262,6 +289,8 @@ export default function Entities({ kind }: { kind: EntityKind }) {
 interface CardProps {
   /** The ✕ in the corner: back to the tiles of the section. */
   onClose: () => void
+  /** The bin beside "merge with": a card that is not needed. */
+  onDelete: () => void
   entity: Entity
   projectId: string
   others: EntityBrief[]
@@ -273,7 +302,7 @@ interface CardProps {
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ onClose, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
+function Card({ onClose, onDelete, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
@@ -311,6 +340,14 @@ function Card({ onClose, entity, projectId, others, onChanged, onError, gallery 
               ))}
             </select>
           )}
+          <button
+            className="btn ghost icon"
+            title={t('entities.delete')}
+            aria-label={t('entities.delete')}
+            onClick={onDelete}
+          >
+            <TrashIcon />
+          </button>
           <button className="btn ghost card-close" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
             ✕
           </button>

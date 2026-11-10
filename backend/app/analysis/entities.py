@@ -385,13 +385,33 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     if len(entities) < 2:
         return {}
 
+    # Where each one appears and with whom: the book often calls a known one "the old man"
+    # in a scene with the same people, and a nickname never shares a chapter with the name.
+    positions = {
+        c.id: c.position
+        for c in session.scalars(select(Chapter).where(Chapter.project_id == run.project_id))
+    }
+    chapters_of = {
+        e.id: {f.chapter_id for f in e.facts if f.chapter_id in positions} for e in entities
+    }
+
+    def companions(entity: Entity) -> list[str]:
+        mine = chapters_of[entity.id]
+        shared = [(len(mine & chapters_of[o.id]), o.name) for o in entities if o is not entity]
+        return [name for count, name in sorted(shared, key=lambda s: -s[0]) if count][:4]
+
     def line(number: int, entity: Entity) -> str:
         also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
-        details = [f.text for f in entity.facts if f.category == FACT_PERMANENT][:3]
         mark = " [no proper name]" if entity.uncertain else ""
-        return f"{number}. {entity.name}{mark}{also}" + (
-            f" - {'; '.join(details)}" if details else ""
-        )
+        role = [f.text for f in entity.facts if f.category == FACT_PROFILE][:2]
+        looks = [f.text for f in entity.facts if f.category == FACT_PERMANENT][:3]
+        where = sorted(positions[c] + 1 for c in chapters_of[entity.id])
+        parts = [
+            f"chapters {', '.join(map(str, where[:10]))}" if where else "",
+            f"with {', '.join(companions(entity))}" if companions(entity) else "",
+            "; ".join(role + looks),
+        ]
+        return f"{number}. {entity.name}{mark}{also}" + "".join(f" | {p}" for p in parts if p)
 
     listing = "\n".join(line(n, e) for n, e in enumerate(entities, 1))
     answer = model.invoke_json(
@@ -416,9 +436,9 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     return {}
 
 
-SUMMARY_BATCH = 6
-SUMMARY_FACTS = 30
-SUMMARY_MOMENTS = 15
+SUMMARY_BATCH = 4
+SUMMARY_FACTS = 60
+SUMMARY_MOMENTS = 20
 
 
 def summarize(state: State, config: RunnableConfig) -> dict:
@@ -433,9 +453,13 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         c.id: c.title or f"#{c.position + 1}"
         for c in session.scalars(select(Chapter).where(Chapter.project_id == entity.project_id))
     }
+    positions = {
+        c.id: c.position
+        for c in session.scalars(select(Chapter).where(Chapter.project_id == entity.project_id))
+    }
     chapters = sorted(
         {f.chapter_id for f in entity.facts if f.chapter_id in titles},
-        key=lambda cid: titles[cid],
+        key=lambda cid: positions[cid],
     )
     also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
     lines = [f"[{number}] {entity.name}{also}"]
@@ -445,30 +469,49 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         lines.append(f"description so far: {entity.summary.strip()}")
     if entity.appearance.strip():
         lines.append(f"appearance so far: {entity.appearance.strip()}")
-    # The general description and lasting looks. What is true in one chapter only (clothes,
-    # wounds) would make the description about a moment; it is used only when nothing else
-    # is known.
-    order = {FACT_PROFILE: 0, FACT_PERMANENT: 1}
+    # Facts are taken chapter by chapter in turn, so a main character's description covers
+    # the whole book and not only the chapters read first. Looks come with their quote: the
+    # model can tell a lasting trait from a moment ("looked with one eye" is not one-eyed).
     facts = [f for f in entity.facts if f.text.strip()]
-    lasting = [f for f in facts if f.category in order]
-    facts = sorted(lasting, key=lambda f: order[f.category]) if lasting else facts
+    lasting = [f for f in facts if f.category in (FACT_PROFILE, FACT_PERMANENT)]
+    moments = [f for f in facts if f.category == FACT_STATE]
     seen: set[str] = set()
-    for fact in facts:
-        if norm(fact.text) not in seen and len(seen) < SUMMARY_FACTS:
-            seen.add(norm(fact.text))
-            lines.append(f"- {fact.text.strip()}")
+    for fact in _spread(lasting or moments, positions, SUMMARY_FACTS, seen):
+        lines.append(_fact_line(fact, "looks" if fact.category != FACT_PROFILE else "about"))
     # Looks of one moment (clothes, wounds) for the appearance: what repeats is the usual look.
     if lasting:
-        moments = 0
-        for fact in entity.facts:
-            if fact.category != FACT_STATE or not fact.text.strip() or norm(fact.text) in seen:
-                continue
-            if moments >= SUMMARY_MOMENTS:
-                break
-            seen.add(norm(fact.text))
-            moments += 1
-            lines.append(f"- in one chapter: {fact.text.strip()}")
+        for fact in _spread(moments, positions, SUMMARY_MOMENTS, seen):
+            lines.append(_fact_line(fact, "in one chapter"))
     return "\n".join(lines)
+
+
+def _spread(facts: list, positions: dict[str, int], limit: int, seen: set[str]) -> list:
+    """Up to `limit` facts with different texts, one chapter after another in turn."""
+    by_chapter: dict[str, list] = {}
+    for fact in sorted(facts, key=lambda f: positions.get(f.chapter_id, 10**6)):
+        by_chapter.setdefault(fact.chapter_id, []).append(fact)
+    queues = list(by_chapter.values())
+    picked = []
+    while queues and len(picked) < limit:
+        for queue in list(queues):
+            if not queue:
+                queues.remove(queue)
+                continue
+            fact = queue.pop(0)
+            if norm(fact.text) in seen:
+                continue
+            seen.add(norm(fact.text))
+            picked.append(fact)
+            if len(picked) >= limit:
+                break
+    return picked
+
+
+def _fact_line(fact, label: str) -> str:
+    quote = " ".join(fact.quote.split())
+    if label == "about" or not quote:
+        return f"- {label}: {fact.text.strip()}"
+    return f"- {label}: {fact.text.strip()} (text: «{quote[:140]}»)"
 
 
 def summarize_cards(session: Session, model: TextModel, project_id: str, kind: str) -> None:

@@ -560,3 +560,16 @@ def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
     # One chapter's state is not a lasting fact: it comes marked, for the appearance only.
     assert "- in one chapter: Сегодня злой и в мокром плаще" in listing
     assert "\n- Сегодня злой" not in listing
+
+
+def test_summary_facts_come_from_every_chapter_in_turn():
+    """A main character's description must cover the whole book, not its first chapters."""
+    from types import SimpleNamespace
+
+    facts = [
+        SimpleNamespace(chapter_id=chapter, text=f"{chapter}-{n}", quote="")
+        for chapter in ("a", "b", "c")
+        for n in range(5)
+    ]
+    picked = analysis._spread(facts, {"a": 0, "b": 1, "c": 2}, 4, set())
+    assert [f.text for f in picked] == ["a-0", "b-0", "c-0", "a-1"]

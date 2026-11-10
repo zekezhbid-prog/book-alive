@@ -220,6 +220,9 @@ const ru = {
   'run.cancelling': 'Останавливаю после текущей главы…',
   'run.failed':
     'Поиск остановился на главе {done} из {total}: {error}. Прочитанное сохранено, повторный запуск продолжит с этого места.',
+  'run.done': 'Поиск завершён: прочитано глав — {total}, карточек в разделе — {cards}.',
+  'entities.delete': 'Удалить карточку',
+  'entities.delete.confirm': 'Удалить карточку «{name}»? Её картинки останутся в проекте. Следующий поиск может найти её снова.',
   'run.cancelled': 'Поиск остановлен на главе {done} из {total}. Прочитанное сохранено.',
   'run.interrupted': 'сервер был перезапущен',
 
@@ -779,6 +782,9 @@ const en: Record<keyof typeof ru, string> = {
   'run.cancelling': 'Stopping after the current chapter…',
   'run.failed':
     'The search stopped at chapter {done} of {total}: {error}. What was read is saved; starting again continues from there.',
+  'run.done': 'The search is done: {total} chapter(s) read, {cards} card(s) in this section.',
+  'entities.delete': 'Delete the card',
+  'entities.delete.confirm': 'Delete the card “{name}”? Its pictures stay in the project. A later search may find it again.',
   'run.cancelled': 'The search was stopped at chapter {done} of {total}. What was read is saved.',
   'run.interrupted': 'the server was restarted',
 

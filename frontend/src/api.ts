@@ -642,6 +642,7 @@ export const api = {
   settings: () => request<ModelSettings>('GET', '/settings'),
   saveEntityDescription: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/description`, { text }),
+  deleteEntity: (entityId: string) => request<void>('DELETE', `/entities/${entityId}`),
   saveEntityAppearance: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/appearance`, { text }),
   saveSceneSummary: (sceneId: string, text: string) =>

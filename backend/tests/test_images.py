@@ -305,3 +305,11 @@ def test_pictures_are_drawn_from_the_appearance_and_the_users_own_wins(client, s
     session.refresh(hero)
     build_image_prompt(model, project, hero, None, "", has_reference=False)
     assert "Appearance: Высокая, в кольчуге." in model.facts and "Худая" not in model.facts
+
+
+def test_deleting_a_card_keeps_its_pictures(client, session, project):
+    image = upload(client, project, project.hero_id)[0]
+    assert client.delete(f"/api/entities/{project.hero_id}").status_code == 204
+    assert client.get(f"/api/entities/{project.hero_id}").status_code == 404
+    left = client.get(f"/api/projects/{project.id}/images").json()
+    assert [(i["id"], i["entity_id"]) for i in left] == [(image["id"], None)]

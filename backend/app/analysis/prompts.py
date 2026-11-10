@@ -59,6 +59,9 @@ known hint matches.
 (then "facts" is an empty list). Skip passing mentions and unnamed background.
 - Looks facts ("permanent" and "state") are what an illustrator needs to draw this: looks, \
 not actions, speech or plot. At most 8 per entry, the most visual ones.
+- A "permanent" fact only when the text states a lasting feature. Never draw one from an \
+action, a gesture or a moment (squinting, limping once, a flushed face): such a moment is \
+at most a "state" fact, or nothing.
 - "profile" facts are the general description of the entry, not looks. At most 4 per entry, \
 outside the limit of 8, each short and plain, only what this chapter says.
 - Each fact is one detail:
@@ -80,16 +83,23 @@ Chapter "{title}":
 
 {text}"""
 
-RECONCILE_SYSTEM = """Below is a numbered list of {noun} found in one book, each with its \
-other names and a few known details. Some entries may be the same one under different \
-names (a nickname, a title, a short form, a different spelling).
+RECONCILE_SYSTEM = """Below is a numbered list of {noun} found in one book. Each line has \
+its other names, the chapters it appears in, the others it appears with most, and a few \
+known details (role, looks). Some entries may be the same one under different names (a \
+nickname, a title, a short form, a different spelling, or a common word such as "the old \
+man" or "the mentor" in place of the name).
 
-Group only entries you are confident are the same. A man and a woman are never the same. \
-Two different proper names are different ones, unless one is plainly a short form or \
-nickname of the other. An entry marked [no proper name] belongs with a named one when its \
-details clearly match. Companions, relatives and entries that \
-merely appear together are different. When in doubt, leave them apart: a wrong merge is \
-worse than a duplicate.
+Group only entries you are confident are the same:
+- An entry marked [no proper name] belongs with a named one when its details fit (sex, age, \
+role, occupation, looks) and it appears together with the same companions as the named one: \
+the book calls a known one by a common word in a scene with the people around them.
+- Two different proper names are different ones, unless one is plainly a short form or \
+nickname of the other, or everything points to one: the same role and companions, details \
+that fit, and the two names never appear in the same chapter.
+- A man and a woman are never the same. Companions, relatives and entries that merely \
+appear together are different. Two entries that act side by side in the same chapter are \
+different.
+When in doubt, leave them apart: a wrong merge is worse than a duplicate.
 
 Reply with one JSON object and nothing else:
 {{"groups": [[1, 4], [2, 7, 9]]}}
@@ -97,25 +107,34 @@ Use an empty list when nothing should be merged."""
 
 
 SUMMARY_SYSTEM = """Below are numbered cards of {noun} from one book. Each lists the chapters where \
-it appears, the description written for it so far (if any) and facts taken from the text. \
-For every card write one general description of 3 to 5 sentences in the language of the \
-facts: who or what it is, its role and function in the book, its lasting looks, and the \
-traits it shows throughout. Connected prose, not a list and not quotes.
-- A description written so far is the base: keep what it says, correct it only where the \
-facts contradict it, and add what the new facts tell about the card as a whole. Do not \
-drop it in favour of the latest chapters.
+it appears, the texts written for it so far (if any) and facts taken from the text, chapter \
+by chapter: "about" facts tell who or what it is, "looks" facts how it looks (with the words \
+of the book), "in one chapter" facts how it looked at one moment.
+
+For every card write "text", one general description in the language of the facts: who or \
+what it is, its role and occupation, its ties to others, what it does in the story from \
+beginning to end, and the traits it shows throughout. Connected prose, not a list and not \
+quotes.
+- The length follows what the facts tell: two or three sentences for a minor one with few \
+facts; for a main one that appears in many chapters, a full paragraph of six to ten sentences \
+that covers the whole book, not just its first chapters.
+- A text written so far is the base: keep what the facts support, add what the new facts \
+tell, correct or drop what the facts do not support.
 - The description is of the card as a whole, not of a moment: leave out moods, feelings \
 and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
 a lasting trait.
-Also write "appearance": how it looks, for an illustrator who will draw it, 2 to 4 \
+
+Also write "appearance": how it looks, for an illustrator who will draw it, 2 to 5 \
 sentences in the language of the facts: {appearance}. Looks only: no role, plot or \
 character traits.
-- An appearance written so far is the base, as with the description.
-- Details from a single chapter (marked "in one chapter") belong only when nothing lasting \
-says otherwise; things that repeat across chapters (the same coat, the same ruins) belong.
-- Leave "appearance" empty when the facts say nothing about looks.
-Use only the given facts and the texts so far. Never invent anything; if little is \
-known, write less.
+- A lasting feature only when the book states it as one. An action, a gesture or a moment \
+(squinting, limping once, a flushed face) is not a feature of the body; never turn it into \
+one. Check the words of the book given with each looks fact.
+- Details from a single chapter ("in one chapter") belong only when they repeat or nothing \
+lasting says otherwise; the same coat in several chapters is the usual clothing.
+- When the facts say nothing about looks, write one short sentence saying the book does not \
+describe them.
+Use only the given facts and the texts so far. Never invent anything.
 
 Reply with one JSON object and nothing else:
 {{"summaries": [{{"number": 1, "text": "", "appearance": ""}}]}}"""

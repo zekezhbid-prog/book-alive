@@ -401,6 +401,17 @@ def save_appearance(entity_id: str, body: DescriptionPatch, session: SessionDep)
     return get_entity(entity_id, session)
 
 
+@router.delete("/entities/{entity_id}", status_code=204)
+def delete_entity(entity_id: str, session: SessionDep) -> None:
+    """A card that is not needed (a passer-by, a mistake of the search). Its pictures stay in
+    the project, without a card. Its names are not remembered: a later search may find it again."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    session.delete(entity)
+    session.commit()
+
+
 @router.post("/entities/{entity_id}/merge")
 def merge_entities(entity_id: str, body: MergeRequest, session: SessionDep) -> EntityOut:
     """Cards are read-only, but who is who is the user's call: models get names wrong."""
