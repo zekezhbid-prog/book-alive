@@ -77,6 +77,10 @@ class Summaries(BaseModel):
 # ---------- helpers ----------
 
 
+def _is_proper(name: str) -> bool:
+    return name.strip()[:1].isupper()
+
+
 def norm(name: str) -> str:
     return re.sub(r"\s+", " ", name.casefold().replace("ё", "е")).strip(" .,:;!?\"'«»")
 
@@ -205,6 +209,16 @@ def _context(config: RunnableConfig) -> tuple[Session, TextModel, AnalysisRun]:
     return session, config["configurable"]["model"], run
 
 
+def _known_line(entity: Entity) -> str:
+    """A known card for the model: its main name and a hint who it is, so a chapter that calls
+    them "the girl" can be matched. Aliases stay out: an earlier mistake would come back."""
+    hint = (entity.description or entity.summary).split(". ")[0]
+    if not hint:
+        hint = "; ".join(f.text for f in entity.facts if f.category == FACT_PERMANENT and f.text)
+    hint = hint.strip()[:120]
+    return f"- {entity.name}" + (f" - {hint}" if hint else "")
+
+
 def extract(state: State, config: RunnableConfig) -> dict:
     session, model, run = _context(config)
     chapter = session.get(Chapter, state["pending"][0])
@@ -213,7 +227,7 @@ def extract(state: State, config: RunnableConfig) -> dict:
     known = _entities(session, run.project_id, run.kind)
     # Main names only: listing the aliases too would hand an earlier chapter's mistake
     # (someone's friend given as their nickname) back to the model as a fact.
-    known_text = "\n".join(f"- {e.name}" for e in known if not e.uncertain)
+    known_text = "\n".join(_known_line(e) for e in known if not e.uncertain)
     found: list[ExtractedEntity] = []
     for part in chunks(chapter.text):
         answer = model.invoke_json(
@@ -301,19 +315,26 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
         if not name:
             continue
         # Models still slip common nouns into aliases; proper names are capitalised.
-        names = [
-            name,
-            *(
-                a.strip()
-                for a in item.aliases
-                if a.strip()[:1].isupper() and norm(a) not in own_names
-            ),
+        proper = [
+            a.strip()
+            for a in item.aliases
+            if _is_proper(a) and norm(a) not in own_names - {norm(name)}
         ]
-        uncertain = not item.named or item.group
+        # "The old man (also: Rykhtash)": the model put the word first and the name second.
+        if proper and (not item.named or not _is_proper(name)):
+            name, proper = proper[0], proper[1:]
+        names = [name, *proper]
+        # Lower case is never a proper name, whatever the model says.
+        uncertain = item.group or not _is_proper(name) or (not item.named and name == item.name)
         entity = by_key.get(norm(name))
         if entity is None:
+            # The chapter calls a known card by another word but names it among the aliases.
+            entity = next((by_key[norm(a)] for a in proper if norm(a) in by_key), None)
+        if entity is None:
+            if uncertain and not any(f.text.strip() for f in item.facts):
+                continue  # "a bird", mentioned once and never described: nothing to show
             entity = Entity(
-                project_id=project_id, kind=kind, name=names[0], aliases=[], uncertain=uncertain
+                project_id=project_id, kind=kind, name=name, aliases=[], uncertain=uncertain
             )
             session.add(entity)
         elif not uncertain:
@@ -365,7 +386,10 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     def line(number: int, entity: Entity) -> str:
         also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
         details = [f.text for f in entity.facts if f.category == FACT_PERMANENT][:3]
-        return f"{number}. {entity.name}{also}" + (f" - {'; '.join(details)}" if details else "")
+        mark = " [no proper name]" if entity.uncertain else ""
+        return f"{number}. {entity.name}{mark}{also}" + (
+            f" - {'; '.join(details)}" if details else ""
+        )
 
     listing = "\n".join(line(n, e) for n, e in enumerate(entities, 1))
     answer = model.invoke_json(
@@ -380,7 +404,10 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
             continue
         merged.update(members)
         # The entry with the most facts is the best known one: it keeps its name.
-        main, *others = sorted((entities[n - 1] for n in members), key=lambda e: -len(e.facts))
+        # A card with a proper name wins over "the old man", then the best known one.
+        main, *others = sorted(
+            (entities[n - 1] for n in members), key=lambda e: (e.uncertain, -len(e.facts))
+        )
         for other in others:
             absorb(session, main, other)
     session.commit()

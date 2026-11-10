@@ -475,7 +475,9 @@ def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, sessi
                 entries = [
                     {"name": "Рыхташ", "facts": []},
                     {"name": "Стары", "named": False, "facts": []},
-                    {"name": "Купцы", "group": True, "facts": []},
+                    {"name": "Купцы", "group": True, "facts": [{"text": "в шубах"}]},
+                    {"name": "птушка", "facts": []},  # a bare mention, lower case
+                    {"name": "стары", "aliases": ["Дед"], "facts": [{"text": "сівы"}]},
                 ]
                 if 'Chapter "Дорога"' in text:
                     entries.append({"name": "Стары", "named": True, "facts": []})
@@ -492,4 +494,29 @@ def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, sessi
         ).json()
     }
     # "Стары" was named in the second chapter, so it is a character after all.
-    assert cards == {"Рыхташ": False, "Стары": False, "Купцы": True}
+    # "птушка" was only mentioned: no card. "стары (also Дед)" took the proper name.
+    assert cards == {"Рыхташ": False, "Стары": False, "Купцы": True, "Дед": False}
+
+
+def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(session, project):
+    class Words(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is analysis.ChapterEntities:
+                text = messages[-1].content
+                if 'Chapter "Мельница"' in text:
+                    entry = {
+                        "name": "Рыхташ",
+                        "facts": [{"category": "permanent", "text": "седая борода"}],
+                    }
+                else:
+                    assert "- Рыхташ - седая борода" in text  # known, with a hint
+                    entry = {"name": "Дзед", "aliases": ["Рыхташ"], "facts": [{"text": "кольчуга"}]}
+                return schema.model_validate({"entities": [entry]})
+            if schema is analysis.Groups:
+                return analysis.Groups(groups=[])
+            return super().invoke_json(operation, messages, schema)
+
+    run(session, project, Words())
+    people = cast(session, project)
+    assert set(people) == {"Рыхташ"}
+    assert {f.text for f in people["Рыхташ"].facts if f.text} == {"седая борода", "кольчуга"}

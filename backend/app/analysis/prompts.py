@@ -3,7 +3,7 @@
 from app.models import KIND_CHARACTER
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 6
+PROMPT_VERSION = 7
 
 _SUBJECT = {
     "character": {
@@ -52,7 +52,9 @@ as the text uses it. They may be someone named elsewhere, so never invent a name
 - "group": true for several taken together (the merchants, the guards, the nieces), false \
 for a single one.
 - Two different beings are two entries, even when they travel together or are related.
-- If it is one of the already known entries below, use exactly that name.
+- If it is one of the already known entries below, use exactly that name, also when this \
+chapter calls them only by a common word or a description (the girl, the old man) and the \
+known hint matches.
 - List everyone/everything that takes part in the chapter, even with no described details \
 (then "facts" is an empty list). Skip passing mentions and unnamed background.
 - Looks facts ("permanent" and "state") are what an illustrator needs to draw this: looks, \
@@ -82,7 +84,10 @@ RECONCILE_SYSTEM = """Below is a numbered list of {noun} found in one book, each
 other names and a few known details. Some entries may be the same one under different \
 names (a nickname, a title, a short form, a different spelling).
 
-Group only entries you are confident are the same. Companions, relatives and entries that \
+Group only entries you are confident are the same. A man and a woman are never the same. \
+Two different proper names are different ones, unless one is plainly a short form or \
+nickname of the other. An entry marked [no proper name] belongs with a named one when its \
+details clearly match. Companions, relatives and entries that \
 merely appear together are different. When in doubt, leave them apart: a wrong merge is \
 worse than a duplicate.
 

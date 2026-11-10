@@ -110,8 +110,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
         <section className="reading">
           <div className="chapter stack">
             {error && <p className="error">{error}</p>}
+            {/* Stays on top while the cards below change: the run is never out of sight. */}
             {running && run && (
-              <div className="notice stack">
+              <div className="notice stack run-progress">
                 <div className="row">
                   <span>{t('run.progress', { done: run.done, total: run.total })}</span>
                   <span className="spacer" />
