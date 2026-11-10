@@ -544,3 +544,59 @@ def test_answer_in_another_language_than_the_question_is_translated(session, pro
     _, reply = chat.ask(session, project, model, "Что Люта несла в руках и на плечах?")
     assert reply.content == "Она несла посох и платок [1]."
     assert not chat.other_language("Что несла Люта?", "Посох «і хустку» [1].")
+
+
+def _book(session, chapters):
+    book = Project(title="Короткие имена", mode="writer")
+    for position, text in enumerate(chapters):
+        book.chapters.append(
+            Chapter(
+                position=position,
+                title=f"Глава {position + 1}",
+                text=text,
+                content_hash=text_hash(text),
+            )
+        )
+    session.add(book)
+    session.commit()
+    index_project(session, book)
+    return book
+
+
+def test_mentions_find_a_three_letter_name_but_not_a_question_word(session):
+    from app.rag.index import mentions
+
+    book = _book(
+        session,
+        [
+            "Кто там стоит? Это воевода Зур с дружиной.\n\nКто знает дорогу? Никто.",
+            "Князь велел, и воевода Зур собирал охотников в поход.",
+        ],
+    )
+    found = mentions(session, book.id, "Кто такой Зур")
+    assert any("Зур собирал" in p.text for p in found)
+    assert mentions(session, book.id, "Кто знает") == []  # capitalised only at sentence starts
+
+
+def test_mentions_reach_every_chapter_of_a_name(session):
+    from app.rag.index import MENTION_CHUNKS, mentions
+
+    early = "\n\n".join(f"Лютава ішла па дарозе {n}. " + "Далей лес. " * 30 for n in range(40))
+    book = _book(session, [early, "Тут Лютава атрымала даручэнне вызваліць вязняў."])
+    found = mentions(session, book.id, "Лютава")
+    assert any("даручэнне" in p.text for p in found)
+    assert len(found) <= MENTION_CHUNKS
+
+
+def test_translated_query_is_the_same_on_a_repeat(monkeypatch):
+    calls = []
+
+    def once(model, query, sample):
+        calls.append(query)
+        return f"пераклад {len(calls)}"
+
+    monkeypatch.setattr(chat, "_translate_once", once)
+    chat.TRANSLATIONS.clear()
+    assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
+    assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
+    assert len(calls) == 1

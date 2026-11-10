@@ -167,13 +167,42 @@ def search(
 
 
 MENTION_CHUNKS = 20
+MENTION_CANDIDATES = 400
 
 
 def _name_stems(query: str) -> list[str]:
     """Words written with a capital letter (names, in a search query of key words), cut
-    to a stem that survives case endings: "Журэі" -> "журэ", "Люты" -> "лют"."""
-    words = {w for w in re.findall(r"\w+", query) if len(w) >= 4 and w[0].isupper()}
-    return sorted({w.casefold()[: len(w) - (1 if len(w) <= 5 else 2)] for w in words})
+    to a stem that survives case endings: "Журэі" -> "журэ", "Люты" -> "лют". A name of
+    three letters ("Зур") is kept whole; whether it is a name at all, and not "Кто" at the
+    start of a question, `mentions` checks against the book."""
+    words = {w for w in re.findall(r"\w+", query) if len(w) >= 3 and w[0].isupper()}
+    return sorted({w.casefold()[: len(w) - _cut(w)] for w in words})
+
+
+def _cut(word: str) -> int:
+    return 0 if len(word) <= 3 else 1 if len(word) <= 5 else 2
+
+
+# Before a name inside a sentence: a word or a comma, then spaces ("ваявода Зур").
+INSIDE_SENTENCE = r"[\w,;:]\s+$"
+NAME_SAMPLE = 60
+
+
+def _used_as_name(session: Session, scope: list, stem: str) -> bool:
+    """True when the book writes the stem with a capital inside a sentence somewhere: a
+    name, not a word that is capitalised only where a sentence starts."""
+    word = stem[:1].upper() + stem[1:]
+    texts = session.scalars(
+        select(Chunk.text).where(*scope, Chunk.text.like(f"%{word}%")).limit(NAME_SAMPLE)
+    ).all()
+    for text in texts:
+        for match in re.finditer(re.escape(word), text):
+            start = match.start()
+            if start and text[start - 1].isalnum():
+                continue  # inside another word
+            if re.search(INSIDE_SENTENCE, text[max(0, start - 40) : start]):
+                return True
+    return False
 
 
 def mentions(
@@ -181,24 +210,35 @@ def mentions(
 ) -> list[Passage]:
     """Every place the names of the query occur, not just the few best hits: a question
     about someone ("her maid") is answered by what surrounds their name across the book.
-    Places that also share the other words of the query come first, then book order."""
-    names = _name_stems(query)
-    if not names:
-        return []
-    others = [s for s in _stems(query) if not any(s.startswith(n) for n in names)]
+    Every chapter the name is in gets a place first, so a late chapter is not crowded out
+    by the early ones; within that, places that also share the other words of the query
+    come first, then book order."""
     in_scope = [Chunk.project_id == project_id]
     if chapter_ids:
         in_scope.append(Chunk.chapter_id.in_(chapter_ids))
+    short = {w.casefold() for w in re.findall(r"\w+", query) if len(w) == 3}
+    names = [n for n in _name_stems(query) if n not in short or _used_as_name(session, in_scope, n)]
+    if not names:
+        return []
+    others = [s for s in _stems(query) if not any(s.startswith(n) for n in names)]
     shared = sum((func.cast(Chunk.text.ilike(f"%{w}%"), Integer) for w in others), start=0)
     rows = session.execute(
         select(Chunk, Chapter.position)
         .join(Chapter, Chapter.id == Chunk.chapter_id)
         .where(*in_scope, or_(*(Chunk.text.ilike(f"%{n}%") for n in names)))
         .order_by(desc(shared) if others else Chapter.position, Chapter.position, Chunk.position)
-        .limit(MENTION_CHUNKS)
+        .limit(MENTION_CANDIDATES)
     ).all()
+    picked: list = []
+    chapters: set[str] = set()
+    for row in rows:  # the best place of each chapter
+        if row[0].chapter_id not in chapters:
+            chapters.add(row[0].chapter_id)
+            picked.append(row)
+    picked += [r for r in rows if r not in picked]
+    picked = picked[:MENTION_CHUNKS]
     # Read in book order: the story of a person unfolds chapter by chapter.
-    return _widen(session, [c for c, _ in sorted(rows, key=lambda r: (r[1], r[0].position))])
+    return _widen(session, [c for c, _ in sorted(picked, key=lambda r: (r[1], r[0].position))])
 
 
 def _widen(session: Session, hits: list[Chunk]) -> list[Passage]:

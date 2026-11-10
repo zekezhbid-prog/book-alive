@@ -14,7 +14,7 @@ from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
 from app.models import FACT_PERMANENT, ChatMessage, ChatThread, Chunk, Entity, Project, new_id, now
 from app.rag import agent
-from app.rag.index import BookRetriever, index_project, mentions, search
+from app.rag.index import BookRetriever, _cut, _used_as_name, index_project, mentions, search
 from app.scenes.service import entities_in
 
 HISTORY_MESSAGES = 6
@@ -260,7 +260,7 @@ def _in_language_of(model: TextModel, question: str, answer: str) -> str:
     return rewritten.answer.strip() or answer
 
 
-NAME = re.compile(r"[^\W\d_][\w'’]{3,}")
+NAME = re.compile(r"[^\W\d_][\w'’]{2,}")
 
 
 def _capitalised(text: str, skip_sentence_starts: bool) -> list[str]:
@@ -280,9 +280,11 @@ def cardless_names(session: Session, project: Project, query: str, question: str
     words = _capitalised(query, False) + _capitalised(question, True)
     missing: dict[str, str] = {}
     for word in words:
-        stem = word[: len(word) - (1 if len(word) <= 5 else 2)]
+        stem = word[: len(word) - _cut(word)]
         if stem.casefold() in missing or agent.find_card(session, project, word):
             continue
+        if len(word) == 3 and not _used_as_name(session, [Chunk.project_id == project.id], stem):
+            continue  # "Хто" starting a sentence, not a name
         uses = session.scalar(
             select(func.count())
             .select_from(Chunk)
@@ -356,9 +358,27 @@ def other_language(question: str, answer: str) -> bool:
     return bool(asked and answered and asked != answered)
 
 
+# Translated queries, so that the same question searches the same way every time: a
+# model rewrites it a little differently on each call, and the first search with it.
+TRANSLATIONS: dict[tuple[str, str], str] = {}
+TRANSLATIONS_KEPT = 500
+
+
 def _translate(model: TextModel, query: str, sample: str) -> str:
     """The question as a search query in the book's language; the question itself if the
     model cannot help."""
+    key = (sample[:1500], query)
+    if key in TRANSLATIONS:
+        return TRANSLATIONS[key]
+    translated = _translate_once(model, query, sample)
+    if translated != query:
+        if len(TRANSLATIONS) >= TRANSLATIONS_KEPT:
+            TRANSLATIONS.pop(next(iter(TRANSLATIONS)))
+        TRANSLATIONS[key] = translated
+    return translated
+
+
+def _translate_once(model: TextModel, query: str, sample: str) -> str:
     try:
         answer = model.invoke_json(
             "chat",
