@@ -50,6 +50,8 @@ class EntityBrief(BaseModel):
     chapters: int
     facts: int
     stale: bool
+    # No proper name or a group: shown apart, "in question".
+    uncertain: bool = False
 
 
 class FactOut(BaseModel):
@@ -213,6 +215,7 @@ def list_entities(project_id: str, kind: str, session: SessionDep) -> list[Entit
             chapters=len({f.chapter_id for f in e.facts}),
             facts=sum(f.category != analysis.FACT_MENTION for f in e.facts),
             stale=any(hashes.get(f.chapter_id) != f.chapter_hash for f in e.facts),
+            uncertain=e.uncertain,
         )
         for e in rows
     ]

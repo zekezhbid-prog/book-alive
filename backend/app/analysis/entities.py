@@ -50,6 +50,10 @@ class ExtractedFact(BaseModel):
 class ExtractedEntity(BaseModel):
     name: str
     aliases: list[str] = Field(default_factory=list)
+    # False when the text gives no proper name and "name" is a common word (the old man).
+    named: bool = True
+    # True for several beings or things taken together (the merchants, the guards).
+    group: bool = False
     facts: list[ExtractedFact] = Field(default_factory=list)
 
 
@@ -209,7 +213,7 @@ def extract(state: State, config: RunnableConfig) -> dict:
     known = _entities(session, run.project_id, run.kind)
     # Main names only: listing the aliases too would hand an earlier chapter's mistake
     # (someone's friend given as their nickname) back to the model as a fact.
-    known_text = "\n".join(f"- {e.name}" for e in known)
+    known_text = "\n".join(f"- {e.name}" for e in known if not e.uncertain)
     found: list[ExtractedEntity] = []
     for part in chunks(chapter.text):
         answer = model.invoke_json(
@@ -305,10 +309,15 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
                 if a.strip()[:1].isupper() and norm(a) not in own_names
             ),
         ]
+        uncertain = not item.named or item.group
         entity = by_key.get(norm(name))
         if entity is None:
-            entity = Entity(project_id=project_id, kind=kind, name=names[0], aliases=[])
+            entity = Entity(
+                project_id=project_id, kind=kind, name=names[0], aliases=[], uncertain=uncertain
+            )
             session.add(entity)
+        elif not uncertain:
+            entity.uncertain = False  # one chapter giving a proper name is enough
         taken = {norm(entity.name), *map(norm, entity.aliases)}
         new_aliases = [
             n
@@ -447,6 +456,7 @@ def absorb(session: Session, main: Entity, other: Entity) -> list[str]:
     added = [n for n in dict.fromkeys([other.name, *other.aliases]) if norm(n) not in taken]
     main.aliases = [*main.aliases, *added]
     main.pinned_names = [*main.pinned_names, *other.pinned_names]
+    main.uncertain = main.uncertain and other.uncertain
     for item in list(other.facts):
         item.entity = main
     for image in list(other.images):

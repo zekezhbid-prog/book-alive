@@ -215,19 +215,34 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   }
 
   function cards(section: 'characters' | 'locations', list?: EntityBrief[] | null) {
+    const link = (item: EntityBrief) => (
+      <button
+        key={item.id}
+        className={`chapter-link entity-link ${item.uncertain ? 'uncertain' : ''} ${current === section && item.id === entityId ? 'active' : ''}`}
+        title={item.uncertain ? t('entities.uncertain.hint') : undefined}
+        onClick={() => navigate(`${base}/${section}/${item.id}`)}
+      >
+        <span>
+          {item.uncertain && <span className="uncertain-mark">? </span>}
+          {item.name}
+        </span>
+        {item.stale && <span className="dot" title={t('entities.stale.hint')} />}
+        <span className="faint small">{item.chapters}</span>
+      </button>
+    )
+    const doubtful = list?.filter((item) => item.uncertain) ?? []
     return (
       <>
-        {list?.map((item) => (
-          <button
-            key={item.id}
-            className={`chapter-link entity-link ${current === section && item.id === entityId ? 'active' : ''}`}
-            onClick={() => navigate(`${base}/${section}/${item.id}`)}
-          >
-            <span>{item.name}</span>
-            {item.stale && <span className="dot" title={t('entities.stale.hint')} />}
-            <span className="faint small">{item.chapters}</span>
-          </button>
-        ))}
+        {list?.filter((item) => !item.uncertain).map(link)}
+        {/* No proper name or a group: probably someone already known, waiting for a merge. */}
+        {doubtful.length > 0 && (
+          <>
+            <p className="nav-subhead" title={t('entities.uncertain.hint')}>
+              {t('entities.uncertain')}
+            </p>
+            {doubtful.map(link)}
+          </>
+        )}
       </>
     )
   }

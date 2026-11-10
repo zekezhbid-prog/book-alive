@@ -3,7 +3,7 @@
 from app.models import KIND_CHARACTER
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 5
+PROMPT_VERSION = 6
 
 _SUBJECT = {
     "character": {
@@ -46,6 +46,11 @@ Rules:
 nicknames of the same one, only when the text makes plain that it is the same one. Never put \
 there the name of another entry, a friend, relative or companion. Never put common words \
 there (girl, old man, guest, the smith): many others can be called that.
+- "named": true when the text gives a proper name; false when it only calls them by a \
+common word (the old man, a girl, the stranger in a hat, a bird). Then "name" is that word \
+as the text uses it. They may be someone named elsewhere, so never invent a name.
+- "group": true for several taken together (the merchants, the guards, the nieces), false \
+for a single one.
 - Two different beings are two entries, even when they travel together or are related.
 - If it is one of the already known entries below, use exactly that name.
 - List everyone/everything that takes part in the chapter, even with no described details \
@@ -63,8 +68,8 @@ outside the limit of 8, each short and plain, only what this chapter says.
 under 200 characters.
 
 Reply with one JSON object and nothing else:
-{{"entities": [{{"name": "", "aliases": [], "facts": [{{"category": "permanent", "text": "", \
-"quote": ""}}]}}]}}"""
+{{"entities": [{{"name": "", "aliases": [], "named": true, "group": false, "facts": \
+[{{"category": "permanent", "text": "", "quote": ""}}]}}]}}"""
 
 EXTRACT_USER = """Already known:
 {known}

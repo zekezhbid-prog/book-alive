@@ -464,3 +464,32 @@ def test_a_wrong_alias_does_not_swallow_another_character(session, project):
     people = cast(session, project)
     assert set(people) == {"Рыхташ", "Люта"}
     assert people["Рыхташ"].aliases == []
+
+
+def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, session, project):
+    class Vague(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is analysis.ChapterEntities:
+                text = messages[-1].content
+                assert "Купцы" not in text.split("Chapter")[0]
+                entries = [
+                    {"name": "Рыхташ", "facts": []},
+                    {"name": "Стары", "named": False, "facts": []},
+                    {"name": "Купцы", "group": True, "facts": []},
+                ]
+                if 'Chapter "Дорога"' in text:
+                    entries.append({"name": "Стары", "named": True, "facts": []})
+                return schema.model_validate({"entities": entries})
+            if schema is analysis.Groups:
+                return analysis.Groups(groups=[])
+            return super().invoke_json(operation, messages, schema)
+
+    run(session, project, Vague())
+    cards = {
+        c["name"]: c["uncertain"]
+        for c in client.get(
+            f"/api/projects/{project.id}/entities", params={"kind": "character"}
+        ).json()
+    }
+    # "Стары" was named in the second chapter, so it is a character after all.
+    assert cards == {"Рыхташ": False, "Стары": False, "Купцы": True}

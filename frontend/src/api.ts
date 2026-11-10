@@ -138,6 +138,8 @@ export interface EntityBrief {
   chapters: number
   facts: number
   stale: boolean
+  /** Found without a proper name or as a group: listed apart, "in question". */
+  uncertain?: boolean
 }
 
 export interface Fact {
