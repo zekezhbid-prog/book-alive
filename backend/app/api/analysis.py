@@ -28,6 +28,8 @@ class RunRequest(BaseModel):
     kind: str
     # Empty means the whole book.
     chapter_ids: list[str] = []
+    # Start from scratch: earlier answers and cards are forgotten (see start_fresh).
+    fresh: bool = False
 
 
 class RunOut(BaseModel):
@@ -145,7 +147,7 @@ def estimate(project_id: str, body: RunRequest, session: SessionDep) -> analysis
     except ModelNotConfigured:
         overhead = 0  # the estimate is still useful before a model is chosen
     return analysis.estimate(
-        session, _chapters(project, body.chapter_ids), _kind(body.kind), overhead
+        session, _chapters(project, body.chapter_ids), _kind(body.kind), overhead, body.fresh
     )
 
 
@@ -162,6 +164,8 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
         TextModel(session, project.id)
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
+    if body.fresh:
+        analysis.start_fresh(session, project.id, chapters, _kind(body.kind))
     run = AnalysisRun(
         project_id=project.id, kind=_kind(body.kind), chapter_ids=[c.id for c in chapters]
     )

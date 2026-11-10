@@ -4,10 +4,11 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.analysis import entities as analysis
-from app.analysis import runner
+from app.analysis import prompts, runner
+from app.api import analysis as analysis_api
 from app.db import get_engine
 from app.llm.calls import BadModelOutput, _parse, estimate_tokens
-from app.models import AnalysisRun, Chapter, Entity, Project, text_hash
+from app.models import AnalysisRun, Chapter, ChapterExtraction, Entity, Project, text_hash
 
 CHAPTER_1 = (
     "Рыхташ вошёл в мельницу. На нём был чёрный плащ.\n\n"
@@ -296,14 +297,14 @@ class ProfileModel(FakeModel):
             for item in result.entities:
                 if item.name == "Рыхташ":
                     item.facts.append(
-                        analysis.ExtractedFact(category="profile", text="старый мельник, живёт один")
+                        analysis.ExtractedFact(
+                            category="profile", text="старый мельник, живёт один"
+                        )
                     )
         return result
 
 
-def test_profile_facts_go_to_the_top_of_the_card_not_to_looks_or_timeline(
-    session, project, client
-):
+def test_profile_facts_go_to_the_top_of_the_card_not_to_looks_or_timeline(session, project, client):
     run(session, project, ProfileModel())
     rykhtash = cast(session, project)["Рыхташ"]
     card = client.get(f"/api/entities/{rykhtash.id}").json()
@@ -361,3 +362,59 @@ def test_cancelled_run_describes_what_was_found_so_far(session, project):
     assert record.status == "cancelled", record.error
     assert len(record.done_chapter_ids) == 1
     assert cast(session, project)["Рыхташ"].summary
+
+
+def test_rescan_from_scratch_reads_again_and_forgets_old_cards(session, project):
+    run(session, project, FakeModel())
+    people = cast(session, project)
+    people["Люта"].standalone = True  # the user's own decision: the card stays
+    session.commit()
+
+    class Forgetful(FakeModel):
+        """The new prompt no longer finds "Люта" nor the old man in the second chapter."""
+
+        def invoke_json(self, operation, messages, schema):
+            answer = super().invoke_json(operation, messages, schema)
+            if isinstance(answer, analysis.ChapterEntities):
+                answer.entities = [e for e in answer.entities if e.name == "Рыхташ"]
+            return answer
+
+    assert analysis.estimate(session, project.chapters, "character", fresh=True).cached == 0
+    analysis.start_fresh(session, project.id, project.chapters, "character")
+    session.commit()
+    model = Forgetful()
+    run(session, project, model)
+    # Both chapters are read again although their text did not change.
+    assert model.calls.count("find_characters") == 2
+    people = cast(session, project)
+    assert set(people) == {"Рыхташ", "Люта"}
+    assert people["Люта"].facts == []  # kept, but nothing from the old run is left on it
+    assert "Дед" not in people["Рыхташ"].aliases  # nothing carried over from the old run
+
+
+def test_api_rescan_from_scratch_drops_stored_answers(client, session, project, monkeypatch):
+    run(session, project, FakeModel())
+    started = []
+    monkeypatch.setattr(analysis_api.runner, "start", started.append)
+    monkeypatch.setattr(
+        analysis_api, "TextModel", lambda *a: type("M", (), {"request_overhead": 0})
+    )
+    body = {"kind": "character", "chapter_ids": [], "fresh": True}
+    assert (
+        client.post(f"/api/projects/{project.id}/analysis/estimate", json=body).json()["cached"]
+        == 0
+    )
+    assert client.post(f"/api/projects/{project.id}/analysis", json=body).status_code == 200
+    session.expire_all()
+    assert session.query(ChapterExtraction).filter_by(project_id=project.id).count() == 0
+    assert cast(session, project) == {}
+    assert len(started) == 1
+
+
+def test_characters_are_living_beings_and_objects_go_with_locations():
+    characters = prompts.extract_system("character")
+    assert "living, animate beings only" in characters
+    assert "Never list objects" in characters
+    locations = prompts.extract_system("location")
+    assert "notable inanimate things" in locations
+    assert prompts.summary_system("location").count("locations and objects") == 1

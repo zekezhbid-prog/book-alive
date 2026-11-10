@@ -125,6 +125,27 @@ def _cached(session: Session, chapter: Chapter, kind: str) -> ChapterExtraction 
     return row if fresh else None
 
 
+def start_fresh(session: Session, project_id: str, chapters: list[Chapter], kind: str) -> None:
+    """Before a run "from scratch": forget what earlier runs found, so the new one neither
+    reuses their answers nor sees their names as already known. The chosen chapters lose
+    their stored model answers. Cards are dropped, except those carrying the user's own work
+    (pictures, hand merges or splits, cards made by hand): they only lose their facts and
+    summary, and the run fills them again if it finds them."""
+    session.execute(
+        delete(ChapterExtraction).where(
+            ChapterExtraction.chapter_id.in_([c.id for c in chapters]),
+            ChapterExtraction.kind == kind,
+        )
+    )
+    for entity in _entities(session, project_id, kind):
+        if entity.images or entity.pinned_names or entity.standalone:
+            entity.facts.clear()
+            entity.summary = ""
+            entity.aliases = list(entity.pinned_names)
+        else:
+            session.delete(entity)
+
+
 # ---------- estimate ----------
 
 
@@ -137,15 +158,20 @@ class Estimate(BaseModel):
 
 
 def estimate(
-    session: Session, chapters: list[Chapter], kind: str, request_overhead: int = 0
+    session: Session,
+    chapters: list[Chapter],
+    kind: str,
+    request_overhead: int = 0,
+    fresh: bool = False,
 ) -> Estimate:
-    """`request_overhead`: tokens the connection adds to every request on its own."""
+    """`request_overhead`: tokens the connection adds to every request on its own.
+    `fresh`: the stored answers will be thrown away, so every chapter is read again."""
     system_tokens = (
         estimate_tokens(prompts.extract_system(kind)) + PROMPT_OVERHEAD_TOKENS + request_overhead
     )
     result = Estimate(chapters=len(chapters), cached=0, requests=0, input_tokens=0, output_tokens=0)
     for chapter in chapters:
-        if not chapter.text.strip() or _cached(session, chapter, kind):
+        if not chapter.text.strip() or (not fresh and _cached(session, chapter, kind)):
             result.cached += 1
             continue
         for part in chunks(chapter.text):

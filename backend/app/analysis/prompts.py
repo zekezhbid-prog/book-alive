@@ -3,11 +3,15 @@
 from app.models import KIND_CHARACTER
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 
 _SUBJECT = {
     "character": {
-        "what": "characters (people and other beings that act or are described)",
+        "what": "characters: living, animate beings only (people, animals, spirits, gods, \
+monsters, any creature that thinks, speaks or acts on its own will). Never list objects, \
+weapons, buildings, places, plants, weather, natural phenomena, illnesses or abstract \
+things, however vividly the text describes them; a thing becomes a character only when \
+the story makes it alive (it speaks or acts by itself)",
         "permanent": "age, face, build, height, hair, eyes, skin, scars, species, voice, "
         "lasting traits of personality",
         "state": "clothes, hairstyle, injuries, dirt or blood, weapons and objects they "
@@ -17,19 +21,24 @@ _SUBJECT = {
         "occupation",
     },
     "location": {
-        "what": "locations (places where the action happens or that are described)",
-        "permanent": "what kind of place it is, architecture, layout, materials, size, "
-        "surroundings, landmarks",
-        "state": "time of day, weather, season, light, damage, crowds or emptiness, "
-        "sounds and smells",
-        "profile": "what the place is for, who lives or works there, what happens there, "
-        "its history and role in the story",
+        "what": "locations and objects: places where the action happens or that are \
+described, and notable inanimate things (weapons, artifacts, vehicles, buildings, \
+landmarks such as a bridge or a mill, important items a character owns or uses). Skip \
+living beings: they are characters. Skip ordinary everyday things that play no part",
+        "permanent": "what kind of place or thing it is, architecture, layout, shape, "
+        "materials, size, ornament, surroundings, landmarks",
+        "state": "time of day, weather, season, light, damage, wear, crowds or emptiness, "
+        "sounds and smells, who holds or uses it now",
+        "profile": "what the place or thing is for, who lives or works there or owns it, "
+        "what happens there or with it, its history and role in the story",
     },
 }
 
-EXTRACT_SYSTEM = """You read one chapter of a book and list the {what} in it, with what the \
-text says about how they look. The result feeds illustration and video prompts, so visual \
-detail matters most.
+EXTRACT_SYSTEM = """You read one chapter of a book and list the entries of one kind in it, \
+with what the text says about how they look. The result feeds illustration and video \
+prompts, so visual detail matters most.
+
+What to list: {what}.
 
 Rules:
 - Use only what this chapter states. Never invent details and never guess beyond the text.
@@ -86,8 +95,12 @@ Reply with one JSON object and nothing else:
 {{"summaries": [{{"number": 1, "text": ""}}]}}"""
 
 
+def _noun(kind: str) -> str:
+    return "characters" if kind == KIND_CHARACTER else "locations and objects"
+
+
 def summary_system(kind: str) -> str:
-    return SUMMARY_SYSTEM.format(noun="characters" if kind == KIND_CHARACTER else "locations")
+    return SUMMARY_SYSTEM.format(noun=_noun(kind))
 
 
 def extract_system(kind: str) -> str:
@@ -95,4 +108,4 @@ def extract_system(kind: str) -> str:
 
 
 def reconcile_system(kind: str) -> str:
-    return RECONCILE_SYSTEM.format(noun="characters" if kind == KIND_CHARACTER else "locations")
+    return RECONCILE_SYSTEM.format(noun=_noun(kind))

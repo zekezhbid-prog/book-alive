@@ -14,7 +14,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("entities", sa.Column("description", sa.Text(), nullable=False, server_default=""))
+    op.add_column(
+        "entities", sa.Column("description", sa.Text(), nullable=False, server_default="")
+    )
 
 
 def downgrade() -> None:

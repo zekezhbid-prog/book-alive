@@ -58,9 +58,7 @@ def _model_info(item: dict) -> ModelInfo:
             except (TypeError, ValueError):
                 free = None
     architecture = item.get("architecture") or {}
-    outputs = (
-        item.get("output_modalities") or architecture.get("output_modalities") or []
-    )
+    outputs = item.get("output_modalities") or architecture.get("output_modalities") or []
     if "video" in outputs:
         kind = "video"
     elif "image" in outputs:

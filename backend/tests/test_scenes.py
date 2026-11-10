@@ -246,7 +246,9 @@ def test_writer_can_describe_a_card_and_a_scene_in_words(client, book):
     luta = client.get(f"/api/projects/{book.id}/entities", params={"kind": "character"}).json()
     luta_id = next(c["id"] for c in luta if c["name"] == "Люта")
     assert client.get(f"/api/entities/{luta_id}").json()["description"] == ""
-    saved = client.put(f"/api/entities/{luta_id}/description", json={"text": "  Рыжая и упрямая.  "})
+    saved = client.put(
+        f"/api/entities/{luta_id}/description", json={"text": "  Рыжая и упрямая.  "}
+    )
     assert saved.status_code == 200
     assert saved.json()["description"] == "Рыжая и упрямая."
     assert client.get(f"/api/entities/{luta_id}").json()["description"] == "Рыжая и упрямая."

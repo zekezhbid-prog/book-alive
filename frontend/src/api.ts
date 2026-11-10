@@ -437,13 +437,19 @@ export const api = {
       chapter_id: chapterId,
     }),
 
-  estimate: (projectId: string, kind: EntityKind, chapterIds: string[]) =>
+  /** `fresh`: read the chapters again even when they were read before with the same text. */
+  estimate: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false) =>
     request<Estimate>('POST', `/projects/${projectId}/analysis/estimate`, {
       kind,
       chapter_ids: chapterIds,
+      fresh,
     }),
-  startRun: (projectId: string, kind: EntityKind, chapterIds: string[]) =>
-    request<Run>('POST', `/projects/${projectId}/analysis`, { kind, chapter_ids: chapterIds }),
+  startRun: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false) =>
+    request<Run>('POST', `/projects/${projectId}/analysis`, {
+      kind,
+      chapter_ids: chapterIds,
+      fresh,
+    }),
   latestRun: (projectId: string, kind: EntityKind) =>
     request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
   cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),

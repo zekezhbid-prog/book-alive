@@ -337,6 +337,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     () => new Set(initial.length ? initial : project.chapters.slice(0, 1).map((c) => c.id)),
   )
   const [estimate, setEstimate] = useState<Estimate | null>(null)
+  const [fresh, setFresh] = useState(false)
   const [error, setError] = useState('')
   const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
@@ -347,7 +348,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     let stale = false
     const timer = setTimeout(
       () =>
-        api.estimate(project.id, kind, idsKey.split(',')).then(
+        api.estimate(project.id, kind, idsKey.split(','), fresh).then(
           (result) => !stale && setEstimate(result),
           (e) => !stale && setError(errorText(t, e)),
         ),
@@ -357,7 +358,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
       stale = true
       clearTimeout(timer)
     }
-  }, [idsKey, project.id, kind, t])
+  }, [idsKey, project.id, kind, fresh, t])
 
   const toggle = (id: string) => {
     const next = new Set(selected)
@@ -365,7 +366,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     setSelected(next)
   }
   const start = () =>
-    api.startRun(project.id, kind, ids).then(onStarted, (e) => setError(errorText(t, e)))
+    api.startRun(project.id, kind, ids, fresh).then(onStarted, (e) => setError(errorText(t, e)))
   const number = (n: number) => n.toLocaleString()
 
   return (
@@ -395,6 +396,17 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
               />
               <span className="grow">{chapter.title || t('book.untitled')}</span>
               <span className="faint small">{number(chapter.chars)}</span>
+            </label>
+          ))}
+        </div>
+        <div className="stack">
+          {[false, true].map((value) => (
+            <label key={String(value)} className="row">
+              <input type="radio" name="run-mode" checked={fresh === value} onChange={() => setFresh(value)} />
+              <span className="grow">
+                {t(value ? 'run.fresh' : 'run.add')}
+                <span className="faint small"> — {t(value ? 'run.fresh.hint' : 'run.add.hint')}</span>
+              </span>
             </label>
           ))}
         </div>
