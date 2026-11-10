@@ -126,3 +126,29 @@ export function CloseIcon() {
     </svg>
   )
 }
+
+export function SearchIcon() {
+  return (
+    <svg {...stroke}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
+export function UserIcon() {
+  return (
+    <svg {...stroke}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  )
+}
+
+export function ChatIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z" />
+    </svg>
+  )
+}

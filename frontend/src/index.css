@@ -432,3 +432,53 @@ h2.chapter-title:hover { border-bottom-color: transparent; }
   .btn.small, .lang-select, .nav-add, .chapter-link { min-height: 44px; }
   .btn.icon { min-width: 44px; min-height: 44px; }
 }
+
+/* ---------- top bar: title and tabs on the left, search, name and account on the right ---------- */
+:root { --dock: 420px; }
+.topbar .tabs { margin-left: 28px; }
+.tab .dot { margin-left: 6px; }
+.brand-right { margin-left: 4px; }
+.book-search { position: relative; flex: 0 1 260px; min-width: 160px; display: flex; align-items: center; }
+.book-search > svg { position: absolute; left: 11px; color: var(--muted); pointer-events: none; }
+.book-search .input { padding: 8px 12px 8px 34px; }
+.book-search-results, .account-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); background: #17140d; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6); }
+.book-search-results { width: min(460px, 92vw); max-height: 65vh; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; }
+.book-search-results h4 { margin: 0 0 2px 12px; }
+.book-search-results nav { display: flex; flex-direction: column; gap: 2px; }
+.account { position: relative; }
+.topbar .btn.ghost.account-button { padding: 0; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.account-button svg { width: 20px; height: 20px; flex: none; }
+.account-button.active { color: var(--accent); }
+.account-menu { min-width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.account-email { margin: 2px 8px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu a, .account-menu button { background: transparent; border: 0; text-align: left; cursor: pointer; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--muted); font-family: var(--book); font-size: 15px; font-weight: 600; }
+.account-menu a:hover, .account-menu button:hover { color: #ffe7a0; background: rgba(250, 204, 21, 0.08); }
+
+/* ---------- one list column, the work area to the right edge ---------- */
+.nav-list { animation: none; }
+
+/* ---------- the book chat: a button in the corner, a panel along the right edge ---------- */
+.chat-fab { position: fixed; right: 24px; bottom: 24px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+.chat-fab svg { width: 18px; height: 18px; }
+.chat-dock { position: fixed; top: var(--topbar); right: 0; bottom: 0; z-index: 25; width: var(--dock); display: flex; flex-direction: column; padding: 18px; border-left: 1px solid var(--accent-line); background: rgba(16, 14, 9, 0.97); backdrop-filter: blur(12px); box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45); }
+.chat-head .btn.icon { margin-right: -6px; }
+/* The open panel takes its place from the work area instead of covering the text. */
+body:has(.chat-dock) .workspace { padding-right: var(--dock); }
+body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
+
+@media (max-width: 900px) {
+  /* The tabs are the only way between the parts now: they stay, scrolling sideways. */
+  .topbar .tabs { display: flex; margin-left: 0; flex: 1 1 100%; overflow-x: auto; height: 44px; }
+  .book-search { flex: 1 1 100%; order: 4; }
+  .topbar .brand-right { margin-left: auto; }
+  .topbar .account { margin-left: auto; }
+  .topbar .brand-right + .account { margin-left: 0; }
+  .chat-dock { top: 0; width: 100%; z-index: 50; }
+  body:has(.chat-dock) .workspace { padding-right: 0; }
+  body:has(.chat-dock) main.page { margin-right: auto; }
+  .chat-fab { right: 16px; bottom: 16px; }
+}
+@media (max-width: 480px) {
+  .chat-fab { padding: 12px; }
+  .chat-fab-label { display: none; }
+}

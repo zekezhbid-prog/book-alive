@@ -1,6 +1,9 @@
 /** Belarusian. A key missing here shows its Russian text (see `dictionaries` in i18n.tsx). */
 export const by: Record<string, string> = {
   'app.settings': 'Налады',
+  'account.menu': 'Акаўнт',
+  'chat.close': 'Згарнуць чат',
+  'settings.language': 'Мова інтэрфейсу',
   'projects.start.reader.title': 'Ілюстраваць гатовую кнігу',
   'projects.start.reader.body':
     'Загрузіце кнігу (TXT, EPUB, FB2, DOCX, PDF): сэрвіс разаб’е яе на раздзелы, знойдзе герояў, лакацыі і сцэны і збярэ промпты для малюнкаў і відэа з адными і тымі ж героямі.',

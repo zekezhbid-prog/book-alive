@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, type Chapter, type EntityBrief, type Project } from '../api'
 import ChapterEditor from '../components/ChapterEditor'
-import ChatPanel from '../components/ChatPanel'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
 import ReviewPanel from '../components/ReviewPanel'
@@ -73,6 +72,7 @@ export default function Book() {
   const highlighted = searchParams.has('p') ? Number(searchParams.get('p')) : undefined
   const writing = project.mode === 'writer' && view === 'writer' && highlighted === undefined
   const shown = chapter?.id === activeId ? chapter : null
+  const sidePanel = writing && (side === 'versions' || side === 'review')
   const open = (id: string) => navigate(`/projects/${projectId}/chapters/${id}`)
   const setView = async (next: View) => {
     // The other view is drawn from what the server has, so the draft must be there first.
@@ -98,7 +98,7 @@ export default function Book() {
 
   return (
     <>
-      <ProjectHeader project={project}>
+      <ProjectHeader project={project} chat={{ chapterId: activeId, canSuggest: writing }}>
         {project.mode === 'writer' && (
           <div className="segmented">
             {(['writer', 'illustrator'] as const).map((option) => (
@@ -111,7 +111,8 @@ export default function Book() {
           </div>
         )}
       </ProjectHeader>
-      <div className="workspace with-side">
+      {/* The writer's checks and versions open beside the text; the chat floats over all pages. */}
+      <div className={`workspace ${sidePanel ? 'with-side' : ''}`}>
         <ProjectNav project={project} activeChapter={activeId} onAddChapter={writing ? addChapter : undefined} />
 
         <section className="reading">
@@ -147,20 +148,15 @@ export default function Book() {
           )}
         </section>
 
-        <aside className="side">
-          {writing && side === 'versions' ? (
-            <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
-          ) : writing && side === 'review' ? (
-            <ReviewPanel project={project} chapterId={activeId} />
-          ) : (
-            <ChatPanel
-              projectId={project.id}
-              chapters={project.chapters}
-              chapterId={activeId}
-              canSuggest={writing}
-            />
-          )}
-        </aside>
+        {sidePanel && (
+          <aside className="side">
+            {side === 'versions' ? (
+              <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
+            ) : (
+              <ReviewPanel project={project} chapterId={activeId} />
+            )}
+          </aside>
+        )}
       </div>
     </>
   )

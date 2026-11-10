@@ -46,3 +46,10 @@ export function useSide(projectId: string): [Side, (side: Side) => void] {
   const side: Side = value === 'review' || value === 'versions' ? value : 'chat'
   return [side, (next) => write(key, next)]
 }
+
+/** Whether the book chat is unfolded on the right. One choice for every page of every book:
+ * the reader who keeps it open keeps it open while moving between sections. */
+export function useChatOpen(): [boolean, (open: boolean) => void] {
+  const open = useSyncExternalStore(subscribe, () => read('chat:open') === '1')
+  return [open, (next) => write('chat:open', next ? '1' : '0')]
+}

@@ -4,14 +4,25 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import type { Project } from '../api'
 import { useI18n } from '../i18n'
 import { useSide, useView, type Side } from '../view'
+import BookSearch from './BookSearch'
+import ChatDock from './ChatDock'
 
-/** The book's title, the tabs of its parts and, for a writer, the checks and versions,
- * rendered into the app's top bar. The project's own links sit in the left menu. */
-export default function ProjectHeader({ project, children }: { project: Project; children?: ReactNode }) {
+interface Props {
+  project: Project
+  children?: ReactNode
+  /** The book page tells the chat which chapter is open and whether ideas can be offered. */
+  chat?: { chapterId?: string; canSuggest?: boolean }
+}
+
+/** The book's title, the tabs of its parts, for a writer the checks and versions, and the
+ * book search, rendered into the app's top bar; and the book chat, on every project page. */
+export default function ProjectHeader({ project, children, chat }: Props) {
   const { t } = useI18n()
   const navigate = useNavigate()
   const view = useView(project)
   const [side, setSide] = useSide(project.id)
+  // The style is a step of the illustrator's work (references and frames wait for it).
+  const illustrating = view === 'illustrator'
   const slot = document.getElementById('topbar-slot')
   if (!slot) return null
   const base = `/projects/${project.id}`
@@ -28,7 +39,7 @@ export default function ProjectHeader({ project, children }: { project: Project;
       {tool === 'versions' && project.changes?.dirty && <span className="dot" />}
     </button>
   )
-  return createPortal(
+  const bar = createPortal(
     <>
       <b className="book-title" title={project.title}>
         {project.title}
@@ -47,6 +58,12 @@ export default function ProjectHeader({ project, children }: { project: Project;
         <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
           {t('tabs.scenes')}
         </NavLink>
+        {illustrating && (
+          <NavLink to={`${base}/style`} className={({ isActive }) => tabClass(isActive)}>
+            {t('tabs.style')}
+            {!project.style_id && <span className="dot" title={t('style.not_chosen')} />}
+          </NavLink>
+        )}
       </nav>
       {project.mode === 'writer' && view === 'writer' && (
         <>
@@ -56,8 +73,20 @@ export default function ProjectHeader({ project, children }: { project: Project;
       )}
       <span className="spacer" />
       {children}
+      <BookSearch projectId={project.id} />
     </>,
     slot,
+  )
+  return (
+    <>
+      {bar}
+      <ChatDock
+        projectId={project.id}
+        chapters={project.chapters}
+        chapterId={chat?.chapterId}
+        canSuggest={chat?.canSuggest}
+      />
+    </>
   )
 }
 

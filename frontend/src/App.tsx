@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Route, Routes } from 'react-router-dom'
 import { api, type SessionInfo } from './api'
 import { errorText, LANGS, useI18n, type Lang } from './i18n'
-import { SessionActions } from './session'
+import AccountMenu from './components/AccountMenu'
 import Book from './pages/Book'
 import Entities from './pages/Entities'
 import Projects from './pages/Projects'
@@ -12,7 +12,7 @@ import Style from './pages/Style'
 import Usage from './pages/Usage'
 
 export default function App() {
-  const { lang, setLang, t } = useI18n()
+  const { lang, setLang } = useI18n()
   // A hosted instance has accounts (e-mail and password); locally there is no login.
   const [session, setSession] = useState<SessionInfo | null>(null)
 
@@ -23,9 +23,6 @@ export default function App() {
     return () => window.removeEventListener('login-required', expired)
   }, [])
 
-  // The pages with the left menu keep Settings and Sign out at its foot.
-  const { pathname } = useLocation()
-  const hasMenu = /^\/projects\/[^/]+(\/(chapters|characters|locations|scenes)(\/|$)|$)/.test(pathname)
   const languageButton = (
     <select
       className="input lang-select"
@@ -60,34 +57,24 @@ export default function App() {
   }
   return (
     <>
+      {/* The mark on the left, then the open book's title, tabs and search (pages put them
+          into the slot); the name of the app and the account menu in the right corner. */}
       <header className="topbar">
-        <Link to="/" className="brand">
+        <Link to="/" className="brand brand-mark-only" title="Lorebook">
           <span className="brand-mark">
-            <img src="/favicon.svg" alt="" />
+            <img src="/favicon.svg" alt="Lorebook" />
           </span>
+        </Link>
+        <div id="topbar-slot" className="topbar-slot" />
+        <Link to="/" className="brand brand-right">
           <span className="brand-name">Lorebook</span>
         </Link>
-        {/* Pages put their own breadcrumb and controls here. */}
-        <div id="topbar-slot" className="topbar-slot" />
-        {!hasMenu && (
-          <NavLink to="/settings" className="btn ghost">
-            {t('app.settings')}
-          </NavLink>
-        )}
-        {!hasMenu && session.accounts && (
-          <button className="btn ghost" title={session.email} onClick={() => api.logout().then(setSession)}>
-            {t('login.logout')}
-          </button>
-        )}
-        {languageButton}
+        <AccountMenu
+          accounts={session.accounts}
+          email={session.email}
+          onLogout={() => void api.logout().then(setSession)}
+        />
       </header>
-      <SessionActions.Provider
-        value={{
-          accounts: session.accounts,
-          email: session.email,
-          logout: () => void api.logout().then(setSession),
-        }}
-      >
       <Routes>
         <Route path="/" element={<Projects />} />
         <Route path="/projects/:projectId" element={<Book />} />
@@ -113,7 +100,6 @@ export default function App() {
         <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
-      </SessionActions.Provider>
     </>
   )
 }

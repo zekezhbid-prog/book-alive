@@ -21,6 +21,8 @@ interface Props {
   chapterId?: string
   /** Writer projects: offer ideas for what happens next in the open chapter. */
   canSuggest?: boolean
+  /** Folds the panel away (the chat floats over every page of the book). */
+  onClose?: () => void
 }
 
 /** Errors the reader can act on are named; anything else (a model that broke its format,
@@ -36,7 +38,7 @@ function useChatError() {
 /** Questions about the book. Answers come only from its text, with links to the source.
  * The book has several conversations; each keeps its own history and may be limited to
  * chosen chapters. */
-export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }: Props) {
+export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, onClose }: Props) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
   const chatError = useChatError()
@@ -219,6 +221,16 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
         >
           <BoldPlusIcon />
         </button>
+        {onClose && (
+          <button
+            className="btn ghost small icon"
+            onClick={onClose}
+            title={t('chat.close')}
+            aria-label={t('chat.close')}
+          >
+            <CloseIcon />
+          </button>
+        )}
       </div>
       {threads.length > 0 && (
         <div className="row chat-threads">

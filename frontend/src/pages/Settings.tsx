@@ -6,13 +6,16 @@ import {
   type ModelInfo,
   type ModelSettings,
 } from "../api";
-import { errorText, useI18n, type MessageKey } from "../i18n";
+import { errorText, LANGS, useI18n, type Lang, type MessageKey } from "../i18n";
 import { ask } from "../dialogs";
+
+// Each language by its own name, so the reader finds theirs whatever is chosen now.
+const LANG_NAMES: Record<Lang, string> = { ru: "Русский", by: "Беларуская", en: "English" };
 
 const PRESETS = [{ name: "Hubris", url: "https://api.hubris.pw/v1" }];
 
 export default function Settings() {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [settings, setSettings] = useState<ModelSettings | null>(null);
   const [error, setError] = useState("");
@@ -64,6 +67,22 @@ export default function Settings() {
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+
+      <section className="panel pad row">
+        <h2 className="grow">{t("settings.language")}</h2>
+        <select
+          className="input lang-select"
+          value={lang}
+          onChange={(e) => setLang(e.target.value as Lang)}
+          aria-label={t("settings.language")}
+        >
+          {LANGS.map((code) => (
+            <option key={code} value={code}>
+              {LANG_NAMES[code]}
+            </option>
+          ))}
+        </select>
+      </section>
 
       {isAdmin && (
         <section className="panel pad stack">

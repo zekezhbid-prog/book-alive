@@ -8,6 +8,9 @@ export const LANGS: Lang[] = ['ru', 'by', 'en']
 
 const ru = {
   'app.settings': 'Настройки',
+  'account.menu': 'Аккаунт',
+  'chat.close': 'Свернуть чат',
+  'settings.language': 'Язык интерфейса',
   'projects.start.reader.title': 'Иллюстрировать готовую книгу',
   'projects.start.reader.body':
     'Загрузите книгу (TXT, EPUB, FB2, DOCX, PDF): сервис разобьёт её на главы, найдёт персонажей, локации и сцены и соберёт промпты для картинок и видео с одними и теми же героями.',
@@ -545,6 +548,9 @@ const ru = {
 
 const en: Record<keyof typeof ru, string> = {
   'app.settings': 'Settings',
+  'account.menu': 'Account',
+  'chat.close': 'Fold the chat',
+  'settings.language': 'Interface language',
   'projects.start.reader.title': 'Illustrate a finished book',
   'projects.start.reader.body':
     'Upload a book (TXT, EPUB, FB2, DOCX, PDF): the service splits it into chapters, finds characters, locations and scenes, and builds prompts for pictures and video that keep the same characters throughout.',

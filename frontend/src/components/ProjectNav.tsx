@@ -1,12 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, type SearchHit } from '../api'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { markMatches } from '../markMatches'
 import { BoldPlusIcon, PlusIcon, SparklesIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
-import { useSessionActions } from '../session'
-import { useView } from '../view'
 
 type Section = 'chapters' | 'characters' | 'locations' | 'scenes'
 const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'scenes']
@@ -25,9 +22,8 @@ interface Props {
 }
 
 /**
- * The left menu of a project: the book search and the parts of the book in a narrow
- * column, the list of the chosen part beside it. Choosing a part goes to its page, so the
- * tab above lights up with it.
+ * The list of the open part of the book (chapters, characters, locations or scenes) in a
+ * column on the left. The parts themselves are the tabs of the top bar.
  */
 export default function ProjectNav({ project, activeChapter, onAddChapter, ...given }: Props) {
   const { t } = useI18n()
@@ -35,9 +31,6 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   const { pathname } = useLocation()
   const { entityId, sceneId } = useParams()
   const base = `/projects/${project.id}`
-  const { accounts, email, logout } = useSessionActions()
-  // The style belongs to the illustrator's work, not to the writer's.
-  const illustrating = useView(project) === 'illustrator'
   // The search dialogs start from the chapter the user was last reading.
   useEffect(() => {
     if (!activeChapter) return
@@ -72,19 +65,6 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
   const locations = given.locations ?? fetched.locations
   const scenes = given.scenes ?? fetched.scenes
 
-  // The current section's list unfolds to the right as a second column. Another section
-  // goes to its page with the list open; the current one folds the list away and back.
-  const [open, setOpen] = useState(() => localStorage.getItem('nav:folded') !== '1')
-  const remember = (next: boolean) => {
-    setOpen(next)
-    localStorage.setItem('nav:folded', next ? '0' : '1')
-  }
-  const choose = (section: Section) => {
-    if (section === current) return remember(!open)
-    remember(true)
-    navigate(section === 'chapters' ? base : `${base}/${section}`)
-  }
-
   // Chapters whose scenes are folded away in the list; a click on the chapter title toggles.
   const [foldedChapters, setFoldedChapters] = useState<Set<string>>(new Set())
   const toggleChapter = (id: string) =>
@@ -99,23 +79,6 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     localStorage.setItem('nav:vivid', showVivid ? '0' : '1')
   }
 
-  const [query, setQuery] = useState('')
-  const [found, setHits] = useState<SearchHit[] | null>(null)
-  const searching = query.trim().length >= 2
-  const hits = searching ? found : null
-  useEffect(() => {
-    if (!searching) return
-    const timer = setTimeout(
-      () => api.search(project.id, query).then(setHits, (e) => setError(errorText(t, e))),
-      250,
-    )
-    return () => clearTimeout(timer)
-  }, [query, searching, project.id, t])
-  const openHit = (hit: SearchHit) => {
-    const params = new URLSearchParams({ p: String(hit.paragraph), q: query.trim() })
-    navigate(`${base}/chapters/${hit.chapter_id}?${params}`)
-  }
-
   // A card for someone the search has not reached yet, so pictures can be attached now.
   const [adding, setAdding] = useState<'characters' | 'locations' | null>(null)
   const addCard = (section: 'characters' | 'locations') => setAdding(section)
@@ -128,14 +91,6 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     })
     navigate(`${base}/${section}/${created.id}`)
   }
-
-  const count = (section: Section) =>
-    ({
-      chapters: project.chapters.length,
-      characters: characters?.length,
-      locations: locations?.length,
-      scenes: scenes?.length,
-    })[section]
 
   const body: Record<Section, ReactNode> = {
     chapters: (
@@ -274,79 +229,14 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
 
   return (
     <aside className="project-nav">
-      <div className="nav-rail">
-        <input
-          className="input"
-          type="search"
-          placeholder={t('book.search')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <nav className="nav-sections">
-          {SECTIONS.map((section) => (
-            <button
-              key={section}
-              className={`nav-head ${section === current ? 'current' : ''}`}
-              aria-expanded={section === current && open}
-              onClick={() => choose(section)}
-            >
-              <span className="grow">{t(`nav.${section}`)}</span>
-              {count(section) !== undefined && <span className="nav-count">{count(section)}</span>}
-              <span className="nav-chevron">{section === current && open ? '‹' : '›'}</span>
-            </button>
-          ))}
-          {/* The style is a step of the illustrator's work (references and frames wait for it),
-              so it stands with the parts of the book, flagged while it is not chosen. */}
-          {illustrating && (
-            <Link
-              to={`${base}/style`}
-              className={`nav-head ${pathname.startsWith(`${base}/style`) ? 'current' : ''}`}
-            >
-              <span className="grow">{t('tabs.style')}</span>
-              {!project.style_id && <span className="nav-count nav-flag">{t('style.not_chosen')}</span>}
-              <span className="nav-chevron">›</span>
-            </Link>
-          )}
-        </nav>
-        {/* The project's own links and the app's settings, at the foot of the first column. */}
-        <nav className="nav-footer">
-          <Link to="/">{t('nav.my_projects')}</Link>
-          <Link to={`${base}/usage`}>{t('tabs.usage')}</Link>
-          <Link to="/settings">{t('app.settings')}</Link>
-          {accounts && (
-            <button title={email} onClick={logout}>
-              {t('login.logout')}
-            </button>
-          )}
-        </nav>
-      </div>
-      {/* Search results take the list's place while there is a query. */}
-      {(hits || open) && (
-        <div className="nav-list">
-          {error && <p className="error small">{error}</p>}
-          {hits ? (
-            <>
-              <h4>{hits.length ? t('book.search.results', { n: hits.length }) : t('book.search.none')}</h4>
-              <nav>
-                {hits.map((hit, i) => (
-                  <button key={i} className="hit" onClick={() => openHit(hit)}>
-                    <span className="faint small">{hit.chapter_title || t('book.untitled')}</span>
-                    <span>…{markMatches(hit.snippet, query, (text) => [text])}…</span>
-                  </button>
-                ))}
-              </nav>
-            </>
-          ) : (
-            <>
-              <div className="nav-list-head">
-                <h4>{t(`nav.${current}`)}</h4>
-                {(current === 'characters' || current === 'locations') && cardActions(current)}
-              </div>
-              <nav>{body[current]}</nav>
-            </>
-          )}
+      <div className="nav-list">
+        {error && <p className="error small">{error}</p>}
+        <div className="nav-list-head">
+          <h4>{t(`nav.${current}`)}</h4>
+          {(current === 'characters' || current === 'locations') && cardActions(current)}
         </div>
-      )}
+        <nav>{body[current]}</nav>
+      </div>
       {adding && (
         <AddCardDialog
           projectId={project.id}
