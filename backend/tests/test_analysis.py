@@ -418,3 +418,19 @@ def test_characters_are_living_beings_and_objects_go_with_locations():
     locations = prompts.extract_system("location")
     assert "notable inanimate things" in locations
     assert prompts.summary_system("location").count("locations and objects") == 1
+
+
+def test_dialog_knows_which_chapters_are_read_and_which_changed(client, session, project):
+    url = f"/api/projects/{project.id}/analysis/chapters"
+    assert client.get(url, params={"kind": "character"}).json() == {"read": [], "changed": []}
+    run(session, project, FakeModel(), chapters=project.chapters[:1])
+    first, second = project.chapters
+    status = client.get(url, params={"kind": "character"}).json()
+    assert status == {"read": [first.id], "changed": []}
+
+    first.text += "\n\nНовый абзац."
+    first.content_hash = text_hash(first.text)
+    session.commit()
+    status = client.get(url, params={"kind": "character"}).json()
+    assert status == {"read": [], "changed": [first.id]}
+    assert second.id not in status["read"]

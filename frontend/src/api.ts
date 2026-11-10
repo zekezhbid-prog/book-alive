@@ -450,6 +450,12 @@ export const api = {
       chapter_ids: chapterIds,
       fresh,
     }),
+  /** Which chapters were already read (free to run again) and which changed since. */
+  chapterStatus: (projectId: string, kind: EntityKind) =>
+    request<{ read: string[]; changed: string[] }>(
+      'GET',
+      `/projects/${projectId}/analysis/chapters?kind=${kind}`,
+    ),
   latestRun: (projectId: string, kind: EntityKind) =>
     request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
   cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),

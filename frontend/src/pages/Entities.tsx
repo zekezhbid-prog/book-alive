@@ -333,13 +333,27 @@ interface DialogProps {
 /** Pick chapters, see what it will cost, then start. Nothing is spent before "Start". */
 function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: DialogProps) {
   const { t } = useI18n()
-  const [selected, setSelected] = useState(
-    () => new Set(initial.length ? initial : project.chapters.slice(0, 1).map((c) => c.id)),
-  )
+  const [selected, setSelected] = useState(() => new Set(initial))
   const [estimate, setEstimate] = useState<Estimate | null>(null)
   const [fresh, setFresh] = useState(false)
   const [error, setError] = useState('')
-  const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)
+  // Chapters already read stay ticked when adding: their answers are reused for free and the
+  // book does not change under the illustrator. Starting from scratch frees every box.
+  const [status, setStatus] = useState<{ read: Set<string>; changed: Set<string> } | null>(null)
+  useEffect(() => {
+    api.chapterStatus(project.id, kind).then(
+      (s) => {
+        setStatus({ read: new Set(s.read), changed: new Set(s.changed) })
+        // Nothing read yet and nothing asked for: offer the first chapter, as a start.
+        if (!s.read.length && !initial.length) setSelected(new Set(project.chapters.slice(0, 1).map((c) => c.id)))
+      },
+      (e) => setError(errorText(t, e)),
+    )
+    // Once, when the dialog opens: later changes to the props must not reset the ticks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const locked = (id: string) => !fresh && !!status?.read.has(id)
+  const ids = project.chapters.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
 
   useEffect(() => {
@@ -360,7 +374,13 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     }
   }, [idsKey, project.id, kind, fresh, t])
 
+  // Going from scratch keeps the read chapters ticked: they are what gets read again.
+  const chooseMode = (value: boolean) => {
+    if (value && status) setSelected(new Set([...selected, ...status.read]))
+    setFresh(value)
+  }
   const toggle = (id: string) => {
+    if (locked(id)) return
     const next = new Set(selected)
     if (!next.delete(id)) next.add(id)
     setSelected(next)
@@ -373,6 +393,17 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog stack">
         <h2>{t(`entities.find.${kind}`)}</h2>
+        <div className="stack">
+          {[false, true].map((value) => (
+            <label key={String(value)} className="row">
+              <input type="radio" name="run-mode" checked={fresh === value} onChange={() => chooseMode(value)} />
+              <span className="grow">
+                {t(value ? 'run.fresh' : 'run.add')}
+                <span className="faint small"> — {t(value ? 'run.fresh.hint' : 'run.add.hint')}</span>
+              </span>
+            </label>
+          ))}
+        </div>
         <div className="row">
           <h4>{t('run.title')}</h4>
           <span className="spacer" />
@@ -391,22 +422,18 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
             <label key={chapter.id} className="row">
               <input
                 type="checkbox"
-                checked={selected.has(chapter.id)}
+                checked={selected.has(chapter.id) || locked(chapter.id)}
+                disabled={locked(chapter.id)}
                 onChange={() => toggle(chapter.id)}
               />
-              <span className="grow">{chapter.title || t('book.untitled')}</span>
-              <span className="faint small">{number(chapter.chars)}</span>
-            </label>
-          ))}
-        </div>
-        <div className="stack">
-          {[false, true].map((value) => (
-            <label key={String(value)} className="row">
-              <input type="radio" name="run-mode" checked={fresh === value} onChange={() => setFresh(value)} />
               <span className="grow">
-                {t(value ? 'run.fresh' : 'run.add')}
-                <span className="faint small"> — {t(value ? 'run.fresh.hint' : 'run.add.hint')}</span>
+                {chapter.title || t('book.untitled')}
+                {locked(chapter.id) && <span className="faint small"> · {t('run.chapter.read')}</span>}
+                {status?.changed.has(chapter.id) && (
+                  <span className="warn small"> · {t('run.chapter.changed')}</span>
+                )}
               </span>
+              <span className="faint small">{number(chapter.chars)}</span>
             </label>
           ))}
         </div>

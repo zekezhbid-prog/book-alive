@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.analysis import entities as analysis
-from app.analysis import runner
+from app.analysis import prompts, runner
 from app.db import SessionDep
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import (
@@ -16,6 +16,7 @@ from app.models import (
     KIND_LOCATION,
     AnalysisRun,
     Chapter,
+    ChapterExtraction,
     Entity,
     Project,
     UsageEvent,
@@ -217,6 +218,37 @@ def list_entities(project_id: str, kind: str, session: SessionDep) -> list[Entit
     ]
     # Main characters first: they appear in the most chapters.
     return sorted(briefs, key=lambda b: (-b.chapters, b.name))
+
+
+class ChapterStatus(BaseModel):
+    # Read with the same text and prompt: running them again costs nothing.
+    read: list[str]
+    # Read before, but their text has changed since: worth reading again.
+    changed: list[str]
+
+
+@router.get("/projects/{project_id}/analysis/chapters")
+def chapter_status(project_id: str, kind: str, session: SessionDep) -> ChapterStatus:
+    project = _project(session, project_id)
+    stored = {
+        row.chapter_id: row
+        for row in session.scalars(
+            select(ChapterExtraction).where(
+                ChapterExtraction.project_id == project.id,
+                ChapterExtraction.kind == _kind(kind),
+            )
+        )
+    }
+    read, changed = [], []
+    for chapter in project.chapters:
+        row = stored.get(chapter.id)
+        if row is None:
+            continue
+        if row.chapter_hash != chapter.content_hash:
+            changed.append(chapter.id)
+        elif row.payload.get("version") == prompts.PROMPT_VERSION:
+            read.append(chapter.id)
+    return ChapterStatus(read=read, changed=changed)
 
 
 class StaleOut(BaseModel):
