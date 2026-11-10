@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from datetime import datetime
 from typing import Annotated, Literal
@@ -6,11 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.db import SessionDep
-from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
+from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import MODE_WRITER, ChatMessage, ChatThread, Project
 from app.rag import chat
 
 router = APIRouter(prefix="/api", tags=["chat"])
+log = logging.getLogger(__name__)
+# What the reader sees when the agent fails: the details go to the server log only.
+CHAT_FAILED = "chat_failed"
 
 
 class CitationOut(BaseModel):
@@ -146,10 +150,9 @@ def ask(project_id: str, thread_id: str, body: Question, session: SessionDep) ->
         asked, reply = chat.ask(
             session, project, model, body.question.strip(), body.chapter_id, thread
         )
-    except BadModelOutput as exc:
-        raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:
-        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+        log.exception("chat failed: project %s, thread %s", project_id, thread_id)
+        raise HTTPException(502, CHAT_FAILED) from exc
     return [_out(asked), _out(reply)]
 
 
@@ -189,10 +192,9 @@ def ask_stream(
                 yield StreamLine(type="done", messages=[_out(event.asked), _out(event.reply)])
             else:
                 yield StreamLine(type="status", code=event.code, detail=event.detail)
-    except BadModelOutput as exc:
-        yield StreamLine(type="error", detail=f"bad_model_output: {exc}")
-    except Exception as exc:  # noqa: BLE001 - the response has started: report in it
-        yield StreamLine(type="error", detail=f"provider_error: {str(exc)[:300]}")
+    except Exception:  # the response has started: report in it
+        log.exception("chat failed: project %s, thread %s", project_id, thread_id)
+        yield StreamLine(type="error", detail=CHAT_FAILED)
 
 
 @router.post("/projects/{project_id}/chats/{thread_id}/suggest")
@@ -210,8 +212,7 @@ def suggest(
         asked, reply = chat.suggest(
             session, project, model, body.question.strip(), body.chapter_id, thread
         )
-    except BadModelOutput as exc:
-        raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:
-        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+        log.exception("plot suggestions failed: project %s, thread %s", project_id, thread_id)
+        raise HTTPException(502, CHAT_FAILED) from exc
     return [_out(asked), _out(reply)]

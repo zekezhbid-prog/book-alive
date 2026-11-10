@@ -1,6 +1,7 @@
 """Calling the configured text model, with every call written to the usage journal."""
 
 import json
+import logging
 import re
 
 from langchain_core.language_models import BaseChatModel
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.db import release_connection
 from app.llm import prefs, registry
 from app.models import Connection, UsageEvent
+
+log = logging.getLogger(__name__)
 
 
 class ModelNotConfigured(RuntimeError):
@@ -80,9 +83,14 @@ class TextModel:
                     "Reply again with only the corrected JSON object."
                 ),
             ]
+            again = self.invoke(operation, repair)
             try:
-                return _parse(self.invoke(operation, repair), schema)
+                return _parse(again, schema)
             except (ValueError, ValidationError) as exc:
+                # The reply itself, so a failure seen by a user can be understood later.
+                log.warning(
+                    "%s: %s gave no valid JSON: %r", operation, self.model_name, again[:800]
+                )
                 raise BadModelOutput(str(exc)[:300]) from exc
 
 

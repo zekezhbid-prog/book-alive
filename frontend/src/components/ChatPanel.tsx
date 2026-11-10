@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { Link } from 'react-router-dom'
 import {
   api,
+  ApiError,
   type ChapterBrief,
   type ChatMessage,
   type ChatStatus,
@@ -21,12 +22,23 @@ interface Props {
   canSuggest?: boolean
 }
 
+/** Errors the reader can act on are named; anything else (a model that broke its format,
+ * a provider or network failure) is one plain line, with no technical details. */
+function useChatError() {
+  const { t } = useI18n()
+  return (error: unknown) =>
+    error instanceof ApiError && error.code === 'text_model_not_configured'
+      ? errorText(t, error)
+      : t('error.chat_failed')
+}
+
 /** Questions about the book. Answers come only from its text, with links to the source.
  * The book has several conversations; each keeps its own history and may be limited to
  * chosen chapters. */
 export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }: Props) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
+  const chatError = useChatError()
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [threadId, setThreadId] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -97,7 +109,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
       afterAnswer(await api.ask(projectId, id, text, chapterId, setStatus))
       setQuestion('')
     } catch (e) {
-      setError(errorText(t, e))
+      setError(chatError(e))
     } finally {
       setWaiting(false)
       setStatus(null)
@@ -111,7 +123,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
       const id = await currentThread()
       afterAnswer(await api.suggest(projectId, id, t('chat.suggest.question'), chapterId))
     } catch (e) {
-      setError(errorText(t, e))
+      setError(chatError(e))
     } finally {
       setWaiting(false)
     }

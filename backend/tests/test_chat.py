@@ -179,7 +179,7 @@ def test_agent_must_answer_within_its_steps(session, project):
     model = FakeModel({"action": "search", "query": "ключ"})
     with pytest.raises(BadModelOutput):
         chat.ask(session, project, model, "Куда делся ключ?")
-    assert len(model.prompts) == agent.MAX_STEPS
+    assert len(model.prompts) == agent.MAX_STEPS + 1  # the last step is asked twice
     assert agent.FORCE_ANSWER in model.prompts[-1]
 
 
@@ -236,7 +236,8 @@ def test_chat_stream_reports_a_model_failure_as_its_last_line(client, project, s
     stream_model["model"] = BrokenModel()
     lines = _stream(client, project.id, "Что несла Люта?")
     assert lines[0]["type"] == "status"  # the response had already begun
-    assert (lines[-1]["type"], lines[-1]["detail"]) == ("error", "provider_error: rate limit")
+    # The reader gets a plain message; the details stay in the server log.
+    assert (lines[-1]["type"], lines[-1]["detail"]) == ("error", "chat_failed")
 
 
 def test_chat_stream_without_a_model_fails_before_streaming(client, project):
@@ -382,3 +383,28 @@ def test_agent_reads_a_chapter_before_saying_the_book_does_not_answer(session, p
     _, reply = chat.ask(session, project, model, "Куда делся ключ?")
     assert "You have not read any chapter yet" in model.prompts[1]
     assert reply.content == "За пазуху [2]."
+
+
+def test_agent_out_of_steps_is_asked_once_more_to_answer(session, project):
+    looking = {"action": "search", "query": "ключ"}
+    replies = [looking] * agent.MAX_STEPS + [
+        {"found": True, "answer": "Ключ у мельника [1].", "citations": []}
+    ]
+    model = FakeModel(*replies)
+    _, reply = chat.ask(session, project, model, "Куда делся ключ?")
+    assert reply.content == "Ключ у мельника [1]."
+
+
+def test_one_unreadable_reply_is_tried_again(session, project):
+    class OnceBroken(FakeModel):
+        broken = True
+
+        def invoke_json(self, operation, messages, schema):
+            if self.broken:
+                self.broken = False
+                raise BadModelOutput("not JSON")
+            return super().invoke_json(operation, messages, schema)
+
+    model = OnceBroken({"found": True, "answer": "Посох [1].", "citations": []})
+    _, reply = chat.ask(session, project, model, "Что несла Люта?")
+    assert reply.content == "Посох [1]."

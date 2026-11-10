@@ -78,6 +78,10 @@ if they do not answer the question, say so.
 """
 
 FORCE_ANSWER = "No more tools: answer now from the sources you have."
+EMPTY_ANSWER = (
+    'Your answer was empty. Reply {"action": "answer", ...} with the answer written out, or '
+    "say plainly that the sources do not answer the question."
+)
 READ_FIRST = (
     "You have not read any chapter yet, so you cannot know the book does not answer. "
     "Earlier answers in this conversation may be wrong too. Pick from the table of contents "
@@ -182,18 +186,38 @@ def decide(state: State, config: RunnableConfig) -> dict:
         request += f"\n\n{FORCE_ANSWER}"
     messages: list[BaseMessage] = [SystemMessage(system), *c.get("history", [])]
     messages.append(HumanMessage(request))
-    decision = model.invoke_json("chat", messages, Decision)
+    decision = _ask(model, messages)
     read_any = any(d.metadata.get("whole") for d in state["sources"])
     if decision.action == "answer" and not decision.found and not read_any and steps < MAX_STEPS:
         # "The book does not say" from a few passages is too quick (and an earlier answer in
         # the history tempts to repeat it): one more turn, with a chapter opened first.
-        messages += [AIMessage(decision.model_dump_json()), HumanMessage(READ_FIRST)]
-        decision = model.invoke_json("chat", messages, Decision)
+        decision = _again(model, messages, decision, READ_FIRST)
+    if decision.action != "answer" and steps >= MAX_STEPS:
+        # Out of steps but still wanting to look: one firm request to answer now.
+        decision = _again(model, messages, decision, FORCE_ANSWER)
+    if decision.action == "answer" and not decision.answer.strip():
+        decision = _again(model, messages, decision, EMPTY_ANSWER)
     if decision.action != "answer" and steps >= MAX_STEPS:
         raise BadModelOutput("the agent did not answer within its steps")
     if decision.action == "answer" and not decision.answer.strip():
         raise BadModelOutput("empty answer")
     return {"decision": decision, "steps": steps}
+
+
+def _ask(model: TextModel, messages: list[BaseMessage]) -> Decision:
+    """One decision; a reply that is still not valid JSON after the repair inside
+    `invoke_json` gets one fresh try, since such failures are usually one-off."""
+    try:
+        return model.invoke_json("chat", messages, Decision)
+    except BadModelOutput:
+        return model.invoke_json("chat", messages, Decision)
+
+
+def _again(
+    model: TextModel, messages: list[BaseMessage], decision: Decision, request: str
+) -> Decision:
+    messages += [AIMessage(decision.model_dump_json()), HumanMessage(request)]
+    return _ask(model, messages)
 
 
 def search_tool(state: State, config: RunnableConfig) -> dict:
