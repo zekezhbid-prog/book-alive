@@ -308,3 +308,18 @@ def test_question_in_another_language_is_put_into_the_books_language():
     assert not chat.needs_translation("дзе сустрэліся Уцей і Люта?", belarusian)
     assert chat.needs_translation("where did they meet", belarusian)
     assert not chat.needs_translation("Что несла Люта?", "Люта несла корзину. Что это было?")
+
+
+def test_agent_reads_a_chapter_before_saying_the_book_does_not_answer(session, project):
+    model = FakeModel(
+        {"found": False, "answer": "В книге этого нет."},
+        {"action": "read", "chapter": 1},
+        {
+            "found": True,
+            "answer": "За пазуху [2].",
+            "citations": [{"source": 2, "quote": "спрятал его за пазуху"}],
+        },
+    )
+    _, reply = chat.ask(session, project, model, "Куда делся ключ?")
+    assert "You have not read any chapter yet" in model.prompts[1]
+    assert reply.content == "За пазуху [2]."

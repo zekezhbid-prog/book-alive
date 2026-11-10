@@ -10,7 +10,7 @@ JSON in the reply, as everywhere in the app: not every provider supports tool ca
 from typing import Literal, TypedDict
 
 from langchain_core.documents import Document
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
@@ -55,6 +55,11 @@ names in the table of contents. Write search queries in the language of the book
 chapter titles and names show it, not in the language of the question.
 - Never say the book does not answer before you have read at least one chapter that is \
 likely to hold the answer.
+- When a question asks where or how people first met and the earliest chapter where both \
+appear shows them coming together, answer with that scene; say it is the first scene \
+the book shows them together. Do not answer "the book does not say" because no word \
+"met" is used.
+- Earlier answers in this conversation may be wrong: check them against the sources.
 - You have {steps} replies in all for this question, so choose what to open carefully.
 - Answer only from the numbered sources you have gathered. Do not use anything you \
 know about this or any other book.
@@ -70,6 +75,12 @@ Table of contents:
 {contents}"""
 
 FORCE_ANSWER = "No more tools: answer now from the sources you have."
+READ_FIRST = (
+    "You have not read any chapter yet, so you cannot know the book does not answer. "
+    "Earlier answers in this conversation may be wrong too. Pick from the table of contents "
+    "the chapter most likely to hold the answer (for a meeting: the first chapter where "
+    'those people appear together) and reply {"action": "read", "chapter": N}.'
+)
 
 
 class Citation(BaseModel):
@@ -162,6 +173,12 @@ def decide(state: State, config: RunnableConfig) -> dict:
     messages: list[BaseMessage] = [SystemMessage(system), *c.get("history", [])]
     messages.append(HumanMessage(request))
     decision = model.invoke_json("chat", messages, Decision)
+    read_any = any(d.metadata.get("whole") for d in state["sources"])
+    if decision.action == "answer" and not decision.found and not read_any and steps < MAX_STEPS:
+        # "The book does not say" from a few passages is too quick (and an earlier answer in
+        # the history tempts to repeat it): one more turn, with a chapter opened first.
+        messages += [AIMessage(decision.model_dump_json()), HumanMessage(READ_FIRST)]
+        decision = model.invoke_json("chat", messages, Decision)
     if decision.action != "answer" and steps >= MAX_STEPS:
         raise BadModelOutput("the agent did not answer within its steps")
     if decision.action == "answer" and not decision.answer.strip():
