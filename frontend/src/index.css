@@ -332,6 +332,10 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .nav-empty { padding: 4px 12px; }
 .nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; text-align: left; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }
+.nav-actions { display: flex; gap: 8px; margin: 0 4px 6px; }
+.nav-actions .btn { flex: 1; justify-content: center; }
+.btn.gold-outline { background: rgba(250, 204, 21, 0.1); color: var(--accent); border-color: var(--accent); }
+.btn.gold-outline:hover { background: rgba(250, 204, 21, 0.2); color: var(--accent); }
 @media (max-width: 900px) {
   .workspace > .project-nav { flex-direction: column; }
   .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, type SearchHit } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
-import { PlusIcon, SparklesIcon } from './icons'
+import { HandIcon, PlusIcon, SparklesIcon } from './icons'
 import { askText } from '../dialogs'
 import { useSessionActions } from '../session'
 import { useView } from '../view'
@@ -228,18 +228,26 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
             <span className="faint small">{item.chapters}</span>
           </button>
         ))}
-        <button className="nav-add" onClick={() => addCard(section)}>
-          <PlusIcon /> {t(`nav.add.${section}`)}
-        </button>
+      </>
+    )
+  }
+
+  /** On top of the card list, where they are seen at once: find in the book or add by hand. */
+  function cardActions(section: 'characters' | 'locations') {
+    return (
+      <div className="nav-actions">
         {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
         <button
-          className="nav-add"
+          className="btn primary small"
           title={t(`entities.search.hint.${KIND[section]}`)}
           onClick={() => navigate(`${base}/${section}?find=1`)}
         >
-          <SparklesIcon /> {t(`nav.find.${section}`)}
+          <SparklesIcon /> {t('nav.find.short')}
         </button>
-      </>
+        <button className="btn gold-outline small" title={t(`nav.add.${section}`)} onClick={() => addCard(section)}>
+          <HandIcon /> {t('nav.add.short')}
+        </button>
+      </div>
     )
   }
 
@@ -310,6 +318,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
           ) : (
             <>
               <h4>{t(`nav.${current}`)}</h4>
+              {(current === 'characters' || current === 'locations') && cardActions(current)}
               <nav>{body[current]}</nav>
             </>
           )}
