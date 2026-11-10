@@ -68,6 +68,7 @@ class Groups(BaseModel):
 class CardSummary(BaseModel):
     number: int
     text: str = ""
+    appearance: str = ""
 
 
 class Summaries(BaseModel):
@@ -149,6 +150,7 @@ def start_fresh(session: Session, project_id: str, chapters: list[Chapter], kind
         if entity.images or entity.pinned_names or entity.standalone:
             entity.facts.clear()
             entity.summary = ""
+            entity.appearance = ""
             entity.aliases = list(entity.pinned_names)
         else:
             session.delete(entity)
@@ -416,6 +418,7 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
 
 SUMMARY_BATCH = 6
 SUMMARY_FACTS = 30
+SUMMARY_MOMENTS = 15
 
 
 def summarize(state: State, config: RunnableConfig) -> dict:
@@ -440,6 +443,8 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         lines.append(f"chapters ({len(chapters)}): " + ", ".join(titles[c] for c in chapters[:12]))
     if entity.summary.strip():
         lines.append(f"description so far: {entity.summary.strip()}")
+    if entity.appearance.strip():
+        lines.append(f"appearance so far: {entity.appearance.strip()}")
     # The general description and lasting looks. What is true in one chapter only (clothes,
     # wounds) would make the description about a moment; it is used only when nothing else
     # is known.
@@ -452,6 +457,17 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         if norm(fact.text) not in seen and len(seen) < SUMMARY_FACTS:
             seen.add(norm(fact.text))
             lines.append(f"- {fact.text.strip()}")
+    # Looks of one moment (clothes, wounds) for the appearance: what repeats is the usual look.
+    if lasting:
+        moments = 0
+        for fact in entity.facts:
+            if fact.category != FACT_STATE or not fact.text.strip() or norm(fact.text) in seen:
+                continue
+            if moments >= SUMMARY_MOMENTS:
+                break
+            seen.add(norm(fact.text))
+            moments += 1
+            lines.append(f"- in one chapter: {fact.text.strip()}")
     return "\n".join(lines)
 
 
@@ -475,8 +491,13 @@ def summarize_cards(session: Session, model: TextModel, project_id: str, kind: s
         except BadModelOutput:
             continue
         for item in answer.summaries:
-            if 1 <= item.number <= len(batch) and item.text.strip():
-                batch[item.number - 1].summary = item.text.strip()
+            if not 1 <= item.number <= len(batch):
+                continue
+            card = batch[item.number - 1]
+            if item.text.strip():
+                card.summary = item.text.strip()
+            if item.appearance.strip():
+                card.appearance = item.appearance.strip()
         session.commit()
 
 

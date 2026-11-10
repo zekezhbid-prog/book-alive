@@ -107,19 +107,34 @@ drop it in favour of the latest chapters.
 - The description is of the card as a whole, not of a moment: leave out moods, feelings \
 and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
 a lasting trait.
-Use only the given facts and the description so far. Never invent anything; if little is \
+Also write "appearance": how it looks, for an illustrator who will draw it, 2 to 4 \
+sentences in the language of the facts: {appearance}. Looks only: no role, plot or \
+character traits.
+- An appearance written so far is the base, as with the description.
+- Details from a single chapter (marked "in one chapter") belong only when nothing lasting \
+says otherwise; things that repeat across chapters (the same coat, the same ruins) belong.
+- Leave "appearance" empty when the facts say nothing about looks.
+Use only the given facts and the texts so far. Never invent anything; if little is \
 known, write less.
 
 Reply with one JSON object and nothing else:
-{{"summaries": [{{"number": 1, "text": ""}}]}}"""
+{{"summaries": [{{"number": 1, "text": "", "appearance": ""}}]}}"""
 
 
 def _noun(kind: str) -> str:
     return "characters" if kind == KIND_CHARACTER else "locations and objects"
 
 
+_APPEARANCE = {
+    "character": "age, sex, build and height, face, hair, eyes, skin, scars or marks, and "
+    "the clothes they usually wear",
+    "location": "what kind of place or thing it is, its size and shape, materials, colours, "
+    "architecture or make, and what surrounds it",
+}
+
+
 def summary_system(kind: str) -> str:
-    return SUMMARY_SYSTEM.format(noun=_noun(kind))
+    return SUMMARY_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind])
 
 
 def extract_system(kind: str) -> str:

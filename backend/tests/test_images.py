@@ -275,11 +275,33 @@ def test_a_base_set_shares_one_prompt_and_adds_each_view(client, session, projec
 
 
 def test_card_list_carries_a_blurb_the_first_chapter_and_a_picture(client, project):
-    brief = lambda: client.get(f"/api/projects/{project.id}/entities?kind=character").json()[0]  # noqa: E731
+    brief = lambda: client.get(f"/api/projects/{project.id}/entities?kind=character").json()[0]
     assert (brief()["first_chapter"], brief()["cover"]) == ("Мельница", "")
-    client.put(f"/api/entities/{project.hero_id}/description", json={"text": "Дочь мельника. " * 30})
+    client.put(
+        f"/api/entities/{project.hero_id}/description", json={"text": "Дочь мельника. " * 30}
+    )
     image = upload(client, project, project.hero_id)[0]
     shown = brief()
     assert shown["cover"] == image["url"]
     assert shown["blurb"].startswith("Дочь мельника.") and shown["blurb"].endswith("…")
     assert len(shown["blurb"]) <= 161
+
+
+def test_pictures_are_drawn_from_the_appearance_and_the_users_own_wins(client, session, project):
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.facts = messages[1].content
+            return "prompt"
+
+    hero = session.get(Entity, project.hero_id)
+    hero.appearance = "Худая девушка лет двадцати, рыжая коса, серый плащ."
+    session.commit()
+    model = Recorder()
+    build_image_prompt(model, project, hero, None, "", has_reference=False)
+    assert "Appearance: Худая девушка лет двадцати" in model.facts
+
+    saved = client.put(f"/api/entities/{hero.id}/appearance", json={"text": "Высокая, в кольчуге."})
+    assert saved.json()["appearance_own"] == "Высокая, в кольчуге."
+    session.refresh(hero)
+    build_image_prompt(model, project, hero, None, "", has_reference=False)
+    assert "Appearance: Высокая, в кольчуге." in model.facts and "Худая" not in model.facts

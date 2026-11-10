@@ -84,6 +84,9 @@ class EntityOut(BaseModel):
     aliases: list[str]
     description: str
     summary: str
+    # How it looks: the model's text and the user's own (which wins when set).
+    appearance: str = ""
+    appearance_own: str = ""
     profile: list[FactOut]
     permanent: list[FactOut]
     timeline: list[ChapterFacts]
@@ -367,6 +370,8 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         aliases=entity.aliases,
         description=entity.description,
         summary=entity.summary,
+        appearance=entity.appearance,
+        appearance_own=entity.appearance_own,
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),
@@ -380,6 +385,18 @@ def save_description(entity_id: str, body: DescriptionPatch, session: SessionDep
     if entity is None:
         raise HTTPException(404, "entity_not_found")
     entity.description = body.text.strip()
+    session.commit()
+    return get_entity(entity_id, session)
+
+
+@router.put("/entities/{entity_id}/appearance")
+def save_appearance(entity_id: str, body: DescriptionPatch, session: SessionDep) -> EntityOut:
+    """The user's own appearance of a card: pictures are drawn from it, searches keep it.
+    An empty text brings the model's version back."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    entity.appearance_own = body.text.strip()
     session.commit()
     return get_entity(entity_id, session)
 

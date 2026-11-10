@@ -61,9 +61,12 @@ def build_image_prompt(
     if chapters is not None:
         ids = {c.id for c in chapters}
         state = [f.text for f in entity.facts if f.category == FACT_STATE and f.chapter_id in ids]
+    appearance = entity.appearance_own.strip() or entity.appearance.strip()
     facts = "\n".join(
         [
             f"Name: {entity.name}",
+            # The coherent picture first; the facts below add detail and the quoted wording.
+            *([f"Appearance: {appearance}"] if appearance else []),
             "Permanent traits:",
             *(f"- {t}" for t in permanent or ["(none described)"]),
             *(["At this point of the story:", *(f"- {t}" for t in state)] if state else []),

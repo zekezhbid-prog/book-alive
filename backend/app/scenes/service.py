@@ -277,7 +277,12 @@ def _facts_at(project: Project, entity: Entity, chapter: Chapter) -> tuple[list[
     """Permanent traits, and the state as of this chapter: its own state facts, or
     those of the nearest earlier chapter that has any."""
     positions = {c.id: c.position for c in project.chapters}
-    permanent = [f.text for f in entity.facts if f.category == FACT_PERMANENT]
+    # The card's coherent appearance first (the user's own wins), then the separate traits.
+    appearance = entity.appearance_own.strip() or entity.appearance.strip()
+    permanent = [
+        *([appearance] if appearance else []),
+        *(f.text for f in entity.facts if f.category == FACT_PERMANENT),
+    ]
     earlier = [
         f
         for f in entity.facts

@@ -190,6 +190,12 @@ class Entity(Base):
     # A coherent description (who it is, its role, what is known), written by the model at
     # the end of a run from the card's facts. Empty until a run has finished or was cancelled.
     summary: Mapped[str] = mapped_column(Text, default="")
+    # How it looks as a whole (a character's age, build, face, hair, usual clothes; a place's
+    # kind, size, materials, colours), written by the model with the summary. Pictures are
+    # drawn from it. `appearance_own` is the user's version: when set, it wins and runs
+    # never touch it.
+    appearance: Mapped[str] = mapped_column(Text, default="")
+    appearance_own: Mapped[str] = mapped_column(Text, default="")
 
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"

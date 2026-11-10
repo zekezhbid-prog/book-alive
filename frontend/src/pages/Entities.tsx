@@ -137,13 +137,24 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {running && run && (
               <div className="notice stack run-progress">
                 <div className="row">
-                  <span>{t('run.progress', { done: run.done, total: run.total })}</span>
+                  <b className="run-progress-text">{t('run.progress', { done: run.done, total: run.total })}</b>
                   <span className="spacer" />
                   <button className="btn small" onClick={cancel}>
                     {t('run.cancel')}
                   </button>
                 </div>
-                <progress value={run.done} max={run.total} />
+                {/* A wave keeps running along the bar, so a long chapter does not look stuck. */}
+                <div
+                  className="live-progress"
+                  role="progressbar"
+                  aria-valuenow={run.done}
+                  aria-valuemax={run.total}
+                >
+                  <div
+                    className="live-progress-fill"
+                    style={{ width: `${Math.max(4, run.total ? (run.done / run.total) * 100 : 0)}%` }}
+                  />
+                </div>
               </div>
             )}
             {staleChapters.length > 0 && !running && (
@@ -318,8 +329,28 @@ function Card({ onClose, entity, projectId, others, onChanged, onError, gallery 
           </div>
         )}
       </div>
-      {/* Its own key: the gallery beside it is keyed by the card id too. */}
-      <GeneralDescription key={`description-${entity.id}`} entity={entity} />
+      {/* Their own keys: the gallery beside them is keyed by the card id too. */}
+      <EditableText
+        key={`description-${entity.id}`}
+        title={t('entities.profile')}
+        editLabel={t('entities.profile.edit')}
+        own={entity.description}
+        generated={entity.summary}
+        placeholder={t(`description.${entity.kind}.placeholder`)}
+        none={t('entities.profile.none')}
+        save={(text) => api.saveEntityDescription(entity.id, text)}
+      />
+      {/* What pictures and scenes are drawn from: age, build, face, clothes; a place's look. */}
+      <EditableText
+        key={`appearance-${entity.id}`}
+        title={t(`entities.appearance.${entity.kind}`)}
+        editLabel={t('entities.appearance.edit')}
+        own={entity.appearance_own}
+        generated={entity.appearance}
+        placeholder={t(`entities.appearance.${entity.kind}.placeholder`)}
+        none={t('entities.appearance.none')}
+        save={(text) => api.saveEntityAppearance(entity.id, text)}
+      />
       {entity.profile.length + entity.permanent.length > 0 && (
         <details>
           <summary className="muted">{t('entities.facts')}</summary>
@@ -334,7 +365,7 @@ function Card({ onClose, entity, projectId, others, onChanged, onError, gallery 
         </details>
       )}
       {gallery}
-      <h4>{t('entities.timeline')}</h4>
+      <h4>{t(`entities.timeline.${entity.kind}`)}</h4>
       {entity.timeline.map((entry) => (
         <div key={entry.chapter_id} className="timeline-entry">
           <div className="row">
@@ -526,23 +557,34 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
   )
 }
 
-/** One general description for every card. The model writes it at the end of a search; the
- *  pencil lets the user write their own, which later searches never overwrite. Clearing the
- *  text brings the model's version back. */
-function GeneralDescription({ entity }: { entity: Entity }) {
+interface EditableProps {
+  title: string
+  editLabel: string
+  /** The user's own text; empty means the model's is shown. */
+  own: string
+  generated: string
+  placeholder: string
+  none: string
+  save: (text: string) => Promise<unknown>
+}
+
+/** A text of the card the model writes at the end of a search (the general description, the
+ *  appearance); the pencil lets the user write their own, which later searches never
+ *  overwrite. Clearing the text brings the model's version back. */
+function EditableText({ title, editLabel, own: savedOwn, generated, placeholder, none, save: send }: EditableProps) {
   const { t } = useI18n()
-  const [own, setOwn] = useState(entity.description)
+  const [own, setOwn] = useState(savedOwn)
   const [draft, setDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const shown = own.trim() || entity.summary
+  const shown = own.trim() || generated
   const save = async () => {
     if (draft === null) return
     setBusy(true)
     setError('')
     try {
-      const text = draft.trim() === entity.summary.trim() ? '' : draft.trim()
-      await api.saveEntityDescription(entity.id, text)
+      const text = draft.trim() === generated.trim() ? '' : draft.trim()
+      await send(text)
       setOwn(text)
       setDraft(null)
     } catch (e) {
@@ -554,12 +596,12 @@ function GeneralDescription({ entity }: { entity: Entity }) {
   return (
     <div className="stack">
       <div className="row profile-head">
-        <h4 className="grow">{t('entities.profile')}</h4>
+        <h4 className="grow">{title}</h4>
         {draft === null && (
           <button
             className="btn primary nav-action"
-            title={t('entities.profile.edit')}
-            aria-label={t('entities.profile.edit')}
+            title={editLabel}
+            aria-label={editLabel}
             onClick={() => setDraft(shown)}
           >
             <PencilIcon />
@@ -574,7 +616,7 @@ function GeneralDescription({ entity }: { entity: Entity }) {
             maxLength={6000}
             autoFocus
             value={draft}
-            placeholder={t(`description.${entity.kind}.placeholder`)}
+            placeholder={placeholder}
             onChange={(e) => setDraft(e.target.value)}
           />
           {error && <p className="error">{error}</p>}
@@ -591,7 +633,7 @@ function GeneralDescription({ entity }: { entity: Entity }) {
       ) : shown ? (
         <p className="summary">{shown}</p>
       ) : (
-        <p className="faint">{t('entities.profile.none')}</p>
+        <p className="faint">{none}</p>
       )}
     </div>
   )

@@ -176,6 +176,9 @@ export interface Entity {
   aliases: string[]
   description: string
   summary: string
+  /** How it looks, written by the AI; the user's own version wins when set. */
+  appearance: string
+  appearance_own: string
   profile: Fact[]
   permanent: Fact[]
   timeline: ChapterFacts[]
@@ -639,6 +642,8 @@ export const api = {
   settings: () => request<ModelSettings>('GET', '/settings'),
   saveEntityDescription: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/description`, { text }),
+  saveEntityAppearance: (entityId: string, text: string) =>
+    request<Entity>('PUT', `/entities/${entityId}/appearance`, { text }),
   saveSceneSummary: (sceneId: string, text: string) =>
     request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),

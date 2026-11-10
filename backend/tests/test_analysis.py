@@ -72,7 +72,9 @@ class FakeModel:
             numbers = re.findall(r"^\[(\d+)\]", messages[-1].content, re.MULTILINE)
             return analysis.Summaries(
                 summaries=[
-                    analysis.CardSummary(number=int(n), text=f"Связный рассказ {n}.")
+                    analysis.CardSummary(
+                        number=int(n), text=f"Связный рассказ {n}.", appearance=f"Облик {n}."
+                    )
                     for n in numbers
                 ]
             )
@@ -554,4 +556,7 @@ def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
     analysis.summarize_cards(session, Watching(), project.id, "character")
     listing = next(text for text in seen if "Рыхташ" in text)
     assert "description so far: Старый мельник, связной князя." in listing
-    assert "мокром плаще" not in listing  # one chapter's state, not the general description
+    assert card.appearance.startswith("Облик")  # written together with the description
+    # One chapter's state is not a lasting fact: it comes marked, for the appearance only.
+    assert "- in one chapter: Сегодня злой и в мокром плаще" in listing
+    assert "\n- Сегодня злой" not in listing

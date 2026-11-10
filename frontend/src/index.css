@@ -529,3 +529,14 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .tile-action:disabled { opacity: 0.5; cursor: default; }
 .tile-action:disabled:hover { border-color: var(--line-2); background: rgba(14, 12, 8, 0.55); box-shadow: none; }
 .card-close { font-size: 18px; }
+
+/* The search's progress: gold fill with light waves running through it, and a moving
+   shimmer over the part still to read, so it is plain the work goes on. */
+.run-progress-text { font-size: 16px; color: var(--accent); }
+.live-progress { position: relative; height: 12px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--accent-line); }
+.live-progress::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(255, 224, 122, 0.14) 50%, transparent 100%); background-size: 40% 100%; background-repeat: no-repeat; animation: progress-sweep 2.2s ease-in-out infinite; }
+.live-progress-fill { position: relative; height: 100%; border-radius: inherit; background: repeating-linear-gradient(115deg, #f6bf37 0 14px, #ffe07a 14px 28px); background-size: 200% 100%; box-shadow: 0 0 12px rgba(250, 190, 40, 0.55); transition: width 0.6s ease; animation: progress-flow 1.4s linear infinite; }
+.live-progress-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: progress-sweep 1.8s ease-in-out infinite; }
+@keyframes progress-flow { from { background-position: 0 0; } to { background-position: -61px 0; } }
+@keyframes progress-sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+@media (prefers-reduced-motion: reduce) { .live-progress::after, .live-progress-fill, .live-progress-fill::after { animation: none; } }
