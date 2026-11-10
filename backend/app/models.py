@@ -281,11 +281,33 @@ class Chunk(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
 
 
+class ChatThread(Base):
+    """One conversation about the book. Each keeps its own history (the agent sees only
+    this thread's earlier messages) and its own scope: the whole book or chosen chapters."""
+
+    __tablename__ = "chat_threads"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # Empty until the first question, which then names the thread.
+    title: Mapped[str] = mapped_column(String(200), default="")
+    # Chapters the agent may search and read; empty means the whole book.
+    chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    # Last question asked: the list shows the most recent conversations first.
+    updated_at: Mapped[datetime] = mapped_column(default=now)
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("chat_threads.id", ondelete="CASCADE"), index=True
+    )
     role: Mapped[str] = mapped_column(String(10))  # user | assistant
     content: Mapped[str] = mapped_column(Text)
     # For assistant messages: [{"n", "chapter_id", "chapter_title", "paragraph", "quote"}]

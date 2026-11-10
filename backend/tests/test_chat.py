@@ -201,8 +201,17 @@ def stream_model():
     app.dependency_overrides.pop(_text_model, None)
 
 
+def _new_chat(client, project_id: str, **fields) -> str:
+    response = client.post(f"/api/projects/{project_id}/chats", json=fields)
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
 def _stream(client, project_id: str, question: str) -> list[dict]:
-    response = client.post(f"/api/projects/{project_id}/chat/stream", json={"question": question})
+    thread = _new_chat(client, project_id)
+    response = client.post(
+        f"/api/projects/{project_id}/chats/{thread}/stream", json={"question": question}
+    )
     assert response.status_code == 200
     return [json.loads(line) for line in response.text.splitlines()]
 
@@ -231,15 +240,62 @@ def test_chat_stream_reports_a_model_failure_as_its_last_line(client, project, s
 
 
 def test_chat_stream_without_a_model_fails_before_streaming(client, project):
-    response = client.post(f"/api/projects/{project.id}/chat/stream", json={"question": "Кто?"})
+    thread = _new_chat(client, project.id)
+    response = client.post(
+        f"/api/projects/{project.id}/chats/{thread}/stream", json={"question": "Кто?"}
+    )
     assert (response.status_code, response.json()["detail"]) == (409, "text_model_not_configured")
 
 
-def test_chat_api_history_and_clear(client, project):
-    assert client.get(f"/api/projects/{project.id}/chat").json() == []
-    response = client.post(f"/api/projects/{project.id}/chat", json={"question": "Кто такая Люта?"})
+def test_chat_api_threads(client, project):
+    base = f"/api/projects/{project.id}/chats"
+    assert client.get(base).json() == []
+    road = project.chapters[1].id
+    thread = _new_chat(client, project.id, chapter_ids=[road, "nope", road])
+    (listed,) = client.get(base).json()
+    assert (listed["id"], listed["title"], listed["chapter_ids"]) == (thread, "", [road])
+    assert client.get(f"{base}/{thread}/messages").json() == []
+    changed = client.patch(f"{base}/{thread}", json={"title": " Про  ключ ", "chapter_ids": []})
+    assert (changed.json()["title"], changed.json()["chapter_ids"]) == ("Про ключ", [])
+    response = client.post(f"{base}/{thread}/ask", json={"question": "Кто такая Люта?"})
     assert (response.status_code, response.json()["detail"]) == (409, "text_model_not_configured")
-    assert client.delete(f"/api/projects/{project.id}/chat").status_code == 204
+    assert client.get(f"/api/projects/{project.id}/chats/missing/messages").status_code == 404
+    assert client.delete(f"{base}/{thread}").status_code == 204
+    assert client.get(base).json() == []
+
+
+def test_threads_keep_their_own_history(session, project):
+    answer = {"found": True, "answer": "Ключ [1].", "citations": []}
+    first = chat.new_thread(project)
+    chat.ask(session, project, FakeModel(answer), "Что мельник достал из сундука?", thread=first)
+    assert first.title == "Что мельник достал из сундука?"
+    second = chat.new_thread(project)
+    model = FakeModel(answer)
+    chat.ask(session, project, model, "Что несла Люта?", thread=second)
+    assert "мельник" not in model.prompts[0]
+    assert chat.history(session, second.id)[0].content == "Что несла Люта?"
+    # Without a thread the latest one is used.
+    assert chat.threads(session, project.id)[0].id == second.id
+
+
+def test_thread_limited_to_chapters_searches_and_reads_only_them(session, project):
+    road = project.chapters[1]
+    thread = chat.new_thread(project)
+    thread.chapter_ids = [road.id]
+    model = FakeModel(
+        {"action": "search", "query": "серебряный ключ мельник сундук"},
+        {"action": "read", "chapter": 1},
+        {"found": False, "answer": "В этих главах нет.", "citations": []},
+    )
+    chat.ask(session, project, model, "Что мельник достал из сундука?", thread=thread)
+    assert "2. Дорога" in model.prompts[0] and "1. Мельница" not in model.prompts[0]
+    assert agent.SCOPE_RULE.splitlines()[0] in model.prompts[0]
+    assert "(Мельница" not in model.prompts[1]
+    assert "read chapter 1: outside this conversation's chapters" in model.prompts[2]
+    assert all(
+        p.chapter_id == road.id
+        for p in search(session, project.id, "мельник сундук ключ", chapter_ids=[road.id])
+    )
 
 
 def test_plot_suggestions_for_the_writer(session, project):
@@ -264,7 +320,10 @@ def test_plot_suggestions_for_the_writer(session, project):
 def test_suggestions_are_for_writer_projects_only(client, session, project):
     project.mode = "reader"
     session.commit()
-    response = client.post(f"/api/projects/{project.id}/chat/suggest", json={"question": "x"})
+    thread = _new_chat(client, project.id)
+    response = client.post(
+        f"/api/projects/{project.id}/chats/{thread}/suggest", json={"question": "x"}
+    )
     assert (response.status_code, response.json()["detail"]) == (409, "reader_mode_readonly")
 
 
@@ -291,7 +350,7 @@ def test_chat_holds_no_connection_while_the_model_answers(session, project):
     asked, reply = chat.ask(session, project, model, "Что было в руках у Люты?")
     assert model.held and not any(model.held)
     assert asked.created_at <= reply.created_at
-    roles = [m.role for m in chat.history(session, project.id)]
+    roles = [m.role for m in chat.history(session, asked.thread_id)]
     assert roles[-2:] == ["user", "assistant"]
 
 

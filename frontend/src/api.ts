@@ -206,6 +206,16 @@ export interface ChatMessage {
   created_at: string
 }
 
+/** One conversation about the book, with its own history and scope. */
+export interface ChatThread {
+  id: string
+  title: string
+  /** Chapters it searches and reads; empty means the whole book. */
+  chapter_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
 /** A step the chat agent has started: shown while the user waits for the answer. */
 export interface ChatStatus {
   code: 'index' | 'search' | 'read' | 'think'
@@ -221,11 +231,12 @@ type ChatStreamLine =
  * question and the answer as stored. */
 async function askStream(
   projectId: string,
+  threadId: string,
   question: string,
   chapterId: string,
   onStatus: (status: ChatStatus) => void,
 ): Promise<ChatMessage[]> {
-  const response = await fetch(`/api/projects/${projectId}/chat/stream`, {
+  const response = await fetch(`/api/projects/${projectId}/chats/${threadId}/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, chapter_id: chapterId }),
@@ -480,19 +491,29 @@ export const api = {
     request<Entity>('POST', `/entities/${id}/merge`, { other_id: otherId }),
   splitEntity: (id: string, name: string) =>
     request<Entity>('POST', `/entities/${id}/split`, { name }),
-  chat: (projectId: string) => request<ChatMessage[]>('GET', `/projects/${projectId}/chat`),
+  chats: (projectId: string) => request<ChatThread[]>('GET', `/projects/${projectId}/chats`),
+  newChat: (projectId: string) => request<ChatThread>('POST', `/projects/${projectId}/chats`, {}),
+  updateChat: (
+    projectId: string,
+    threadId: string,
+    fields: { title?: string; chapter_ids?: string[] },
+  ) => request<ChatThread>('PATCH', `/projects/${projectId}/chats/${threadId}`, fields),
+  deleteChat: (projectId: string, threadId: string) =>
+    request<void>('DELETE', `/projects/${projectId}/chats/${threadId}`),
+  chatMessages: (projectId: string, threadId: string) =>
+    request<ChatMessage[]>('GET', `/projects/${projectId}/chats/${threadId}/messages`),
   ask: (
     projectId: string,
+    threadId: string,
     question: string,
     chapterId: string | undefined,
     onStatus: (status: ChatStatus) => void,
-  ) => askStream(projectId, question, chapterId ?? '', onStatus),
-  suggest: (projectId: string, label: string, chapterId?: string) =>
-    request<ChatMessage[]>('POST', `/projects/${projectId}/chat/suggest`, {
+  ) => askStream(projectId, threadId, question, chapterId ?? '', onStatus),
+  suggest: (projectId: string, threadId: string, label: string, chapterId?: string) =>
+    request<ChatMessage[]>('POST', `/projects/${projectId}/chats/${threadId}/suggest`, {
       question: label,
       chapter_id: chapterId ?? '',
     }),
-  clearChat: (projectId: string) => request<void>('DELETE', `/projects/${projectId}/chat`),
   styles: () => request<StylePreset[]>('GET', '/styles'),
   setStyle: (projectId: string, styleId: string, styleText: string) =>
     request<{ style_id: string; style_text: string }>('PUT', `/projects/${projectId}/style`, {

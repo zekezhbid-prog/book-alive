@@ -12,12 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
-from app.models import FACT_PERMANENT, ChatMessage, Entity, Project, now
+from app.models import FACT_PERMANENT, ChatMessage, ChatThread, Entity, Project, new_id, now
 from app.rag import agent
 from app.rag.index import BookRetriever, index_project, search
 from app.scenes.service import entities_in
 
 HISTORY_MESSAGES = 6
+TITLE_CHARS = 60
 
 
 @dataclass
@@ -34,44 +35,121 @@ class Reply:
     reply: ChatMessage
 
 
-def history(session: Session, project_id: str) -> list[ChatMessage]:
+def threads(session: Session, project_id: str) -> list[ChatThread]:
+    """The project's conversations, the most recently used first."""
+    return list(
+        session.scalars(
+            select(ChatThread)
+            .where(ChatThread.project_id == project_id)
+            .order_by(ChatThread.updated_at.desc(), ChatThread.id)
+        ).all()
+    )
+
+
+def new_thread(project: Project) -> ChatThread:
+    """A conversation over the whole book, not yet added to the session. The id is set
+    here so messages can point at it before anything is written."""
+    moment = now()
+    return ChatThread(
+        id=new_id(),
+        project_id=project.id,
+        title="",
+        chapter_ids=[],
+        created_at=moment,
+        updated_at=moment,
+    )
+
+
+def _thread(session: Session, project: Project, thread: ChatThread | None) -> ChatThread:
+    """The thread to talk in: the given one, else the latest, else a new one."""
+    if thread is not None:
+        return thread
+    existing = threads(session, project.id)
+    return existing[0] if existing else new_thread(project)
+
+
+def scope(project: Project, thread: ChatThread) -> list[str]:
+    """The thread's chapters that still exist, in book order; empty means the whole book."""
+    chosen = set(thread.chapter_ids or [])
+    return [c.id for c in project.chapters if c.id in chosen]
+
+
+def _save(session: Session, thread: ChatThread, asked: ChatMessage, reply: ChatMessage) -> None:
+    """Writes the exchange at the very end, together with the thread's name and time."""
+    if not thread.title:
+        line = " ".join(asked.content.split())
+        thread.title = line if len(line) <= TITLE_CHARS else line[: TITLE_CHARS - 1] + "…"
+    thread.updated_at = now()
+    session.add(thread)
+    session.flush()  # no ORM relationship orders the inserts: the thread goes first
+    session.add_all([asked, reply])
+    session.commit()
+
+
+def history(session: Session, thread_id: str) -> list[ChatMessage]:
     return list(
         session.scalars(
             select(ChatMessage)
-            .where(ChatMessage.project_id == project_id)
+            .where(ChatMessage.thread_id == thread_id)
             .order_by(ChatMessage.created_at)
         ).all()
     )
 
 
 def ask(
-    session: Session, project: Project, model: TextModel, question: str, chapter_id: str = ""
+    session: Session,
+    project: Project,
+    model: TextModel,
+    question: str,
+    chapter_id: str = "",
+    thread: ChatThread | None = None,
 ) -> tuple[ChatMessage, ChatMessage]:
-    for event in ask_events(session, project, model, question, chapter_id):
+    for event in ask_events(session, project, model, question, chapter_id, thread):
         if isinstance(event, Reply):
             return event.asked, event.reply
     raise RuntimeError("the chat ended without a reply")
 
 
 def ask_events(
-    session: Session, project: Project, model: TextModel, question: str, chapter_id: str = ""
+    session: Session,
+    project: Project,
+    model: TextModel,
+    question: str,
+    chapter_id: str = "",
+    thread: ChatThread | None = None,
 ) -> Iterator[Status | Reply]:
-    """Answer a question, reporting each step as it starts. The last event is the Reply."""
+    """Answer a question in a thread (the latest one if none is given), reporting each
+    step as it starts. The last event is the Reply."""
     yield Status("index")
     # Indexing is local and free; it happens here, on the user's first question,
     # and again only for chapters whose text has changed.
     index_project(session, project)
-    earlier = history(session, project.id)[-HISTORY_MESSAGES:]
+    thread = _thread(session, project, thread)
+    chapters = scope(project, thread)
+    # The open chapter only counts when the thread may look into it.
+    focus = chapter_id if not chapters or chapter_id in chapters else ""
+    earlier = history(session, thread.id)[-HISTORY_MESSAGES:]
     # A follow-up ("and what then?") only makes sense with the question before it.
     previous = next((m.content for m in reversed(earlier) if m.role == "user"), "")
 
     # Saved together with the reply, at the end: a pending write would keep the database
     # connection for as long as the model thinks (see `db.release_connection`).
-    asked = ChatMessage(project_id=project.id, role="user", content=question, created_at=now())
+    asked = ChatMessage(
+        project_id=project.id,
+        thread_id=thread.id,
+        role="user",
+        content=question,
+        created_at=now(),
+    )
     if not any(c.text.strip() for c in project.chapters):
-        reply = ChatMessage(project_id=project.id, role="assistant", content="", citations=[])
-        session.add_all([asked, reply])
-        session.commit()
+        reply = ChatMessage(
+            project_id=project.id,
+            thread_id=thread.id,
+            role="assistant",
+            content="",
+            citations=[],
+        )
+        _save(session, thread, asked, reply)
         yield Reply(asked, reply)
         return
 
@@ -85,7 +163,7 @@ def ask_events(
     yield Status("search", query)
     sources = [
         agent.passage_document(p.chapter_id, p.chapter_title, p.paragraph, p.text)
-        for p in search(session, project.id, query, 6, chapter_id)
+        for p in search(session, project.id, query, 6, focus, chapters or None)
     ]
     found = ", ".join(f"[{n}]" for n in range(1, len(sources) + 1)) or "nothing"
     state: agent.State = {
@@ -100,7 +178,8 @@ def ask_events(
             "session": session,
             "model": model,
             "project": project,
-            "open_chapter_id": chapter_id,
+            "open_chapter_id": focus,
+            "scope": chapters,
             "history": [
                 HumanMessage(m.content) if m.role == "user" else AIMessage(m.content)
                 for m in earlier
@@ -126,12 +205,12 @@ def ask_events(
     decision = state["decision"]
     reply = ChatMessage(
         project_id=project.id,
+        thread_id=thread.id,
         role="assistant",
         content=decision.answer,
         citations=_citations(project, decision, state["sources"]),
     )
-    session.add_all([asked, reply])
-    session.commit()
+    _save(session, thread, asked, reply)
     yield Reply(asked, reply)
 
 
@@ -272,19 +351,36 @@ class Options(BaseModel):
 
 
 def suggest(
-    session: Session, project: Project, model: TextModel, request: str, chapter_id: str
+    session: Session,
+    project: Project,
+    model: TextModel,
+    request: str,
+    chapter_id: str,
+    thread: ChatThread | None = None,
 ) -> tuple[ChatMessage, ChatMessage]:
     """Three ways to continue from the end of a chapter. The request text is only what
     the user sees in the conversation; nothing is ever written into the book."""
     index_project(session, project)
+    thread = _thread(session, project, thread)
     chapter = next((c for c in project.chapters if c.id == chapter_id), None)
     tail = (chapter.text if chapter else "")[-TAIL_CHARS:]
     # As in `ask_events`: nothing is written until the model has answered.
-    asked = ChatMessage(project_id=project.id, role="user", content=request, created_at=now())
+    asked = ChatMessage(
+        project_id=project.id,
+        thread_id=thread.id,
+        role="user",
+        content=request,
+        created_at=now(),
+    )
     if not tail.strip():
-        reply = ChatMessage(project_id=project.id, role="assistant", content="", citations=[])
-        session.add_all([asked, reply])
-        session.commit()
+        reply = ChatMessage(
+            project_id=project.id,
+            thread_id=thread.id,
+            role="assistant",
+            content="",
+            citations=[],
+        )
+        _save(session, thread, asked, reply)
         return asked, reply
 
     cast = []
@@ -312,7 +408,12 @@ def suggest(
         f"{n}. {option.title.strip()}\n{option.text.strip()}".replace(f"{n}. \n", f"{n}. ")
         for n, option in enumerate(answer.options[:3], 1)
     )
-    reply = ChatMessage(project_id=project.id, role="assistant", content=content, citations=[])
-    session.add_all([asked, reply])
-    session.commit()
+    reply = ChatMessage(
+        project_id=project.id,
+        thread_id=thread.id,
+        role="assistant",
+        content=content,
+        citations=[],
+    )
+    _save(session, thread, asked, reply)
     return asked, reply

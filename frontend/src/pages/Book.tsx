@@ -153,7 +153,12 @@ export default function Book() {
           ) : writing && side === 'review' ? (
             <ReviewPanel project={project} chapterId={activeId} />
           ) : (
-            <ChatPanel projectId={project.id} chapterId={activeId} canSuggest={writing} />
+            <ChatPanel
+              projectId={project.id}
+              chapters={project.chapters}
+              chapterId={activeId}
+              canSuggest={writing}
+            />
           )}
         </aside>
       </div>

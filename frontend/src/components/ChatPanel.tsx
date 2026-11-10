@@ -1,23 +1,36 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ChatMessage, type ChatStatus, type Citation } from '../api'
+import {
+  api,
+  type ChapterBrief,
+  type ChatMessage,
+  type ChatStatus,
+  type ChatThread,
+  type Citation,
+} from '../api'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from './AiNotice'
 
 interface Props {
   projectId: string
+  chapters: ChapterBrief[]
   /** The chapter open in the reader: lets the user ask about "here". */
   chapterId?: string
   /** Writer projects: offer ideas for what happens next in the open chapter. */
   canSuggest?: boolean
 }
 
-/** Questions about the book. Answers come only from its text, with links to the source. */
-export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
+/** Questions about the book. Answers come only from its text, with links to the source.
+ * The book has several conversations; each keeps its own history and may be limited to
+ * chosen chapters. */
+export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }: Props) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
+  const [threads, setThreads] = useState<ChatThread[]>([])
+  const [threadId, setThreadId] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [question, setQuestion] = useState('')
   const [waiting, setWaiting] = useState(false)
   // What the agent is doing right now, so a long answer does not look like a hang.
@@ -26,10 +39,30 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
   const end = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const asked = useRef(false)
+  const thread = threads.find((th) => th.id === threadId) ?? null
 
+  const reloadThreads = useCallback(
+    () =>
+      api.chats(projectId).then((list) => {
+        setThreads(list)
+        return list
+      }),
+    [projectId],
+  )
   useEffect(() => {
-    api.chat(projectId).then(setMessages, (e) => setError(errorText(t, e)))
-  }, [projectId, t])
+    setThreadId('')
+    setMessages([])
+    // The most recent conversation opens first.
+    reloadThreads().then(
+      (list) => setThreadId(list[0]?.id ?? ''),
+      (e) => setError(errorText(t, e)),
+    )
+  }, [reloadThreads, t])
+  useEffect(() => {
+    setSettingsOpen(false)
+    if (!threadId) return setMessages([])
+    api.chatMessages(projectId, threadId).then(setMessages, (e) => setError(errorText(t, e)))
+  }, [projectId, threadId, t])
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
   }, [messages, waiting])
@@ -37,6 +70,20 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
     // The field was disabled while the agent worked: give it back for the next question.
     if (!waiting && asked.current) input.current?.focus()
   }, [waiting])
+
+  /** The open conversation, created on the first question if there is none yet. */
+  const currentThread = async (): Promise<string> => {
+    if (threadId) return threadId
+    const created = await api.newChat(projectId)
+    setThreads((list) => [created, ...list])
+    setThreadId(created.id)
+    return created.id
+  }
+  const afterAnswer = (added: ChatMessage[]) => {
+    setMessages((list) => [...list, ...added])
+    // The first question names the conversation and moves it to the top.
+    reloadThreads().catch(() => {})
+  }
 
   const send = async (event: FormEvent) => {
     event.preventDefault()
@@ -46,8 +93,8 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
     setWaiting(true)
     setError('')
     try {
-      const added = await api.ask(projectId, text, chapterId, setStatus)
-      setMessages((list) => [...list, ...added])
+      const id = await currentThread()
+      afterAnswer(await api.ask(projectId, id, text, chapterId, setStatus))
       setQuestion('')
     } catch (e) {
       setError(errorText(t, e))
@@ -61,31 +108,107 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
     setWaiting(true)
     setError('')
     try {
-      const added = await api.suggest(projectId, t('chat.suggest.question'), chapterId)
-      setMessages((list) => [...list, ...added])
+      const id = await currentThread()
+      afterAnswer(await api.suggest(projectId, id, t('chat.suggest.question'), chapterId))
     } catch (e) {
       setError(errorText(t, e))
     } finally {
       setWaiting(false)
     }
   }
-  const clear = async () => {
-    if (!(await ask(t('chat.clear.confirm')))) return
-    await api.clearChat(projectId)
-    setMessages([])
+  const newChat = async () => {
+    if (waiting) return
+    // An empty conversation is already new: no need for another one.
+    if (thread && messages.length === 0) return input.current?.focus()
+    setError('')
+    try {
+      const created = await api.newChat(projectId)
+      setThreads((list) => [created, ...list])
+      setThreadId(created.id)
+      input.current?.focus()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+  }
+  const remove = async () => {
+    if (!thread || !(await ask(t('chat.delete.confirm', { title: label(thread) })))) return
+    try {
+      await api.deleteChat(projectId, thread.id)
+      const list = await reloadThreads()
+      setThreadId(list[0]?.id ?? '')
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+  }
+  const label = (th: ChatThread) => th.title || t('chat.untitled')
+  /** "Whole book", the chosen chapters by number and title when few, else how many. */
+  const scopeText = (th: ChatThread) => {
+    if (th.chapter_ids.length === 0) return t('chat.scope.book')
+    if (th.chapter_ids.length > 3) return t('chat.scope.many', { n: th.chapter_ids.length })
+    const names = chapters.flatMap((c, i) =>
+      th.chapter_ids.includes(c.id) ? [`${i + 1}. ${c.title || t('book.untitled')}`] : [],
+    )
+    return t('chat.scope.chapters', { list: names.join('; ') })
   }
 
   return (
     <div className="chat">
-      <div className="row">
+      <div className="row chat-head">
         <h4>{t('chat.title')}</h4>
         <span className="spacer" />
-        {messages.length > 0 && (
-          <button className="btn ghost small" onClick={clear}>
-            {t('chat.clear')}
-          </button>
-        )}
+        <button className="btn ghost small" onClick={newChat} disabled={waiting}>
+          {t('chat.new')}
+        </button>
       </div>
+      {threads.length > 0 && (
+        <div className="row chat-threads">
+          <select
+            className="input small"
+            value={threadId}
+            disabled={waiting}
+            aria-label={t('chat.choose')}
+            onChange={(e) => setThreadId(e.target.value)}
+          >
+            {threads.map((th) => (
+              <option key={th.id} value={th.id}>
+                {label(th)}
+              </option>
+            ))}
+          </select>
+          {thread && (
+            <button
+              className={`btn ghost small${settingsOpen ? ' active' : ''}`}
+              onClick={() => setSettingsOpen((open) => !open)}
+              disabled={waiting}
+            >
+              {t('chat.settings')}
+            </button>
+          )}
+        </div>
+      )}
+      {thread && !settingsOpen && (
+        <button className="chat-scope faint small" onClick={() => setSettingsOpen(true)}>
+          {scopeText(thread)}
+        </button>
+      )}
+      {thread && settingsOpen && (
+        <ThreadSettings
+          key={thread.id}
+          thread={thread}
+          chapters={chapters}
+          onCancel={() => setSettingsOpen(false)}
+          onDelete={remove}
+          onSave={async (fields) => {
+            try {
+              const saved = await api.updateChat(projectId, thread.id, fields)
+              setThreads((list) => list.map((th) => (th.id === saved.id ? saved : th)))
+              setSettingsOpen(false)
+            } catch (e) {
+              setError(errorText(t, e))
+            }
+          }}
+        />
+      )}
       <div className="chat-log">
         {messages.length === 0 && !waiting && <p className="faint small">{t('chat.hint')}</p>}
         {messages.map((message) => (
@@ -127,6 +250,98 @@ export default function ChatPanel({ projectId, chapterId, canSuggest }: Props) {
           {t('chat.send')}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** Name of a conversation and where it looks: the whole book (the default) or the
+ * chapters ticked here. Nothing changes until Save. */
+function ThreadSettings({
+  thread,
+  chapters,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  thread: ChatThread
+  chapters: ChapterBrief[]
+  onSave: (fields: { title: string; chapter_ids: string[] }) => Promise<void>
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const { t } = useI18n()
+  const [title, setTitle] = useState(thread.title)
+  const [whole, setWhole] = useState(thread.chapter_ids.length === 0)
+  const [chosen, setChosen] = useState<Set<string>>(new Set(thread.chapter_ids))
+  const [saving, setSaving] = useState(false)
+  const toggle = (id: string) =>
+    setChosen((set) => {
+      const next = new Set(set)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  // Ticking nothing would mean "nowhere": not allowed, the whole book is the way back.
+  const valid = whole || chosen.size > 0
+  const save = async () => {
+    setSaving(true)
+    await onSave({
+      title,
+      chapter_ids: whole ? [] : chapters.filter((c) => chosen.has(c.id)).map((c) => c.id),
+    })
+    setSaving(false)
+  }
+  return (
+    <div className="chat-settings">
+      <label className="small faint" htmlFor="chat-title">
+        {t('chat.settings.name')}
+      </label>
+      <input
+        id="chat-title"
+        className="input small"
+        value={title}
+        maxLength={200}
+        placeholder={t('chat.untitled')}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <span className="small faint">{t('chat.settings.scope')}</span>
+      <label className="row">
+        <input type="radio" checked={whole} onChange={() => setWhole(true)} />
+        {t('chat.settings.book')}
+      </label>
+      <label className="row">
+        <input type="radio" checked={!whole} onChange={() => setWhole(false)} />
+        {t('chat.settings.chapters')}
+      </label>
+      {!whole && (
+        <div className="chapter-picker">
+          {chapters.map((chapter, i) => (
+            <label key={chapter.id} className="row">
+              <input
+                type="checkbox"
+                checked={chosen.has(chapter.id)}
+                onChange={() => toggle(chapter.id)}
+              />
+              <span className="grow">
+                {i + 1}. {chapter.title || t('book.untitled')}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+      {!valid && <p className="error small">{t('chat.settings.none')}</p>}
+      <div className="row">
+        <button className="btn primary small" disabled={!valid || saving} onClick={save}>
+          {t('chat.settings.save')}
+        </button>
+        <button className="btn ghost small" onClick={onCancel}>
+          {t('app.cancel')}
+        </button>
+        <span className="spacer" />
+        <button className="btn ghost small danger" onClick={onDelete}>
+          {t('chat.delete')}
+        </button>
+      </div>
     </div>
   )
 }

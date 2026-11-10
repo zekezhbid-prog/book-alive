@@ -43,9 +43,9 @@ Reply with one JSON object and nothing else, one of:
 "citations": [{{"source": 1, "quote": "..."}}]}}
 
 Rules:
-- If the question names a chapter ("chapter 3", "this chapter"), read that chapter. \
+{scope}- If the question names a chapter ("chapter 3", "this chapter"), read that chapter. \
 "This chapter" is the one marked "open now".
-- Otherwise the whole book is in scope. Do not settle for fragments when the question \
+- Otherwise everything in the table of contents is in scope. Do not settle for fragments when the question \
 needs more: read the chapters they come from.
 - Plan with the table of contents: it lists who and what appears in each chapter. Open \
 the chapters where the people, places or things of the question appear; when the question \
@@ -71,6 +71,11 @@ source you relied on, give one short quote copied from it character for characte
 Table of contents:
 
 {contents}"""
+
+SCOPE_RULE = """- This conversation is limited to some chapters of the book: only they are in \
+the table of contents, and search and read reach nothing else. Answer from them alone; \
+if they do not answer the question, say so.
+"""
 
 FORCE_ANSWER = "No more tools: answer now from the sources you have."
 READ_FIRST = (
@@ -104,9 +109,12 @@ class State(TypedDict):
     decision: Decision | None
 
 
-def contents(session: Session, project: Project, open_chapter_id: str = "") -> str:
+def contents(
+    session: Session, project: Project, open_chapter_id: str = "", scope: list[str] | None = None
+) -> str:
     """The table of contents the agent plans with: number, title, size, and who and
-    where appears in each chapter, from the cards when they have been made."""
+    where appears in each chapter, from the cards when they have been made. With a
+    `scope` only those chapters are listed, under their numbers in the book."""
     names: dict[str, dict[str, list[str]]] = {}
     rows = session.execute(
         select(EntityFact.chapter_id, Entity.kind, Entity.name)
@@ -119,6 +127,8 @@ def contents(session: Session, project: Project, open_chapter_id: str = "") -> s
         names.setdefault(chapter_id, {}).setdefault(kind, []).append(name)
     lines = []
     for number, chapter in enumerate(project.chapters, 1):
+        if scope and chapter.id not in scope:
+            continue
         line = f"{number}. {chapter.title or '(untitled)'} — {len(chapter.text):,} characters"
         found = names.get(chapter.id, {})
         people = [n for k, ns in found.items() if k != KIND_LOCATION for n in ns]
@@ -157,8 +167,11 @@ def _sources_text(sources: list[Document]) -> str:
 def decide(state: State, config: RunnableConfig) -> dict:
     session, model, project, c = _config(config)
     steps = state["steps"] + 1
+    scope = c.get("scope") or []
     system = SYSTEM.format(
-        steps=MAX_STEPS, contents=contents(session, project, c.get("open_chapter_id", ""))
+        steps=MAX_STEPS,
+        scope=SCOPE_RULE if scope else "",
+        contents=contents(session, project, c.get("open_chapter_id", ""), scope),
     )
     request = (
         f"Question: {state['question']}\n\n"
@@ -190,7 +203,14 @@ def search_tool(state: State, config: RunnableConfig) -> dict:
     seen = {(d.metadata["chapter_id"], d.metadata["paragraph"]) for d in sources}
     whole = {d.metadata["chapter_id"] for d in sources if d.metadata.get("whole")}
     added = []
-    for p in search(session, project.id, query, focus_chapter_id=c.get("open_chapter_id", "")):
+    found_passages = search(
+        session,
+        project.id,
+        query,
+        focus_chapter_id=c.get("open_chapter_id", ""),
+        chapter_ids=c.get("scope") or None,
+    )
+    for p in found_passages:
         if (p.chapter_id, p.paragraph) in seen or p.chapter_id in whole:
             continue  # the agent already has this text
         sources.append(passage_document(p.chapter_id, p.chapter_title, p.paragraph, p.text))
@@ -200,12 +220,16 @@ def search_tool(state: State, config: RunnableConfig) -> dict:
 
 
 def read_tool(state: State, config: RunnableConfig) -> dict:
-    _, _, project, _ = _config(config)
+    _, _, project, c = _config(config)
     number = state["decision"].chapter
     chapters = project.chapters
     if not 1 <= number <= len(chapters):
         return {"log": [*state["log"], f"read chapter {number}: there is no such chapter"]}
     chapter = chapters[number - 1]
+    scope = c.get("scope") or []
+    if scope and chapter.id not in scope:
+        log = f"read chapter {number}: outside this conversation's chapters"
+        return {"log": [*state["log"], log]}
     sources = list(state["sources"])
     for n, doc in enumerate(sources, 1):
         if doc.metadata["chapter_id"] == chapter.id and doc.metadata.get("whole"):

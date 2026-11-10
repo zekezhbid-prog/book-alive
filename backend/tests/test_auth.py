@@ -181,7 +181,7 @@ def test_every_user_sees_only_their_own_books(owner, guest):
     assert titles(guest) == {"auth-test theirs"}
 
     chapter = owner.post(f"/api/projects/{mine}/chapters", json={"title": "One"}).json()["id"]
-    paths = (f"/api/projects/{mine}", f"/api/projects/{mine}/chat", f"/api/chapters/{chapter}")
+    paths = (f"/api/projects/{mine}", f"/api/projects/{mine}/chats", f"/api/chapters/{chapter}")
     for path in paths:
         denied = guest.get(path)
         assert (denied.status_code, denied.json()["detail"]) == (404, "project_not_found"), path

@@ -202,6 +202,14 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .sources a:hover { color: var(--text); }
 .quote-inline { font-style: italic; }
 .chat-form { display: flex; flex-direction: column; gap: 10px; }
+.chat > :not(.chat-log) { flex-shrink: 0; }
+.chat-threads { gap: 8px; }
+.chat-threads select.input.small { flex: 1; min-width: 0; }
+.chat-scope { align-self: flex-start; background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; text-align: left; color: var(--faint); font: inherit; font-size: 13px; }
+.chat-scope:hover { color: var(--text); }
+.chat-settings { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); }
+.chat-settings label.row { cursor: pointer; gap: 8px; }
+.chat-settings .chapter-picker { max-height: 30vh; }
 .chat-form textarea { resize: none; }
 
 /* ---------- pictures ---------- */

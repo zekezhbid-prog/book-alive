@@ -106,16 +106,25 @@ class Passage:
 
 
 def search(
-    session: Session, project_id: str, query: str, limit: int = 6, focus_chapter_id: str = ""
+    session: Session,
+    project_id: str,
+    query: str,
+    limit: int = 6,
+    focus_chapter_id: str = "",
+    chapter_ids: list[str] | None = None,
 ) -> list[Passage]:
+    """Hybrid search over the book; `chapter_ids`, when given, keeps it inside those chapters."""
     scores: dict[str, float] = {}
+    in_scope = [Chunk.project_id == project_id]
+    if chapter_ids:
+        in_scope.append(Chunk.chapter_id.in_(chapter_ids))
 
     def add(ranked: list[str]) -> None:
         for rank, chunk_id in enumerate(ranked):
             scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
 
     vector = get_embeddings().embed_query(query)
-    by_meaning = select(Chunk.id).where(Chunk.project_id == project_id)
+    by_meaning = select(Chunk.id).where(*in_scope)
     add(
         list(
             session.scalars(
@@ -144,7 +153,7 @@ def search(
                 session.scalars(
                     select(Chunk.id)
                     .where(
-                        Chunk.project_id == project_id,
+                        *in_scope,
                         or_(*(Chunk.text.ilike(f"%{stem}%") for stem in stems)),
                     )
                     .order_by(matches.desc(), Chunk.id)
