@@ -17,6 +17,8 @@ export interface Tile {
 }
 
 export interface TileAction {
+  /** Drawn large and faint behind the text: the list's + or ✨. */
+  icon: ReactNode
   title: string
   hint: string
   onClick: () => void
@@ -54,7 +56,8 @@ export default function CardGrid({ actions, tiles, onOpen, more }: Props) {
   )
   return (
     <>
-      <div className="card-grid">
+      {/* The actions take the first row between them; the cards start below. */}
+      <div className="card-actions">
         {actions.map((action) => (
           <button
             key={action.title}
@@ -62,12 +65,15 @@ export default function CardGrid({ actions, tiles, onOpen, more }: Props) {
             disabled={action.disabled}
             onClick={action.onClick}
           >
+            <span className="tile-action-icon" aria-hidden>
+              {action.icon}
+            </span>
             <span className="tile-title">{action.title}</span>
             <span className="tile-text">{action.hint}</span>
           </button>
         ))}
-        {tiles.map(tile)}
       </div>
+      {tiles.length > 0 && <div className="card-grid">{tiles.map(tile)}</div>}
       {more && more.tiles.length > 0 && (
         <>
           <h4 className="card-grid-subhead" title={more.hint}>
