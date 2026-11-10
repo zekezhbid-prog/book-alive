@@ -22,7 +22,7 @@ from app.models import KIND_LOCATION, Entity, EntityFact, Project
 from app.rag.index import search
 
 # Decisions per question, the last one forced to be an answer. Each is a model call.
-MAX_STEPS = 4
+MAX_STEPS = 6
 # A chapter longer than this is opened only in part; search reaches the rest.
 READ_CHARS = 60_000
 NAMES_PER_CHAPTER = 12
@@ -47,6 +47,14 @@ Rules:
 "This chapter" is the one marked "open now".
 - Otherwise the whole book is in scope. Do not settle for fragments when the question \
 needs more: read the chapters they come from.
+- The table of contents lists who appears in each chapter. For a question about how, \
+where or when people met, or when something first happened, find there the first chapter \
+where they appear together and read it rather than searching again.
+- Names in the question may be misspelt or given in another language: match them to the \
+names in the table of contents. Write search queries in the language of the book, as its \
+chapter titles and names show it, not in the language of the question.
+- Never say the book does not answer before you have read at least one chapter that is \
+likely to hold the answer.
 - You have {steps} replies in all for this question, so choose what to open carefully.
 - Answer only from the numbered sources you have gathered. Do not use anything you \
 know about this or any other book.
