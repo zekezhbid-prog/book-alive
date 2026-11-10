@@ -321,9 +321,20 @@ function ThreadSettings({
   }
   return (
     <div className="chat-settings" role="dialog" aria-label={t('chat.settings')}>
-      <label className="small faint" htmlFor="chat-title">
-        {t('chat.settings.name')}
-      </label>
+      <div className="row">
+        <label className="small faint" htmlFor="chat-title">
+          {t('chat.settings.name')}
+        </label>
+        <span className="spacer" />
+        <button
+          className="btn ghost icon chat-settings-close"
+          onClick={onCancel}
+          title={t('app.cancel')}
+          aria-label={t('app.cancel')}
+        >
+          <CloseIcon />
+        </button>
+      </div>
       <input
         id="chat-title"
         className="input small"
@@ -367,14 +378,6 @@ function ThreadSettings({
           aria-label={t('chat.settings.save')}
         >
           <SaveIcon />
-        </button>
-        <button
-          className="btn ghost icon"
-          onClick={onCancel}
-          title={t('app.cancel')}
-          aria-label={t('app.cancel')}
-        >
-          <CloseIcon />
         </button>
         <span className="spacer" />
         <button
