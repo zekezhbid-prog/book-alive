@@ -522,9 +522,9 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .tile-action .tile-title { color: var(--accent); }
 .tile-action .tile-text { -webkit-line-clamp: 4; }
 /* The + or ✨ of the list, large and faint, as a symbol behind the text. */
-.tile-action > .tile-action-icon { position: absolute; z-index: 0; right: 14px; top: 50%; transform: translateY(-50%); width: 76px; height: 76px; color: var(--accent); opacity: 0.22; transition: opacity 0.15s; }
-.tile-action-icon svg { width: 100%; height: 100%; }
-.tile-action:hover > .tile-action-icon { opacity: 0.4; }
+.tile-action > .tile-action-icon { position: absolute; z-index: 0; right: 16px; top: 50%; transform: translateY(-50%); width: 72px; height: 72px; opacity: 0.75; transition: opacity 0.2s, transform 0.2s; }
+.tile-action-icon svg { width: 100%; height: 100%; overflow: visible; }
+.tile-action:hover > .tile-action-icon { opacity: 0.95; transform: translateY(-50%) scale(1.06); }
 @media (max-width: 640px) { .card-actions { grid-template-columns: 1fr; } }
 .tile-action:disabled { opacity: 0.5; cursor: default; }
 .tile-action:disabled:hover { border-color: var(--line-2); background: rgba(14, 12, 8, 0.55); box-shadow: none; }

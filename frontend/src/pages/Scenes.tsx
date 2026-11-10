@@ -19,7 +19,7 @@ import { errorText, useI18n } from '../i18n'
 import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { BoldPlusIcon, CopyIcon, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
+import { CopyIcon, GoldPlusSymbol, GoldSparklesSymbol, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
 
 type Participant = Scene['participants'][number]
 
@@ -76,14 +76,14 @@ export default function Scenes() {
               <CardGrid
                 actions={[
                   {
-                    icon: <BoldPlusIcon />,
+                    icon: <GoldPlusSymbol />,
                     title: t('tiles.scene.mark'),
                     hint: t('tiles.scene.mark.hint'),
                     onClick: markByHand,
                     disabled: !project.chapters.length,
                   },
                   {
-                    icon: <SparklesIcon />,
+                    icon: <GoldSparklesSymbol />,
                     title: t('tiles.scene.split'),
                     hint: t('tiles.scene.split.hint'),
                     onClick: () => setSplitting(true),

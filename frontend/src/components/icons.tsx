@@ -1,4 +1,5 @@
 // Small inline icons; they take the button's text colour.
+import type { ReactNode } from 'react'
 
 const stroke = {
   width: 16,
@@ -187,5 +188,78 @@ export function ImageIcon() {
       <circle cx="9" cy="9" r="2" />
       <path d="m21 15-5-5L5 21" />
     </svg>
+  )
+}
+
+/** The large symbols behind the action tiles: drawn for their size (not a stretched line
+ * icon), gold with a highlight that slowly runs across, a lit top edge and a soft shadow. */
+function GoldSymbol({ id, children }: { id: string; children: (fill: string) => ReactNode }) {
+  return (
+    <svg viewBox="0 0 100 100" className="gold-symbol" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}-gold`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff3c4" />
+          <stop offset="0.3" stopColor="#ffd45e" />
+          <stop offset="0.55" stopColor="#e9a21c" />
+          <stop offset="0.8" stopColor="#b8720a" />
+          <stop offset="1" stopColor="#ffd77a" />
+        </linearGradient>
+        {/* A band of light sweeping across, again and again. */}
+        <linearGradient id={`${id}-shine`} x1="0" y1="0" x2="1" y2="0.6">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fffbe8" stopOpacity="0.85" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          <animateTransform
+            attributeName="gradientTransform"
+            type="translate"
+            values="-1.2 0; 1.2 0; 1.2 0"
+            keyTimes="0; 0.6; 1"
+            dur="4.5s"
+            repeatCount="indefinite"
+          />
+        </linearGradient>
+        <linearGradient id={`${id}-edge`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
+          <stop offset="0.35" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <filter id={`${id}-depth`} x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="3" stdDeviation="2.5" floodColor="#3a2000" floodOpacity="0.55" />
+          <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#f6b93b" floodOpacity="0.35" />
+        </filter>
+      </defs>
+      <g filter={`url(#${id}-depth)`}>{children(`url(#${id}-gold)`)}</g>
+      {children(`url(#${id}-edge)`)}
+      {children(`url(#${id}-shine)`)}
+    </svg>
+  )
+}
+
+// A cross with rounded arms and soft inner corners.
+const PLUS =
+  'M43 12h14a6 6 0 0 1 6 6v19h19a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H63v19a6 6 0 0 1-6 6H43a6 6 0 0 1-6-6V63H18a6 6 0 0 1-6-6V43a6 6 0 0 1 6-6h19V18a6 6 0 0 1 6-6z'
+// One large four-pointed star and two small ones, with slightly curved sides.
+const STARS = [
+  'M40 12c2.5 14 8 21.5 24 26-16 4.5-21.5 12-24 26-2.5-14-8-21.5-24-26 16-4.5 21.5-12 24-26z',
+  'M76 52c1.4 7.5 4.2 11 12 13-7.8 2-10.6 5.5-12 13-1.4-7.5-4.2-11-12-13 7.8-2 10.6-5.5 12-13z',
+  'M74 8c1 5 2.8 7.4 8 8.6-5.2 1.2-7 3.6-8 8.6-1-5-2.8-7.4-8-8.6 5.2-1.2 7-3.6 8-8.6z',
+]
+
+export function GoldPlusSymbol() {
+  return <GoldSymbol id="gold-plus">{(fill) => <path d={PLUS} fill={fill} />}</GoldSymbol>
+}
+
+export function GoldSparklesSymbol() {
+  return (
+    <GoldSymbol id="gold-stars">
+      {(fill) => (
+        <>
+          {STARS.map((d) => (
+            <path key={d} d={d} fill={fill} />
+          ))}
+        </>
+      )}
+    </GoldSymbol>
   )
 }
