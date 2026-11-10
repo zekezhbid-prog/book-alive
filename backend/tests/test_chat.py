@@ -3,13 +3,14 @@ import threading
 import time
 
 import pytest
+from langchain_core.messages import AIMessage
 from sqlalchemy.orm import Session
 
 from app.api.chat import _model_factory
 from app.db import get_engine
 from app.llm.calls import BadModelOutput
 from app.main import app
-from app.models import Chapter, ChatThread, Chunk, Project, text_hash
+from app.models import Chapter, ChatThread, Chunk, Entity, EntityFact, Project, text_hash
 from app.rag import agent, chat, jobs
 from app.rag.index import index_project, search, split_chunks
 
@@ -449,3 +450,60 @@ def test_answer_is_finished_and_saved_when_nobody_waits_for_it(client, session, 
     assert client.get(base).json()["pending_question"] == ""
     roles = [m["role"] for m in client.get(f"{base}/messages").json()]
     assert roles == ["user", "assistant"]
+
+
+def test_agent_looks_at_a_card_to_learn_who_to_look_for(session, project):
+    mill = project.chapters[0]
+    lyuta = Entity(project_id=project.id, kind="character", name="Люта", aliases=[])
+    lyuta.facts.append(
+        EntityFact(
+            chapter_id=mill.id,
+            chapter_hash=mill.content_hash,
+            category="profile",
+            text="Её служанка — Рымка.",
+        )
+    )
+    session.add(lyuta)
+    session.commit()
+    model = FakeModel(
+        {"action": "card", "name": "Люты"},  # another case ending of the name
+        {"action": "card", "name": "Цмок"},
+        {"found": True, "answer": "Посох [1].", "citations": []},
+    )
+    statuses = [
+        (e.code, e.detail)
+        for e in chat.ask_events(session, project, model, "Кто служанка Люты?")
+        if isinstance(e, chat.Status)
+    ]
+    assert ("card", "Люты") in statuses
+    assert "Cards (not sources, do not cite)" in model.prompts[1]
+    assert "chapter 1 (Мельница): Её служанка — Рымка." in model.prompts[1]
+    assert 'card "Цмок": no such card' in model.prompts[2]
+
+
+def test_chat_model_falls_back_when_temperature_is_refused(session, project, monkeypatch):
+    from app.llm import calls
+
+    built = []
+
+    class Refusing:
+        def __init__(self, temperature):
+            self.temperature = temperature
+
+        def invoke(self, messages):
+            if self.temperature is not None:
+                raise ValueError("Unsupported value: 'temperature' does not support 0.0")
+            return AIMessage("{}")
+
+    def fake_chat_model(connection, model, **kwargs):
+        built.append(kwargs.get("temperature"))
+        return Refusing(kwargs.get("temperature"))
+
+    model = object.__new__(calls.TextModel)
+    model.session, model.engine, model.project_id = session, session.get_bind(), project.id
+    model.connection, model.connection_name, model.model_name = None, "c", "m"
+    model.temperature, model.request_overhead = calls.STEADY_TEMPERATURE, 0
+    monkeypatch.setattr(calls.registry, "chat_model", fake_chat_model)
+    model.llm = model._build()
+    assert model.invoke("chat", []) == "{}"
+    assert built == [0.0, None] and model.temperature is None

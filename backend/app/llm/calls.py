@@ -15,6 +15,10 @@ from app.models import Connection, UsageEvent
 
 log = logging.getLogger(__name__)
 
+# Tasks answered without sampling randomness, so the same question gets the same answer.
+STEADY_TASKS = {"chat"}
+STEADY_TEMPERATURE = 0.0
+
 
 class ModelNotConfigured(RuntimeError):
     pass
@@ -45,11 +49,28 @@ class TextModel:
         self.connection_name = connection.name
         self.request_overhead = 0  # tokens the connection adds to every request on its own
         self.model_name = model_name
-        self.llm: BaseChatModel = registry.chat_model(connection, model_name)
+        self.connection = connection
+        # The chat should answer the same question the same way: no sampling randomness.
+        # Some models accept only their default temperature; see `invoke`.
+        self.temperature = STEADY_TEMPERATURE if task in STEADY_TASKS else None
+        self.llm: BaseChatModel = self._build()
+
+    def _build(self) -> BaseChatModel:
+        extra = {} if self.temperature is None else {"temperature": self.temperature}
+        return registry.chat_model(self.connection, self.model_name, **extra)
 
     def invoke(self, operation: str, messages: list[BaseMessage]) -> str:
         release_connection(self.session)  # nothing held while the model answers
-        answer: AIMessage = self.llm.invoke(messages)
+        try:
+            answer: AIMessage = self.llm.invoke(messages)
+        except Exception as exc:
+            if self.temperature is None or "temperature" not in str(exc).lower():
+                raise
+            # The model refuses a temperature of its own choosing: use its default.
+            log.info("%s does not take temperature %s", self.model_name, self.temperature)
+            self.temperature = None
+            self.llm = self._build()
+            answer = self.llm.invoke(messages)
         usage = answer.usage_metadata or {}
         # Its own session: tokens are spent whatever happens to the caller's transaction.
         with Session(self.engine) as journal:

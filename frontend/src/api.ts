@@ -221,7 +221,7 @@ export interface ChatThread {
 
 /** A step the chat agent has started: shown while the user waits for the answer. */
 export interface ChatStatus {
-  code: 'index' | 'search' | 'read' | 'think'
+  code: 'index' | 'card' | 'search' | 'read' | 'think'
   detail: string
 }
 

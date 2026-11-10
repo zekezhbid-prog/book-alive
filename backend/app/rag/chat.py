@@ -25,7 +25,7 @@ TITLE_CHARS = 60
 class Status:
     """What the agent is doing, shown while the user waits."""
 
-    code: str  # index | search | read | think
+    code: str  # index | card | search | read | think
     detail: str = ""
 
 
@@ -170,6 +170,7 @@ def ask_events(
         "question": question,
         "sources": sources,
         "log": [f"searched the book for the question: {found}"],
+        "notes": [],
         "steps": 0,
         "decision": None,
     }
@@ -194,7 +195,9 @@ def ask_events(
                 yield Status("think")
                 continue
             decision = state["decision"]
-            if decision.action == "search":
+            if decision.action == "card":
+                yield Status("card", decision.name)
+            elif decision.action == "search":
                 yield Status("search", decision.query)
             elif decision.action == "read":
                 chapters = project.chapters

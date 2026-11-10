@@ -236,6 +236,7 @@ export const by: Record<string, string> = {
   'chat.send': 'Спытаць',
   'chat.waiting': 'Шукаю ў кнізе і адказваю',
   'chat.status.index': 'Гартаю кнігу',
+  'chat.status.card': 'Гляджу картку: «{detail}»',
   'chat.status.search': 'Шукаю ў кнізе: «{detail}»',
   'chat.status.read': 'Чытаю: «{detail}»',
   'chat.status.think': 'Абдумваю прачытанае',

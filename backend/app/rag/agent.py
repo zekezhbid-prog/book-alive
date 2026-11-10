@@ -7,6 +7,7 @@ A LangGraph loop of one decision node and the two tools. Tool calls go through p
 JSON in the reply, as everywhere in the app: not every provider supports tool calling.
 """
 
+import os
 from typing import Literal, TypedDict
 
 from langchain_core.documents import Document
@@ -28,8 +29,13 @@ READ_CHARS = 60_000
 NAMES_PER_CHAPTER = 12
 
 SYSTEM = """You answer questions about one book, using only its text. You do not see the \
-book itself. You have its table of contents below and two tools:
+book itself. You have its table of contents below and three tools:
 
+- card: what an earlier reading of the book recorded about one character or place: who \
+they are, the people around them (servants, family, friends, enemies), and the chapters \
+they appear in. The quickest way to learn a name the question does not give ("her maid", \
+"his brother") and where to look. A card is not a source: confirm what it says in the \
+chapters and cite those.
 - search: finds short passages by meaning and by words. Good for a name, an object, a \
 particular moment.
 - read: opens a whole chapter by its number. Use it when the answer depends on events, \
@@ -37,6 +43,7 @@ motives or how something developed, or when the passages found are fragments tha
 not show the whole picture.
 
 Reply with one JSON object and nothing else, one of:
+{{"action": "card", "name": "..."}}
 {{"action": "search", "query": "..."}}
 {{"action": "read", "chapter": 3}}
 {{"action": "answer", "found": true, "answer": "... [1] ... [3]", \
@@ -47,6 +54,8 @@ Rules:
 "This chapter" is the one marked "open now".
 - Otherwise everything in the table of contents is in scope. Do not settle for fragments when the question \
 needs more: read the chapters they come from.
+- When the question is about a character or place, or about someone tied to them, look \
+at their card first.
 - Plan with the table of contents: it lists who and what appears in each chapter. Open \
 the chapters where the people, places or things of the question appear; when the question \
 is about how something began or developed, start from the earliest of them.
@@ -95,7 +104,8 @@ class Citation(BaseModel):
 
 
 class Decision(BaseModel):
-    action: Literal["search", "read", "answer"] = "answer"
+    action: Literal["card", "search", "read", "answer"] = "answer"
+    name: str = ""
     query: str = ""
     chapter: int = 0
     found: bool = True
@@ -109,6 +119,8 @@ class State(TypedDict):
     sources: list[Document]
     # What the agent has done, so the next decision knows what not to repeat.
     log: list[str]
+    # Cards looked at: background for planning, never cited.
+    notes: list[str]
     steps: int
     decision: Decision | None
 
@@ -177,10 +189,14 @@ def decide(state: State, config: RunnableConfig) -> dict:
         scope=SCOPE_RULE if scope else "",
         contents=contents(session, project, c.get("open_chapter_id", ""), scope),
     )
+    notes = state.get("notes") or []
     request = (
         f"Question: {state['question']}\n\n"
-        f"Done so far:\n" + "\n".join(f"- {line}" for line in state["log"]) + "\n\n"
-        f"Sources:\n\n{_sources_text(state['sources']) or '(none yet)'}"
+        f"Done so far:\n"
+        + "\n".join(f"- {line}" for line in state["log"])
+        + "\n\n"
+        + ("Cards (not sources, do not cite):\n\n" + "\n\n".join(notes) + "\n\n" if notes else "")
+        + f"Sources:\n\n{_sources_text(state['sources']) or '(none yet)'}"
     )
     if steps >= MAX_STEPS:
         request += f"\n\n{FORCE_ANSWER}"
@@ -267,18 +283,84 @@ def read_tool(state: State, config: RunnableConfig) -> dict:
     return {"sources": sources, "log": [*state["log"], log]}
 
 
+CARD_FACTS = 30
+
+
+def find_card(session: Session, project: Project, name: str) -> Entity | None:
+    """The card a name points at: exact name or alias first, then a name that starts
+    the same way (the question may use another case ending or a misspelling)."""
+    wanted = name.strip().casefold()
+    if not wanted:
+        return None
+    cards = session.scalars(select(Entity).where(Entity.project_id == project.id)).all()
+
+    def names(card: Entity) -> list[str]:
+        return [n.casefold() for n in [card.name, *card.aliases, *card.pinned_names] if n]
+
+    exact = [c for c in cards if wanted in names(c)]
+    if exact:
+        return exact[0]
+
+    def similar(a: str, b: str) -> bool:
+        """Same word up to a case ending: "Журэі" ~ "Журэя", "Люты" ~ "Люта"."""
+        common = len(os.path.commonprefix([a, b]))
+        return common >= max(3, min(len(a), len(b)) - 2)
+
+    def words(card: Entity) -> list[str]:  # "князь Цмок" is found by "Цмока" too
+        return [w for n in names(card) for w in [n, *n.split()] if len(w) >= 3]
+
+    close = [c for c in cards if any(similar(w, wanted) for w in words(c))]
+    return close[0] if close else None
+
+
+def card_text(project: Project, card: Entity, scope: list[str]) -> str:
+    numbers = {c.id: n for n, c in enumerate(project.chapters, 1)}
+    titles = {c.id: c.title for c in project.chapters}
+    lines = [f"Card: {card.name}" + (f" (also: {', '.join(card.aliases)})" if card.aliases else "")]
+    about = card.description.strip() or card.summary.strip()
+    if about:
+        lines.append(about)
+    facts = [
+        f for f in card.facts if f.chapter_id in numbers and (not scope or f.chapter_id in scope)
+    ]
+    facts.sort(key=lambda f: numbers[f.chapter_id])
+    for fact in facts[:CARD_FACTS]:
+        n = numbers[fact.chapter_id]
+        lines.append(f"- chapter {n} ({titles[fact.chapter_id] or 'untitled'}): {fact.text}")
+    if not about and not facts:
+        lines.append("(nothing recorded)")
+    return "\n".join(lines)
+
+
+def card_tool(state: State, config: RunnableConfig) -> dict:
+    session, _, project, c = _config(config)
+    name = state["decision"].name.strip()
+    notes = list(state.get("notes") or [])
+    card = find_card(session, project, name)
+    if card is None:
+        log = f'card "{name}": no such card; search the book instead'
+    elif any(n.startswith(f"Card: {card.name}") for n in notes):
+        log = f'card "{name}": already shown below'
+    else:
+        notes.append(card_text(project, card, c.get("scope") or []))
+        log = f'card "{name}": shown below as "{card.name}"'
+    return {"notes": notes, "log": [*state["log"], log]}
+
+
 def _route(state: State) -> str:
     action = state["decision"].action
-    return {"search": "search", "read": "read"}.get(action, END)
+    return {"card": "card", "search": "search", "read": "read"}.get(action, END)
 
 
 def build_graph():
     graph = StateGraph(State)
     graph.add_node("decide", decide)
+    graph.add_node("card", card_tool)
     graph.add_node("search", search_tool)
     graph.add_node("read", read_tool)
     graph.add_edge(START, "decide")
-    graph.add_conditional_edges("decide", _route, ["search", "read", END])
+    graph.add_conditional_edges("decide", _route, ["card", "search", "read", END])
+    graph.add_edge("card", "decide")
     graph.add_edge("search", "decide")
     graph.add_edge("read", "decide")
     return graph.compile()
