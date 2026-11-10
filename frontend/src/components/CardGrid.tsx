@@ -17,7 +17,6 @@ export interface Tile {
 }
 
 export interface TileAction {
-  icon: ReactNode
   title: string
   hint: string
   onClick: () => void
@@ -25,7 +24,7 @@ export interface TileAction {
 }
 
 interface Props {
-  /** The first tiles: add by hand, make with AI. Bigger versions of the list's icons. */
+  /** The first tiles: add by hand, make with AI (the list's + and ✨, spelled out). */
   actions: TileAction[]
   tiles: Tile[]
   onOpen: (id: string) => void
@@ -63,7 +62,6 @@ export default function CardGrid({ actions, tiles, onOpen, more }: Props) {
             disabled={action.disabled}
             onClick={action.onClick}
           >
-            <span className="tile-action-icon">{action.icon}</span>
             <span className="tile-title">{action.title}</span>
             <span className="tile-text">{action.hint}</span>
           </button>

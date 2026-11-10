@@ -17,7 +17,7 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { BoldPlusIcon, PencilIcon, SparklesIcon } from '../components/icons'
+import { PencilIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -168,13 +168,11 @@ export default function Entities({ kind }: { kind: EntityKind }) {
               <CardGrid
                 actions={[
                   {
-                    icon: <BoldPlusIcon />,
                     title: t(`nav.add.${section}`),
                     hint: t(`tiles.add.${kind}`),
                     onClick: () => setAdding(true),
                   },
                   {
-                    icon: <SparklesIcon />,
                     title: t(`nav.find.${section}`),
                     hint: t(running ? 'tiles.find.running' : `tiles.find.${kind}`),
                     onClick: openFind,
