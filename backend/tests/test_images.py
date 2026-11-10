@@ -272,3 +272,14 @@ def test_a_base_set_shares_one_prompt_and_adds_each_view(client, session, projec
     assert drawn[1][0].startswith("Head-and-shoulders portrait, face turned three-quarters")
     assert drawn[0][0].endswith("A red-haired woman.")
     assert [references for _, references in drawn] == [0, 1]
+
+
+def test_card_list_carries_a_blurb_the_first_chapter_and_a_picture(client, project):
+    brief = lambda: client.get(f"/api/projects/{project.id}/entities?kind=character").json()[0]  # noqa: E731
+    assert (brief()["first_chapter"], brief()["cover"]) == ("Мельница", "")
+    client.put(f"/api/entities/{project.hero_id}/description", json={"text": "Дочь мельника. " * 30})
+    image = upload(client, project, project.hero_id)[0]
+    shown = brief()
+    assert shown["cover"] == image["url"]
+    assert shown["blurb"].startswith("Дочь мельника.") and shown["blurb"].endswith("…")
+    assert len(shown["blurb"]) <= 161

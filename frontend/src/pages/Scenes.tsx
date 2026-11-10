@@ -10,15 +10,16 @@ import {
   type Scene,
   type SceneBrief,
 } from '../api'
+import CardGrid from '../components/CardGrid'
 import { ImageDialog } from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
-import { useView } from '../view'
+import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { CopyIcon, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
+import { BoldPlusIcon, CopyIcon, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
 
 type Participant = Scene['participants'][number]
 
@@ -32,6 +33,7 @@ export default function Scenes() {
   const [list, setList] = useState<SceneBrief[] | null>(() => peek.scenes(projectId) ?? null)
   const [scene, setScene] = useState<Scene | null>(() => (sceneId && peek.scene(sceneId)) || null)
   const [error, setError] = useState('')
+  const [splitting, setSplitting] = useState(false)
   const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
@@ -51,6 +53,11 @@ export default function Scenes() {
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
   const writing = view === 'writer'
 
+  // A scene is marked in the reading view of a chapter, by selecting its text.
+  const markByHand = () => {
+    if (project.mode === 'writer') saveView(projectId, 'illustrator')
+    navigate(`/projects/${projectId}/chapters/${lastChapter(projectId, project.chapters)}`)
+  }
   const remove = async () => {
     if (!scene || !(await ask(t('scene.delete.confirm')))) return
     await api.deleteScene(scene.id).then(loadList, fail)
@@ -64,9 +71,53 @@ export default function Scenes() {
         <section className="reading">
           <div className="chapter stack">
             {error && <p className="error">{error}</p>}
-            {list && list.length > 0 && !activeId && <p className="muted">{t('scenes.select')}</p>}
-            {scene && (
+            {/* Nothing open: every scene as a tile, marking by hand and splitting with AI first. */}
+            {list && !sceneId && (
+              <CardGrid
+                actions={[
+                  {
+                    icon: <BoldPlusIcon />,
+                    title: t('tiles.scene.mark'),
+                    hint: t('tiles.scene.mark.hint'),
+                    onClick: markByHand,
+                    disabled: !project.chapters.length,
+                  },
+                  {
+                    icon: <SparklesIcon />,
+                    title: t('tiles.scene.split'),
+                    hint: t('tiles.scene.split.hint'),
+                    onClick: () => setSplitting(true),
+                    disabled: !project.chapters.length,
+                  },
+                ]}
+                tiles={list.map((item) => ({
+                  id: item.id,
+                  title: item.title || t('book.untitled'),
+                  text: item.summary,
+                  meta: item.chapter_title || t('book.untitled'),
+                  cover: item.cover,
+                  mark: item.vivid ? (
+                    <span className="vivid" title={t('scenes.vivid')}>
+                      ★{' '}
+                    </span>
+                  ) : undefined,
+                  extra: (
+                    <>
+                      {item.stale && <span className="dot" title={t('scene.stale')} />}
+                      {item.has_prompt && (
+                        <span className="has-prompt" title={t('scenes.has_prompt')}>
+                          ✓
+                        </span>
+                      )}
+                    </>
+                  ),
+                }))}
+                onOpen={(id) => navigate(`/projects/${projectId}/scenes/${id}`)}
+              />
+            )}
+            {scene && sceneId && (
               <SceneView
+                onClose={() => navigate(`/projects/${projectId}/scenes`)}
                 key={scene.id}
                 projectId={projectId}
                 scene={scene}
@@ -83,11 +134,98 @@ export default function Scenes() {
           </div>
         </section>
       </div>
+      {splitting && (
+        <SplitDialog
+          projectId={projectId}
+          chapters={project.chapters}
+          onClose={() => setSplitting(false)}
+          onDone={(first) => {
+            setSplitting(false)
+            loadList()
+            if (first) navigate(`/projects/${projectId}/scenes/${first}`)
+          }}
+        />
+      )}
     </>
   )
 }
 
+/** The chapter the reader was last in, or the first one. */
+function lastChapter(projectId: string, chapters: ChapterBrief[]): string {
+  let last: string | null = null
+  try {
+    last = localStorage.getItem(`lastChapter:${projectId}`)
+  } catch {
+    /* private mode */
+  }
+  return chapters.some((c) => c.id === last) && last ? last : (chapters[0]?.id ?? '')
+}
+
+interface SplitProps {
+  projectId: string
+  chapters: ChapterBrief[]
+  onClose: () => void
+  onDone: (firstSceneId: string | undefined) => void
+}
+
+/** Pick a chapter, see the price, then the AI splits it into scenes (as in the reader). */
+function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
+  const { t } = useI18n()
+  const aiReady = useTextModelReady()
+  const [chapterId, setChapterId] = useState(() => lastChapter(projectId, chapters))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const start = async () => {
+    setError('')
+    try {
+      const estimate = await api.splitEstimate(chapterId)
+      const question =
+        t('scenes.split.confirm', {
+          input: estimate.input_tokens.toLocaleString(),
+          output: estimate.output_tokens.toLocaleString(),
+        }) + (estimate.existing ? t('scenes.split.replace', { n: estimate.existing }) : '')
+      if (!(await ask(question))) return
+      setBusy(true)
+      const scenes = await api.splitScenes(chapterId)
+      onDone(scenes[0]?.id)
+    } catch (e) {
+      setError(errorText(t, e))
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="dialog stack">
+        <h2>{t('tiles.scene.split')}</h2>
+        <label className="field">
+          {t('tiles.scene.split.chapter')}
+          <select className="input" value={chapterId} disabled={busy} onChange={(e) => setChapterId(e.target.value)}>
+            {chapters.map((chapter, index) => (
+              <option key={chapter.id} value={chapter.id}>
+                {chapter.title || `${index + 1}. ${t('book.untitled')}`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <AiNotice ready={aiReady} />
+        {error && <p className="error">{error}</p>}
+        <div className="row">
+          <span className="spacer" />
+          <button className="btn" disabled={busy} onClick={onClose}>
+            {t('app.cancel')}
+          </button>
+          <button className="btn primary" disabled={busy || !chapterId || aiReady === false} onClick={start}>
+            {busy ? t('scenes.split.busy') : t('scenes.split')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface ViewProps {
+  /** The ✕ in the corner: back to the tiles of the section. */
+  onClose: () => void
   projectId: string
   scene: Scene
   hasStyle: boolean
@@ -98,7 +236,7 @@ interface ViewProps {
   onDelete: () => void
 }
 
-function SceneView({ projectId, scene, hasStyle, chapters, writing, onChange, onDelete }: ViewProps) {
+function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onChange, onDelete }: ViewProps) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
   const [prompt, setPrompt] = useState(scene.prompt)
@@ -165,6 +303,9 @@ function SceneView({ projectId, scene, hasStyle, chapters, writing, onChange, on
         <h1 className="entity-name grow">{scene.title || t('book.untitled')}</h1>
         <button className="btn ghost small danger" onClick={onDelete}>
           {t('scene.delete')}
+        </button>
+        <button className="btn ghost card-close" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
+          ✕
         </button>
       </div>
       <div className="row wrap muted">

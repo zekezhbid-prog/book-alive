@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import PageClose from '../components/PageClose'
 import { useI18n, type Lang } from '../i18n'
 
 interface Text {
@@ -11,7 +12,6 @@ interface Text {
   startTitle: string
   start: string[]
   privacy: string
-  toProjects: string
   toLogin: string
 }
 
@@ -43,7 +43,6 @@ const TEXT: Record<Lang, Text> = {
       'Запустите поиск персонажей — карточки появятся по мере чтения глав.',
     ],
     privacy: 'Проекты видны только в вашем аккаунте. Книги никуда не публикуются.',
-    toProjects: 'Мои проекты',
     toLogin: 'Войти',
   },
   by: {
@@ -72,7 +71,6 @@ const TEXT: Record<Lang, Text> = {
       'Запусціце пошук персанажаў — карткі з’явяцца па меры чытання раздзелаў.',
     ],
     privacy: 'Праекты бачныя толькі ў вашым акаўнце. Кнігі нікуды не публікуюцца.',
-    toProjects: 'Мае праекты',
     toLogin: 'Увайсці',
   },
   en: {
@@ -101,7 +99,6 @@ const TEXT: Record<Lang, Text> = {
       'Run the character search — cards appear as the chapters are read.',
     ],
     privacy: 'Projects are visible only in your account. Books are never published anywhere.',
-    toProjects: 'My projects',
     toLogin: 'Sign in',
   },
 }
@@ -112,7 +109,11 @@ export default function About({ signedIn }: { signedIn: boolean }) {
   const text = TEXT[lang]
   return (
     <main className="page narrow about">
-      <h1>{text.title}</h1>
+      <div className="page-head">
+        <h1 className="grow">{text.title}</h1>
+        {/* Back to wherever the Lorebook name was clicked. */}
+        <PageClose fallback="/" />
+      </div>
       <p className="about-lead">{text.lead}</p>
 
       <h2>{text.whoTitle}</h2>
@@ -143,9 +144,11 @@ export default function About({ signedIn }: { signedIn: boolean }) {
       </ol>
 
       <p className="faint">{text.privacy}</p>
-      <Link to="/" className="btn primary">
-        {signedIn ? text.toProjects : text.toLogin}
-      </Link>
+      {!signedIn && (
+        <Link to="/" className="btn primary">
+          {text.toLogin}
+        </Link>
+      )}
     </main>
   )
 }

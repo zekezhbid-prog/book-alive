@@ -11,11 +11,13 @@ import {
   type Project,
   type Run,
 } from '../api'
+import { AddCardDialog } from '../components/AddCardDialog'
+import CardGrid, { type Tile } from '../components/CardGrid'
 import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { PencilIcon, SparklesIcon } from '../components/icons'
+import { BoldPlusIcon, PencilIcon, SparklesIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -37,6 +39,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   // null: closed. Otherwise the chapters ticked when the dialog opens (empty = all).
   const [choosing, setChoosing] = useState<string[] | null>(null)
   const [staleChapters, setStaleChapters] = useState<string[]>([])
+  const [adding, setAdding] = useState(false)
   const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
   const [error, setError] = useState('')
 
@@ -93,11 +96,29 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const activeId = list?.some((e) => e.id === entityId) ? entityId : undefined
   useEffect(() => {
     if (!activeId) return setEntity(null)
+    // Another card's page must not show the previous one while it loads.
+    setEntity((shown) => (shown?.id === activeId ? shown : (peek.entity(activeId) ?? null)))
     api.entity(activeId).then(setEntity, fail)
     // Refetch when the list changes too: a run may have added facts to the open card.
   }, [activeId, list, fail])
 
   if (!project) return <main className="page muted">{error || t('app.loading')}</main>
+
+  const tile = (item: EntityBrief): Tile => ({
+    id: item.id,
+    title: item.name,
+    text: item.blurb,
+    meta: [
+      item.chapters ? t('tiles.chapters', { n: item.chapters }) : '',
+      item.first_chapter ? t('tiles.first', { title: item.first_chapter }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    cover: item.cover,
+    mark: item.uncertain ? <span className="uncertain-mark">? </span> : undefined,
+    extra: item.stale ? <span className="dot" title={t('entities.stale.hint')} /> : undefined,
+    faded: item.uncertain,
+  })
 
   const cancel = () =>
     run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
@@ -142,17 +163,36 @@ export default function Entities({ kind }: { kind: EntityKind }) {
               <p className="notice">{t('run.cancelled', { done: run.done, total: run.total })}</p>
             )}
             <AiNotice ready={aiReady} />
-            {list?.length === 0 && !running && (
-              <div className="empty-state stack">
-                <p className="muted">{t(`entities.empty.${kind}`)}</p>
-                <button className="btn primary" onClick={openFind}>
-                  <SparklesIcon /> {t(`nav.find.${section}`)}
-                </button>
-              </div>
+            {/* Nothing open: every card as a tile, adding by hand and finding with AI first. */}
+            {list && !entityId && (
+              <CardGrid
+                actions={[
+                  {
+                    icon: <BoldPlusIcon />,
+                    title: t(`nav.add.${section}`),
+                    hint: t(`tiles.add.${kind}`),
+                    onClick: () => setAdding(true),
+                  },
+                  {
+                    icon: <SparklesIcon />,
+                    title: t(`nav.find.${section}`),
+                    hint: t(running ? 'tiles.find.running' : `tiles.find.${kind}`),
+                    onClick: openFind,
+                    disabled: running,
+                  },
+                ]}
+                tiles={list.filter((e) => !e.uncertain).map(tile)}
+                more={{
+                  title: t('entities.uncertain'),
+                  hint: t('entities.uncertain.hint'),
+                  tiles: list.filter((e) => e.uncertain).map(tile),
+                }}
+                onOpen={(id) => navigate(`/projects/${projectId}/${section}/${id}`)}
+              />
             )}
-            {list && list.length > 0 && !entity && <p className="muted">{t('entities.select')}</p>}
-            {entity && (
+            {entity && entityId && (
               <Card
+                onClose={() => navigate(`/projects/${projectId}/${section}`)}
                 entity={entity}
                 projectId={projectId}
                 others={list?.filter((e) => e.id !== entity.id) ?? []}
@@ -178,6 +218,18 @@ export default function Entities({ kind }: { kind: EntityKind }) {
           </div>
         </section>
       </div>
+      {adding && (
+        <AddCardDialog
+          projectId={projectId}
+          kind={kind}
+          onClose={() => setAdding(false)}
+          onCreated={(created) => {
+            setAdding(false)
+            loadList()
+            navigate(`/projects/${projectId}/${section}/${created.id}`)
+          }}
+        />
+      )}
       {choosing && (
         <RunDialog
           aiReady={aiReady}
@@ -197,6 +249,8 @@ export default function Entities({ kind }: { kind: EntityKind }) {
 }
 
 interface CardProps {
+  /** The ✕ in the corner: back to the tiles of the section. */
+  onClose: () => void
   entity: Entity
   projectId: string
   others: EntityBrief[]
@@ -208,7 +262,7 @@ interface CardProps {
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ entity, projectId, others, onChanged, onError, gallery }: CardProps) {
+function Card({ onClose, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
@@ -246,6 +300,9 @@ function Card({ entity, projectId, others, onChanged, onError, gallery }: CardPr
               ))}
             </select>
           )}
+          <button className="btn ghost card-close" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
+            ✕
+          </button>
         </div>
         {entity.aliases.length > 0 && (
           <div className="row wrap muted">

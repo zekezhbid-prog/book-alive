@@ -28,14 +28,14 @@ DRAWING_LIMIT = 3
 SCENE_LIMIT = 2
 
 
-def _rank(image: Image) -> tuple[int, object]:
+def rank(image: Image) -> tuple[int, object]:
     order = list(ANGLES)
     return (order.index(image.angle) if image.angle in ANGLES else len(order), image.created_at)
 
 
 def mains(images: Iterable[Image], key: str) -> list[Image]:
     """The main pictures in the given style, most useful first."""
-    return sorted((i for i in images if i.is_main and i.style_key == key), key=_rank)
+    return sorted((i for i in images if i.is_main and i.style_key == key), key=rank)
 
 
 def next_angle(images: Iterable[Image], key: str) -> str:

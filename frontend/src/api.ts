@@ -147,6 +147,10 @@ export interface EntityBrief {
   stale: boolean
   /** Found without a proper name or as a group: listed apart, "in question". */
   uncertain?: boolean
+  /** For the card's tile: a few words, where it first appears, its best picture. */
+  blurb?: string
+  first_chapter?: string
+  cover?: string
 }
 
 export interface Fact {
@@ -333,6 +337,8 @@ export interface SceneBrief {
   origin: 'auto' | 'manual'
   stale: boolean
   has_prompt: boolean
+  /** The latest first frame, for the scene's tile. */
+  cover?: string
 }
 
 export interface Scene extends SceneBrief {

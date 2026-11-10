@@ -31,6 +31,8 @@ class SceneBrief(BaseModel):
     origin: str
     stale: bool
     has_prompt: bool
+    # The latest first frame, for the scene's card on the section's page.
+    cover: str = ""
 
 
 class Participant(BaseModel):
@@ -115,7 +117,7 @@ def _text_model(session: SessionDep, project_id: str, task: str) -> TextModel:
         raise HTTPException(409, str(exc)) from exc
 
 
-def _brief(scene: Scene, chapter: Chapter | None) -> SceneBrief:
+def _brief(scene: Scene, chapter: Chapter | None, cover: str = "") -> SceneBrief:
     return SceneBrief(
         id=scene.id,
         chapter_id=scene.chapter_id,
@@ -130,6 +132,7 @@ def _brief(scene: Scene, chapter: Chapter | None) -> SceneBrief:
         # The paragraph numbers were counted in a text that has since changed.
         stale=chapter is None or chapter.content_hash != scene.chapter_hash,
         has_prompt=bool(scene.prompt),
+        cover=cover,
     )
 
 
@@ -140,7 +143,7 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
         select(Image).where(Image.scene_id == scene.id).order_by(Image.created_at.desc())
     ).all()
     return SceneOut(
-        **_brief(scene, chapter).model_dump(),
+        **_brief(scene, chapter, f"/api/images/{frames[0].id}/file" if frames else "").model_dump(),
         text=service.scene_text(scene, chapter) if chapter else "",
         prompt=scene.prompt,
         frame_prompt=service.frame_prompt(scene.prompt) if scene.prompt else "",
@@ -178,7 +181,16 @@ def list_scenes(project_id: str, session: SessionDep) -> list[SceneBrief]:
         c.id: c for c in session.scalars(select(Chapter).where(Chapter.project_id == project_id))
     }
     scenes = session.scalars(select(Scene).where(Scene.project_id == project_id)).all()
-    briefs = [_brief(scene, chapters.get(scene.chapter_id)) for scene in scenes]
+    # Oldest first, so the latest frame of each scene wins.
+    frames = session.scalars(
+        select(Image)
+        .where(Image.project_id == project_id, Image.scene_id.is_not(None))
+        .order_by(Image.created_at)
+    ).all()
+    covers = {frame.scene_id: f"/api/images/{frame.id}/file" for frame in frames}
+    briefs = [
+        _brief(scene, chapters.get(scene.chapter_id), covers.get(scene.id, "")) for scene in scenes
+    ]
     return sorted(briefs, key=lambda b: (b.chapter_position, b.paragraph_from))
 
 

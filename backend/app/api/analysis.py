@@ -7,6 +7,8 @@ from sqlalchemy import func, select
 from app.analysis import entities as analysis
 from app.analysis import prompts, runner
 from app.db import SessionDep
+from app.images import angles
+from app.images.styles import style_key
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import (
     FACT_PERMANENT,
@@ -18,6 +20,7 @@ from app.models import (
     Chapter,
     ChapterExtraction,
     Entity,
+    Image,
     Project,
     UsageEvent,
 )
@@ -52,6 +55,10 @@ class EntityBrief(BaseModel):
     stale: bool
     # No proper name or a group: shown apart, "in question".
     uncertain: bool = False
+    # For the card on the section's page: a few words, where it first appears, a picture.
+    blurb: str = ""
+    first_chapter: str = ""
+    cover: str = ""
 
 
 class FactOut(BaseModel):
@@ -200,6 +207,28 @@ def cancel_run(run_id: str, session: SessionDep) -> RunOut:
     return _run_out(run)
 
 
+BLURB_CHARS = 160
+
+
+def _blurb(text: str) -> str:
+    """The start of a description, cut at a word: the card shows two or three lines."""
+    text = " ".join(text.split())
+    if len(text) <= BLURB_CHARS:
+        return text
+    return text[:BLURB_CHARS].rsplit(" ", 1)[0].rstrip(",.;:—-") + "…"
+
+
+def _cover(images: list[Image], current_style: str) -> str:
+    """The card's picture: a main one in the project's style, best view first; else any."""
+    if not images:
+        return ""
+    best = min(
+        images,
+        key=lambda i: (i.style_key != current_style, not i.is_main, *angles.rank(i)),
+    )
+    return f"/api/images/{best.id}/file"
+
+
 @router.get("/projects/{project_id}/entities")
 def list_entities(project_id: str, kind: str, session: SessionDep) -> list[EntityBrief]:
     project = _project(session, project_id)
@@ -207,6 +236,13 @@ def list_entities(project_id: str, kind: str, session: SessionDep) -> list[Entit
     rows = session.scalars(
         select(Entity).where(Entity.project_id == project_id, Entity.kind == _kind(kind))
     ).all()
+    chapters = {c.id: c for c in project.chapters}
+    current_style = style_key(project)
+
+    def first_chapter(e: Entity) -> str:
+        seen = [chapters[f.chapter_id] for f in e.facts if f.chapter_id in chapters]
+        return min(seen, key=lambda c: c.position).title if seen else ""
+
     briefs = [
         EntityBrief(
             id=e.id,
@@ -216,6 +252,9 @@ def list_entities(project_id: str, kind: str, session: SessionDep) -> list[Entit
             facts=sum(f.category != analysis.FACT_MENTION for f in e.facts),
             stale=any(hashes.get(f.chapter_id) != f.chapter_hash for f in e.facts),
             uncertain=e.uncertain,
+            blurb=_blurb(e.description.strip() or e.summary),
+            first_chapter=first_chapter(e),
+            cover=_cover(e.images, current_style),
         )
         for e in rows
     ]

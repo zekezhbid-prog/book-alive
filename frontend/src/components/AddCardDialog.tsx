@@ -24,7 +24,15 @@ export function AddCardDialog({ projectId, kind, onClose, onCreated }: Props) {
     try {
       const created = await api.createEntity(projectId, kind, name.trim())
       if (description.trim()) await api.saveEntityDescription(created.id, description.trim())
-      onCreated({ id: created.id, name: name.trim(), aliases: [], chapters: 0, facts: 0, stale: false })
+      onCreated({
+        id: created.id,
+        name: name.trim(),
+        aliases: [],
+        chapters: 0,
+        facts: 0,
+        stale: false,
+        blurb: description.trim(),
+      })
     } catch (err) {
       setError(errorText(t, err))
       setBusy(false)
