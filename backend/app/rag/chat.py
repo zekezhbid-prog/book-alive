@@ -76,11 +76,16 @@ def ask_events(
         return
 
     # A first search for the question itself: often enough, and it shows the agent where
-    # in the book to look.
-    yield Status("search", question)
+    # in the book to look. Words only match in the book's own language, so a question asked
+    # in another one is first put into it.
+    query = f"{previous}\n{question}".strip()
+    sample = _book_sample(project)
+    if needs_translation(query, sample):
+        query = _translate(model, query, sample, _book_names(session, project))
+    yield Status("search", query)
     sources = [
         agent.passage_document(p.chapter_id, p.chapter_title, p.paragraph, p.text)
-        for p in search(session, project.id, f"{previous}\n{question}".strip(), 6, chapter_id)
+        for p in search(session, project.id, query, 6, chapter_id)
     ]
     found = ", ".join(f"[{n}]" for n in range(1, len(sources) + 1)) or "nothing"
     state: agent.State = {
@@ -128,6 +133,76 @@ def ask_events(
     session.add_all([asked, reply])
     session.commit()
     yield Reply(asked, reply)
+
+
+class SearchQuery(BaseModel):
+    query: str = ""
+
+
+def _book_sample(project: Project, size: int = 6000) -> str:
+    text = ""
+    for chapter in project.chapters:
+        text += chapter.text[: size - len(text)]
+        if len(text) >= size:
+            break
+    return text
+
+
+# Letters that tell close languages apart: Russian и щ ъ, Belarusian і ў, Ukrainian ї є ґ.
+MARKER_LETTERS = set("ищъіўїєґ")
+
+
+def _script(letters: set[str]) -> set[str]:
+    return {"latin" if c.isascii() else "other" for c in letters}
+
+
+def needs_translation(question: str, sample: str) -> bool:
+    """True when the question is in another language than the book: another script, or
+    a letter that marks a close language the book never uses ("и" in a Belarusian book)."""
+    book = {c for c in sample.casefold() if c.isalpha()}
+    asked = {c for c in question.casefold() if c.isalpha()}
+    if not book or not asked:
+        return False
+    if not _script(asked) & _script(book):
+        return True
+    return bool((asked & MARKER_LETTERS) - book)
+
+
+def _book_names(session: Session, project: Project) -> list[str]:
+    """Names from the cards, so a misspelt or foreign form in the question is put right."""
+    return list(
+        session.scalars(
+            select(Entity.name)
+            .where(Entity.project_id == project.id, Entity.uncertain.is_(False))
+            .order_by(Entity.name)
+            .limit(200)
+        )
+    )
+
+
+def _translate(model: TextModel, query: str, sample: str, names: list[str]) -> str:
+    """The question as a search query in the book's language; the question itself if the
+    model cannot help."""
+    try:
+        answer = model.invoke_json(
+            "chat",
+            [
+                SystemMessage(
+                    "Rewrite the user's question as a short search query in the language of "
+                    "the book excerpt below. Write names as the book spells them: the user "
+                    "may misspell them or use another language's form. Reply with one JSON "
+                    'object: {"query": "..."}\n\n'
+                    + (f"Names in the book: {', '.join(names)}\n\n" if names else "")
+                    + "Book excerpt:\n"
+                    + sample[:1500]
+                ),
+                HumanMessage(query),
+            ],
+            SearchQuery,
+        )
+    except Exception:  # noqa: BLE001 - a failed rewrite only costs a worse first search
+        return query
+    return answer.query.strip() or query
 
 
 def _citations(project: Project, decision: agent.Decision, sources: list[Document]) -> list[dict]:

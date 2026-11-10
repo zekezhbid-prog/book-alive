@@ -300,3 +300,11 @@ def test_plot_suggestions_hold_no_connection_while_the_model_answers(session, pr
     model = ReleasingModel(session, options)
     chat.suggest(session, project, model, "Что дальше?", project.chapters[-1].id)
     assert model.held == [False]
+
+
+def test_question_in_another_language_is_put_into_the_books_language():
+    belarusian = "Уцей мімаволі падаўся бліжэй і раптам зразумеў, што не так з дзяўчынай."
+    assert chat.needs_translation("где встретились Уцей и Люта?", belarusian)
+    assert not chat.needs_translation("дзе сустрэліся Уцей і Люта?", belarusian)
+    assert chat.needs_translation("where did they meet", belarusian)
+    assert not chat.needs_translation("Что несла Люта?", "Люта несла корзину. Что это было?")
