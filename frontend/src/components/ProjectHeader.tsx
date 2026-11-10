@@ -69,13 +69,14 @@ export default function ProjectHeader({ project, children, chat }: Props) {
           </NavLink>
         )}
       </nav>
+      <span className="spacer" />
+      {/* On the right, beside the writer / illustrator switch. */}
       {project.mode === 'writer' && view === 'writer' && (
         <>
           {writerTool('review')}
           {writerTool('versions')}
         </>
       )}
-      <span className="spacer" />
       {children}
       <BookSearch projectId={project.id} />
     </>,
