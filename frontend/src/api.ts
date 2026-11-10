@@ -214,6 +214,9 @@ export interface ChatThread {
   chapter_ids: string[]
   created_at: string
   updated_at: string
+  /** A question still being answered (the page may have been left meanwhile). */
+  pending_question: string
+  status: ChatStatus | null
 }
 
 /** A step the chat agent has started: shown while the user waits for the answer. */
@@ -492,6 +495,8 @@ export const api = {
   splitEntity: (id: string, name: string) =>
     request<Entity>('POST', `/entities/${id}/split`, { name }),
   chats: (projectId: string) => request<ChatThread[]>('GET', `/projects/${projectId}/chats`),
+  chatThread: (projectId: string, threadId: string) =>
+    request<ChatThread>('GET', `/projects/${projectId}/chats/${threadId}`),
   newChat: (projectId: string) => request<ChatThread>('POST', `/projects/${projectId}/chats`, {}),
   updateChat: (
     projectId: string,

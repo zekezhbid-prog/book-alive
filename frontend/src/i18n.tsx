@@ -521,6 +521,7 @@ const ru = {
   'error.title_too_long': 'Название слишком длинное (до 300 знаков).',
   'error.key_unreadable':
     'Сохранённый ключ не удалось расшифровать. Удалите подключение и добавьте его заново.',
+  'error.chat_busy': 'Чат ещё отвечает на предыдущий вопрос. Дождитесь ответа.',
   'error.chat_failed': 'Не получилось ответить на этот вопрос. Попробуйте спросить ещё раз или немного иначе.',
   'error.bad_model_output':
     'Модель ответила не в том виде, который ожидался. Попробуйте ещё раз или выберите другую модель.',
@@ -1054,6 +1055,7 @@ const en: Record<keyof typeof ru, string> = {
   'error.title_too_long': 'The title is too long (up to 300 characters).',
   'error.key_unreadable':
     'The stored key could not be decrypted. Delete the connection and add it again.',
+  'error.chat_busy': 'The chat is still answering the previous question. Please wait for it.',
   'error.chat_failed': 'Could not answer this question. Please ask again or put it a little differently.',
   'error.bad_model_output':
     'The model replied in an unexpected form. Try again or choose another model.',

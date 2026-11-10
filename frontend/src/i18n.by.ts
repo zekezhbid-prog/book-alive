@@ -227,6 +227,7 @@ export const by: Record<string, string> = {
   'chat.scope.many': 'Шукае толькі ў абраных раздзелах: {n}',
   'chat.delete': 'Выдаліць чат',
   'chat.delete.confirm': 'Выдаліць чат «{title}» з усёй перапіскай?',
+  'error.chat_busy': 'Чат яшчэ адказвае на папярэдняе пытанне. Дачакайцеся адказу.',
   'error.chat_failed': 'Не атрымалася адказаць на гэтае пытанне. Паспрабуйце спытаць яшчэ раз або крыху інакш.',
   'chat.title': 'Чат па кнізе',
   'chat.hint':

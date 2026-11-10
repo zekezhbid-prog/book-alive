@@ -28,7 +28,7 @@ interface Props {
 function useChatError() {
   const { t } = useI18n()
   return (error: unknown) =>
-    error instanceof ApiError && error.code === 'text_model_not_configured'
+    error instanceof ApiError && ['text_model_not_configured', 'chat_busy'].includes(error.code)
       ? errorText(t, error)
       : t('error.chat_failed')
 }
@@ -52,6 +52,10 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
   const end = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const asked = useRef(false)
+  // A question asked earlier and still being answered on the server: the reader left
+  // the page and came back. Shown with the agent's step until the answer is saved.
+  const [resumed, setResumed] = useState('')
+  const sending = useRef(false)
   const thread = threads.find((th) => th.id === threadId) ?? null
 
   const reloadThreads = useCallback(
@@ -73,8 +77,32 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
   }, [reloadThreads, t])
   useEffect(() => {
     setSettingsOpen(false)
+    setResumed('')
     if (!threadId) return setMessages([])
-    api.chatMessages(projectId, threadId).then(setMessages, (e) => setError(errorText(t, e)))
+    let stopped = false
+    let timer = 0
+    const load = async () => {
+      const [list, info] = await Promise.all([
+        api.chatMessages(projectId, threadId),
+        api.chatThread(projectId, threadId),
+      ])
+      if (stopped) return
+      setMessages(list)
+      // While this page sends a question itself, its own stream shows the progress.
+      const pending = sending.current ? '' : info.pending_question
+      setResumed(pending)
+      if (pending) {
+        setStatus(info.status)
+        timer = window.setTimeout(() => load().catch(() => {}), 2000)
+      } else if (!sending.current) {
+        setStatus(null)
+      }
+    }
+    load().catch((e) => !stopped && setError(errorText(t, e)))
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
   }, [projectId, threadId, t])
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
@@ -103,6 +131,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
     const text = question.trim()
     if (!text || waiting) return
     asked.current = true
+    sending.current = true
     setWaiting(true)
     setError('')
     try {
@@ -112,6 +141,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
     } catch (e) {
       setError(chatError(e))
     } finally {
+      sending.current = false
       setWaiting(false)
       setStatus(null)
     }
@@ -233,7 +263,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
         </button>
       )}
       <div className="chat-log">
-        {messages.length === 0 && !waiting && <p className="faint small">{t('chat.hint')}</p>}
+        {messages.length === 0 && !waiting && !resumed && <p className="faint small">{t('chat.hint')}</p>}
         {messages.map((message) => (
           <div key={message.id} className={`bubble ${message.role}`}>
             {message.role === 'user' ? (
@@ -243,7 +273,8 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
             )}
           </div>
         ))}
-        {waiting && <Waiting status={status} />}
+        {resumed && !waiting && <div className="bubble user">{resumed}</div>}
+        {(waiting || resumed) && <Waiting status={status} />}
         <div ref={end} />
       </div>
       <AiNotice ready={aiReady} />
@@ -261,7 +292,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
           placeholder={t('chat.placeholder')}
           maxLength={4000}
           // No typing while the agent works: the next question waits for this answer.
-          disabled={waiting}
+          disabled={waiting || !!resumed}
           ref={input}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
@@ -269,7 +300,7 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
           }}
         />
         {/* Stays bright with an empty field too: a dim button reads as broken. */}
-        <button className="btn primary" disabled={waiting}>
+        <button className="btn primary" disabled={waiting || !!resumed}>
           {t('chat.send')}
         </button>
       </form>

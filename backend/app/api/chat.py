@@ -1,20 +1,22 @@
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.db import SessionDep
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import MODE_WRITER, ChatMessage, ChatThread, Project
-from app.rag import chat
+from app.rag import chat, jobs
 
 router = APIRouter(prefix="/api", tags=["chat"])
 log = logging.getLogger(__name__)
 # What the reader sees when the agent fails: the details go to the server log only.
 CHAT_FAILED = "chat_failed"
+CHAT_BUSY = "chat_busy"  # the thread is still answering the previous question
 
 
 class CitationOut(BaseModel):
@@ -63,6 +65,11 @@ def _thread(session: SessionDep, project_id: str, thread_id: str) -> ChatThread:
     return thread
 
 
+class StatusOut(BaseModel):
+    code: str
+    detail: str
+
+
 class ThreadOut(BaseModel):
     id: str
     title: str
@@ -70,6 +77,9 @@ class ThreadOut(BaseModel):
     chapter_ids: list[str]
     created_at: datetime
     updated_at: datetime
+    # A question still being answered (see `rag.jobs`), and the agent's current step.
+    pending_question: str = ""
+    status: StatusOut | None = None
 
 
 class ThreadIn(BaseModel):
@@ -78,12 +88,16 @@ class ThreadIn(BaseModel):
 
 
 def _thread_out(project: Project, thread: ChatThread) -> ThreadOut:
+    job = jobs.running(thread.id)
+    status = job.status if job else None
     return ThreadOut(
         id=thread.id,
         title=thread.title,
         chapter_ids=chat.scope(project, thread),
         created_at=thread.created_at,
         updated_at=thread.updated_at,
+        pending_question=job.question if job else "",
+        status=StatusOut(code=status.code, detail=status.detail) if status else None,
     )
 
 
@@ -109,6 +123,12 @@ def create_thread(project_id: str, body: ThreadIn, session: SessionDep) -> Threa
     session.add(thread)
     session.commit()
     return _thread_out(project, thread)
+
+
+@router.get("/projects/{project_id}/chats/{thread_id}")
+def get_thread(project_id: str, thread_id: str, session: SessionDep) -> ThreadOut:
+    project = _project(session, project_id)
+    return _thread_out(project, _thread(session, project.id, thread_id))
 
 
 @router.patch("/projects/{project_id}/chats/{thread_id}")
@@ -166,35 +186,48 @@ class StreamLine(BaseModel):
     messages: list[MessageOut] = Field(default_factory=list)
 
 
-def _text_model(project_id: str, thread_id: str, session: SessionDep) -> TextModel:
-    """Checked before the stream starts, so these failures still get a proper status code."""
+ModelFactory = Callable[[Session], TextModel]
+
+
+def _model_factory(project_id: str, thread_id: str, session: SessionDep) -> ModelFactory:
+    """Checked before the stream starts, so these failures still get a proper status code.
+    The answer runs with a session of its own, so the model is made there."""
     _project(session, project_id)
     _thread(session, project_id, thread_id)
-    return _model(session, project_id)
+    _model(session, project_id)
+    return lambda own: TextModel(own, project_id, "chat")
 
 
-TextModelDep = Annotated[TextModel, Depends(_text_model)]
+ModelFactoryDep = Annotated[ModelFactory, Depends(_model_factory)]
 
 
 @router.post("/projects/{project_id}/chats/{thread_id}/stream")
 def ask_stream(
-    project_id: str, thread_id: str, body: Question, session: SessionDep, model: TextModelDep
+    project_id: str, thread_id: str, body: Question, make_model: ModelFactoryDep
 ) -> Iterator[StreamLine]:
     """The same question as `/ask`, answered as JSON Lines: a `status` line for every
-    step the agent takes, then one `done` line with both messages, or `error`."""
-    project = _project(session, project_id)
-    thread = _thread(session, project.id, thread_id)
+    step the agent takes, then one `done` line with both messages, or `error`. The
+    answer is worked out apart from this request (see `rag.jobs`): if the reader leaves,
+    it is still finished and saved."""
+    question = body.question.strip()
+
+    def work(own: Session) -> Iterator[chat.Status | chat.Reply]:
+        project = own.get(Project, project_id)
+        thread = own.get(ChatThread, thread_id)
+        yield from chat.ask_events(own, project, make_model(own), question, body.chapter_id, thread)
+
     try:
-        for event in chat.ask_events(
-            session, project, model, body.question.strip(), body.chapter_id, thread
-        ):
-            if isinstance(event, chat.Reply):
-                yield StreamLine(type="done", messages=[_out(event.asked), _out(event.reply)])
-            else:
-                yield StreamLine(type="status", code=event.code, detail=event.detail)
-    except Exception:  # the response has started: report in it
-        log.exception("chat failed: project %s, thread %s", project_id, thread_id)
-        yield StreamLine(type="error", detail=CHAT_FAILED)
+        job = jobs.start(thread_id, question, work)
+    except jobs.Busy:
+        yield StreamLine(type="error", detail=CHAT_BUSY)
+        return
+    while (event := job.events.get()) is not jobs.END:
+        if isinstance(event, chat.Reply):
+            yield StreamLine(type="done", messages=[_out(event.asked), _out(event.reply)])
+        elif isinstance(event, chat.Status):
+            yield StreamLine(type="status", code=event.code, detail=event.detail)
+        else:  # the job has logged it
+            yield StreamLine(type="error", detail=CHAT_FAILED)
 
 
 @router.post("/projects/{project_id}/chats/{thread_id}/suggest")

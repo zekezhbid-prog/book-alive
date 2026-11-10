@@ -1,14 +1,16 @@
 import json
+import threading
+import time
 
 import pytest
 from sqlalchemy.orm import Session
 
-from app.api.chat import _text_model
+from app.api.chat import _model_factory
 from app.db import get_engine
 from app.llm.calls import BadModelOutput
 from app.main import app
-from app.models import Chapter, Chunk, Project, text_hash
-from app.rag import agent, chat
+from app.models import Chapter, ChatThread, Chunk, Project, text_hash
+from app.rag import agent, chat, jobs
 from app.rag.index import index_project, search, split_chunks
 
 MILL = (
@@ -196,9 +198,9 @@ def test_reading_a_missing_chapter_is_reported_to_the_agent(session, project):
 def stream_model():
     """Puts a fake model behind `/chat/stream`; the test sets its replies."""
     holder: dict = {}
-    app.dependency_overrides[_text_model] = lambda: holder["model"]
+    app.dependency_overrides[_model_factory] = lambda: lambda own: holder["model"]
     yield holder
-    app.dependency_overrides.pop(_text_model, None)
+    app.dependency_overrides.pop(_model_factory, None)
 
 
 def _new_chat(client, project_id: str, **fields) -> str:
@@ -408,3 +410,42 @@ def test_one_unreadable_reply_is_tried_again(session, project):
     model = OnceBroken({"found": True, "answer": "Посох [1].", "citations": []})
     _, reply = chat.ask(session, project, model, "Что несла Люта?")
     assert reply.content == "Посох [1]."
+
+
+def test_answer_is_finished_and_saved_when_nobody_waits_for_it(client, session, project):
+    """The reader may leave the page while the agent works: the answer still lands in
+    the history, and meanwhile the thread shows the question being answered."""
+    gate = threading.Event()
+
+    class Slow(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            gate.wait(10)
+            return super().invoke_json(operation, messages, schema)
+
+    model = Slow({"found": True, "answer": "Посох [1].", "citations": []})
+    thread = chat.new_thread(project)
+    session.add(thread)
+    session.commit()
+
+    def work(own):
+        yield from chat.ask_events(
+            own,
+            own.get(Project, project.id),
+            model,
+            "Что несла Люта?",
+            "",
+            own.get(ChatThread, thread.id),
+        )
+
+    jobs.start(thread.id, "Что несла Люта?", work)  # nobody reads its events
+    base = f"/api/projects/{project.id}/chats/{thread.id}"
+    assert client.get(base).json()["pending_question"] == "Что несла Люта?"
+    with pytest.raises(jobs.Busy):
+        jobs.start(thread.id, "Ещё вопрос", work)
+    gate.set()
+    deadline = time.monotonic() + 30
+    while jobs.running(thread.id) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert client.get(base).json()["pending_question"] == ""
+    roles = [m["role"] for m in client.get(f"{base}/messages").json()]
+    assert roles == ["user", "assistant"]
