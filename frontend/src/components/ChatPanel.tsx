@@ -56,6 +56,8 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
   // the page and came back. Shown with the agent's step until the answer is saved.
   const [resumed, setResumed] = useState('')
   const sending = useRef(false)
+  // Under an answer: names it was asked about that have no card (only for this visit).
+  const [missingCards, setMissingCards] = useState<Record<string, string[]>>({})
   const thread = threads.find((th) => th.id === threadId) ?? null
 
   const reloadThreads = useCallback(
@@ -136,7 +138,16 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
     setError('')
     try {
       const id = await currentThread()
-      afterAnswer(await api.ask(projectId, id, text, chapterId, setStatus))
+      const { messages: added, missingCards: names } = await api.ask(
+        projectId,
+        id,
+        text,
+        chapterId,
+        setStatus,
+      )
+      afterAnswer(added)
+      const reply = added[added.length - 1]
+      if (reply && names.length) setMissingCards((map) => ({ ...map, [reply.id]: names }))
       setQuestion('')
     } catch (e) {
       setError(chatError(e))
@@ -269,7 +280,12 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest }
             {message.role === 'user' ? (
               message.content
             ) : (
-              <Answer projectId={projectId} message={message} />
+              <>
+                <Answer projectId={projectId} message={message} />
+                {missingCards[message.id] && (
+                  <CardHint projectId={projectId} names={missingCards[message.id]} />
+                )}
+              </>
             )}
           </div>
         ))}
@@ -421,6 +437,18 @@ function ThreadSettings({
         </button>
       </div>
     </div>
+  )
+}
+
+/** The chat finds people faster and surer through their cards; it never starts the
+ * character search itself, it only says so and links to it. */
+function CardHint({ projectId, names }: { projectId: string; names: string[] }) {
+  const { t } = useI18n()
+  return (
+    <p className="chat-card-hint small">
+      {t('chat.card_hint', { names: names.map((n) => `«${n}»`).join(', ') })}{' '}
+      <Link to={`/projects/${projectId}/characters?find=1`}>{t('chat.card_hint.link')}</Link>
+    </p>
   )
 }
 

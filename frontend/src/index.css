@@ -204,6 +204,8 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .chat-form { display: flex; flex-direction: column; gap: 10px; }
 .chat > :not(.chat-log) { flex-shrink: 0; }
 .chat-threads { gap: 8px; position: relative; }
+.chat-card-hint { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--faint); white-space: normal; }
+.chat-card-hint a { color: var(--accent); }
 .chat-threads select.input.small { flex: 1; min-width: 0; }
 .chat-scope { align-self: flex-start; background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; text-align: left; color: var(--faint); font: inherit; font-size: 13px; }
 .chat-scope:hover { color: var(--text); }

@@ -522,3 +522,25 @@ def test_first_search_includes_the_places_of_the_names(session, project):
     model = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
     chat.ask(session, project, model, "Чем занят Рыхташ?")
     assert "Рыхташ вошёл в старую мельницу" in model.prompts[0]
+
+
+def test_names_without_a_card_are_reported(session, project):
+    model = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
+    replies = [
+        e
+        for e in chat.ask_events(session, project, model, "Что несла Люта? Где был Рыхташ?")
+        if isinstance(e, chat.Reply)
+    ]
+    # Both occur in the book once only: too rare to ask for a card search.
+    assert replies[0].missing_cards == []
+    assert chat._capitalised("Расскажи про Журэю. Где Люта?", True) == ["Журэю", "Люта"]
+
+
+def test_answer_in_another_language_than_the_question_is_translated(session, project):
+    model = FakeModel(
+        {"found": True, "answer": "Яна несла посах і хустку [1].", "citations": []},
+        {"answer": "Она несла посох и платок [1]."},
+    )
+    _, reply = chat.ask(session, project, model, "Что Люта несла в руках и на плечах?")
+    assert reply.content == "Она несла посох и платок [1]."
+    assert not chat.other_language("Что несла Люта?", "Посох «і хустку» [1].")

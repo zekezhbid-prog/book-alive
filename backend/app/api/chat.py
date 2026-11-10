@@ -184,6 +184,8 @@ class StreamLine(BaseModel):
     code: str = ""  # status: index | search | read | think
     detail: str = ""
     messages: list[MessageOut] = Field(default_factory=list)
+    # done: names asked about that have no card yet (see `chat.cardless_names`).
+    missing_cards: list[str] = Field(default_factory=list)
 
 
 ModelFactory = Callable[[Session], TextModel]
@@ -223,7 +225,11 @@ def ask_stream(
         return
     while (event := job.events.get()) is not jobs.END:
         if isinstance(event, chat.Reply):
-            yield StreamLine(type="done", messages=[_out(event.asked), _out(event.reply)])
+            yield StreamLine(
+                type="done",
+                messages=[_out(event.asked), _out(event.reply)],
+                missing_cards=event.missing_cards,
+            )
         elif isinstance(event, chat.Status):
             yield StreamLine(type="status", code=event.code, detail=event.detail)
         else:  # the job has logged it

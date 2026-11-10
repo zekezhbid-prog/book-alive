@@ -225,9 +225,15 @@ export interface ChatStatus {
   detail: string
 }
 
+/** The question and the answer as stored, and names asked about that have no card yet. */
+export interface ChatAnswer {
+  messages: ChatMessage[]
+  missingCards: string[]
+}
+
 type ChatStreamLine =
   | ({ type: 'status' } & ChatStatus)
-  | { type: 'done'; messages: ChatMessage[] }
+  | { type: 'done'; messages: ChatMessage[]; missing_cards: string[] }
   | { type: 'error'; detail: string }
 
 /** Asks a question and reports the agent's steps as they come; resolves with the
@@ -238,7 +244,7 @@ async function askStream(
   question: string,
   chapterId: string,
   onStatus: (status: ChatStatus) => void,
-): Promise<ChatMessage[]> {
+): Promise<ChatAnswer> {
   const response = await fetch(`/api/projects/${projectId}/chats/${threadId}/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -261,7 +267,8 @@ async function askStream(
       if (!text.trim()) continue
       const line = JSON.parse(text) as ChatStreamLine
       if (line.type === 'status') onStatus({ code: line.code, detail: line.detail })
-      else if (line.type === 'done') return line.messages
+      else if (line.type === 'done')
+        return { messages: line.messages, missingCards: line.missing_cards ?? [] }
       else throw new ApiError(502, line.detail)
     }
   }

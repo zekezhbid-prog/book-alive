@@ -2,17 +2,17 @@
 
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
-from app.models import FACT_PERMANENT, ChatMessage, ChatThread, Entity, Project, new_id, now
+from app.models import FACT_PERMANENT, ChatMessage, ChatThread, Chunk, Entity, Project, new_id, now
 from app.rag import agent
 from app.rag.index import BookRetriever, index_project, mentions, search
 from app.scenes.service import entities_in
@@ -33,6 +33,9 @@ class Status:
 class Reply:
     asked: ChatMessage
     reply: ChatMessage
+    # Names the question asks about that occur in the book but have no card yet: the
+    # reader is advised to run the character search (it is never started on its own).
+    missing_cards: list[str] = field(default_factory=list)
 
 
 def threads(session: Session, project_id: str) -> list[ChatThread]:
@@ -219,6 +222,9 @@ def ask_events(
                 yield Status("read", title or str(number))
 
     decision = state["decision"]
+    if other_language(question, decision.answer):
+        # The sources pull some models into the book's language: the reader asked in theirs.
+        decision.answer = _in_language_of(model, question, decision.answer)
     reply = ChatMessage(
         project_id=project.id,
         thread_id=thread.id,
@@ -227,7 +233,64 @@ def ask_events(
         citations=_citations(project, decision, state["sources"]),
     )
     _save(session, thread, asked, reply)
-    yield Reply(asked, reply)
+    yield Reply(asked, reply, cardless_names(session, project, query, question))
+
+
+class Answer(BaseModel):
+    answer: str = ""
+
+
+def _in_language_of(model: TextModel, question: str, answer: str) -> str:
+    """The answer rewritten in the question's language; as it was if that fails."""
+    try:
+        rewritten = model.invoke_json(
+            "chat",
+            [
+                SystemMessage(
+                    "Translate the answer into the language of the question. Keep every "
+                    "source marker like [2] where it is, keep quotes in «» as they are, "
+                    'change nothing else. Reply with one JSON object: {"answer": "..."}'
+                ),
+                HumanMessage(f"Question: {question}\n\nAnswer: {answer}"),
+            ],
+            Answer,
+        )
+    except Exception:  # noqa: BLE001 - an answer in the wrong language beats none
+        return answer
+    return rewritten.answer.strip() or answer
+
+
+NAME = re.compile(r"[^\W\d_][\w'’]{3,}")
+
+
+def _capitalised(text: str, skip_sentence_starts: bool) -> list[str]:
+    words = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+        found = [w for w in NAME.findall(sentence) if w[0].isupper()]
+        if skip_sentence_starts and found and sentence.lstrip().startswith(found[0]):
+            found = found[1:]
+        words += found
+    return words
+
+
+def cardless_names(session: Session, project: Project, query: str, question: str) -> list[str]:
+    """Names the reader asks about (capitalised words: all of the search query, which is
+    key words in the book's language, and those of the question that do not start a
+    sentence) that the book uses at least twice with the capital and no card answers to."""
+    words = _capitalised(query, False) + _capitalised(question, True)
+    missing: dict[str, str] = {}
+    for word in words:
+        stem = word[: len(word) - (1 if len(word) <= 5 else 2)]
+        if stem.casefold() in missing or agent.find_card(session, project, word):
+            continue
+        uses = session.scalar(
+            select(func.count())
+            .select_from(Chunk)
+            .where(Chunk.project_id == project.id, Chunk.text.like(f"%{stem}%"))
+        )
+        if uses >= 2:
+            missing[stem.casefold()] = word
+    return list(missing.values())[:3]
 
 
 LANGUAGE_NOTE = (
@@ -267,6 +330,30 @@ def needs_translation(question: str, sample: str) -> bool:
     if not _script(asked) & _script(book):
         return True
     return bool((asked & MARKER_LETTERS) - book)
+
+
+def _language(text: str) -> str:
+    """ "latin", "uk", "be", "ru", or "" when the text does not tell, by the letters only
+    one of the close languages uses. Quotes in «» are left out: an answer quotes the book
+    in the book's language."""
+    letters = [c for c in re.sub(r"«[^»]*»", "", text).casefold() if c.isalpha()]
+    if not letters:
+        return ""
+    if sum(c.isascii() for c in letters) > len(letters) / 2:
+        return "latin"
+    if any(c in "їєґ" for c in letters):
+        return "uk"
+    russian = sum(c in "иыэъ" for c in letters)
+    belarusian = sum(c in "іў" for c in letters)
+    if russian == belarusian:
+        return ""
+    return "ru" if russian > belarusian else "be"
+
+
+def other_language(question: str, answer: str) -> bool:
+    """True when the answer is plainly in another language than the question."""
+    asked, answered = _language(question), _language(answer)
+    return bool(asked and answered and asked != answered)
 
 
 def _translate(model: TextModel, query: str, sample: str) -> str:
