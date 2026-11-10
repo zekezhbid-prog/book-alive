@@ -333,14 +333,14 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; text-align: left; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }
 .warn { color: var(--accent-2); }
+.profile-head { min-height: 36px; }
 .notice.estimate { min-height: 132px; transition: opacity 0.15s; }
 .notice.estimate.counting { opacity: 0.6; }
 .nav-list-head { display: flex; align-items: center; gap: 8px; }
 .nav-list-head h4 { margin: 0 0 0 12px; flex: 1; }
 .nav-actions { display: flex; gap: 6px; }
-.btn.nav-action { height: 34px; min-width: 34px; padding: 0 9px; gap: 1px; border-radius: 10px; }
-.btn.nav-action svg { width: 17px; height: 17px; flex: none; }
-.btn.nav-action svg:first-child:not(:only-child) { width: 13px; height: 13px; }
+.btn.nav-action { width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 10px; justify-content: center; }
+.btn.nav-action svg { width: 18px; height: 18px; flex: none; }
 @media (max-width: 900px) {
   .workspace > .project-nav { flex-direction: column; }
   .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }

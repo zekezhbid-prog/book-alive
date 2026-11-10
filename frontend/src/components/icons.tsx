@@ -39,6 +39,24 @@ export function PlusIcon() {
   )
 }
 
+export function PencilIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  )
+}
+
+/** A thick plus for the gold "add" buttons. */
+export function BoldPlusIcon() {
+  return (
+    <svg {...stroke} strokeWidth={3.4}>
+      <path d="M12 4v16M4 12h16" />
+    </svg>
+  )
+}
+
 export function HandIcon() {
   return (
     <svg {...stroke}>

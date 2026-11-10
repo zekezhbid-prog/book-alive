@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, type EntityBrief, type EntityKind, type Project, type SceneBrief, type SearchHit } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
-import { HandIcon, PlusIcon, SparklesIcon } from './icons'
+import { BoldPlusIcon, PlusIcon, SparklesIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
 import { useSessionActions } from '../session'
 import { useView } from '../view'
@@ -242,8 +242,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
           aria-label={t(`nav.add.${section}`)}
           onClick={() => addCard(section)}
         >
-          <PlusIcon />
-          <HandIcon />
+          <BoldPlusIcon />
         </button>
         {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
         <button

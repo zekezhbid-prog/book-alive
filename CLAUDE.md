@@ -70,8 +70,10 @@ demo/                a short original story used for demos and end-to-end checks
   `PROMPT_VERSION`; bump the version when the extraction prompt changes.
 - Quotes shown as sources are verified against the chapter text; an unverified quote is
   dropped, never displayed.
-- Cards are read-only, with one exception: the user may merge two cards or split a name
-  into its own card (`pinned_names`, `standalone`). Later runs must keep those decisions.
+- Cards are read-only, with two exceptions: the user may merge two cards or split a name
+  into its own card (`pinned_names`, `standalone`), and may write the card's general
+  description (`description`, shown instead of the model's `summary` while not empty).
+  Later runs must keep those decisions.
 - Embeddings are local (fastembed). Chunks are a few sentences because the model reads
   about 128 tokens; search returns each hit with its neighbours.
 - Pictures are never deleted as a side effect, only by the user's own action. Each one

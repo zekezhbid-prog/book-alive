@@ -13,9 +13,8 @@ import {
 import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
-import DescriptionEditor from '../components/DescriptionEditor'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { SparklesIcon } from '../components/icons'
+import { PencilIcon, SparklesIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -171,7 +170,6 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   />
                   )
                 }
-                writing={view === 'writer'}
               />
             )}
           </div>
@@ -203,13 +201,11 @@ interface CardProps {
   onError: (error: unknown) => void
   /** The card's references, shown between the name and the description. */
   gallery: ReactNode
-  /** A writer describes the card in words; pictures belong to the illustrator. */
-  writing: boolean
 }
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ entity, projectId, others, onChanged, onError, gallery, writing }: CardProps) {
+function Card({ entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
@@ -262,23 +258,7 @@ function Card({ entity, projectId, others, onChanged, onError, gallery, writing 
           </div>
         )}
       </div>
-      {/* A writer describes any card; in a finished book only the user's own text is shown. */}
-      {(writing || entity.description) && (
-        <DescriptionEditor
-          key={entity.id}
-          value={entity.description}
-          label={t('description.title')}
-          placeholder={t(`description.${entity.kind}.placeholder`)}
-          onSave={(text) => api.saveEntityDescription(entity.id, text)}
-        />
-      )}
-      <h4>{t('entities.profile')}</h4>
-      {/* A connected text written by the model when a search ends or is stopped. */}
-      {entity.summary ? (
-        <p className="summary">{entity.summary}</p>
-      ) : (
-        <p className="faint">{t('entities.profile.none')}</p>
-      )}
+      <GeneralDescription key={entity.id} entity={entity} />
       {entity.profile.length + entity.permanent.length > 0 && (
         <details>
           <summary className="muted">{t('entities.facts')}</summary>
@@ -481,6 +461,77 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** One general description for every card. The model writes it at the end of a search; the
+ *  pencil lets the user write their own, which later searches never overwrite. Clearing the
+ *  text brings the model's version back. */
+function GeneralDescription({ entity }: { entity: Entity }) {
+  const { t } = useI18n()
+  const [own, setOwn] = useState(entity.description)
+  const [draft, setDraft] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const shown = own.trim() || entity.summary
+  const save = async () => {
+    if (draft === null) return
+    setBusy(true)
+    setError('')
+    try {
+      const text = draft.trim() === entity.summary.trim() ? '' : draft.trim()
+      await api.saveEntityDescription(entity.id, text)
+      setOwn(text)
+      setDraft(null)
+    } catch (e) {
+      setError(errorText(t, e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="stack">
+      <div className="row profile-head">
+        <h4 className="grow">{t('entities.profile')}</h4>
+        {draft === null && (
+          <button
+            className="btn primary nav-action"
+            title={t('entities.profile.edit')}
+            aria-label={t('entities.profile.edit')}
+            onClick={() => setDraft(shown)}
+          >
+            <PencilIcon />
+          </button>
+        )}
+      </div>
+      {draft !== null ? (
+        <>
+          <textarea
+            className="input prompt"
+            rows={7}
+            maxLength={6000}
+            autoFocus
+            value={draft}
+            placeholder={t(`description.${entity.kind}.placeholder`)}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          {error && <p className="error">{error}</p>}
+          <div className="row">
+            <span className="faint small grow">{t('entities.profile.edit.hint')}</span>
+            <button className="btn" onClick={() => setDraft(null)}>
+              {t('app.cancel')}
+            </button>
+            <button className="btn primary" disabled={busy} onClick={save}>
+              {t('app.save')}
+            </button>
+          </div>
+        </>
+      ) : shown ? (
+        <p className="summary">{shown}</p>
+      ) : (
+        <p className="faint">{t('entities.profile.none')}</p>
+      )}
     </div>
   )
 }
