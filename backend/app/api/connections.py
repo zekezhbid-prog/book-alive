@@ -58,6 +58,13 @@ class TestResult(BaseModel):
 class SettingsBody(BaseModel):
     text_connection_id: str = ""
     text_model: str = ""
+    # Per task; empty means the main text model above.
+    text_analysis_connection_id: str = ""
+    text_analysis_model: str = ""
+    text_chat_connection_id: str = ""
+    text_chat_model: str = ""
+    text_prompts_connection_id: str = ""
+    text_prompts_model: str = ""
     image_connection_id: str = ""
     image_model: str = ""
     # Chosen now, used once video generation exists.

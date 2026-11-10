@@ -24,9 +24,15 @@ class BadModelOutput(RuntimeError):
 class TextModel:
     """The text model chosen in Settings, bound to a project for usage accounting."""
 
-    def __init__(self, session: Session, project_id: str | None):
-        connection_id = prefs.for_project(session, project_id, "text_connection_id")
-        model_name = prefs.for_project(session, project_id, "text_model")
+    def __init__(self, session: Session, project_id: str | None, task: str | None = None):
+        """`task`: one of `prefs.TEXT_TASKS`; its own model when one is chosen, else the main."""
+        connection_id = model_name = None
+        if task:
+            connection_id = prefs.for_project(session, project_id, f"text_{task}_connection_id")
+            model_name = prefs.for_project(session, project_id, f"text_{task}_model")
+        if not connection_id or not model_name:
+            connection_id = prefs.for_project(session, project_id, "text_connection_id")
+            model_name = prefs.for_project(session, project_id, "text_model")
         connection = session.get(Connection, connection_id) if connection_id else None
         if connection is None or not model_name:
             raise ModelNotConfigured("text_model_not_configured")

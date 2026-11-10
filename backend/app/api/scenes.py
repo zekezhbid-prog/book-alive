@@ -108,9 +108,9 @@ def _chapter(session: SessionDep, chapter_id: str) -> Chapter:
     return chapter
 
 
-def _text_model(session: SessionDep, project_id: str) -> TextModel:
+def _text_model(session: SessionDep, project_id: str, task: str) -> TextModel:
     try:
-        return TextModel(session, project_id)
+        return TextModel(session, project_id, task)
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -187,7 +187,7 @@ def split_estimate(chapter_id: str, session: SessionDep) -> SplitEstimate:
     chapter = _chapter(session, chapter_id)
     overhead = 0
     try:
-        overhead = TextModel(session, chapter.project_id).request_overhead
+        overhead = TextModel(session, chapter.project_id, "analysis").request_overhead
     except ModelNotConfigured:
         pass
     existing = session.scalars(
@@ -206,7 +206,7 @@ def split(chapter_id: str, session: SessionDep) -> list[SceneBrief]:
     chapter = _chapter(session, chapter_id)
     if not chapter.text.strip():
         raise HTTPException(422, "empty_chapter")
-    model = _text_model(session, chapter.project_id)
+    model = _text_model(session, chapter.project_id, "analysis")
     try:
         scenes = service.split_chapter(session, model, chapter)
     except BadModelOutput as exc:
@@ -243,7 +243,7 @@ def build_prompt(scene_id: str, body: PromptRequest, session: SessionDep) -> Sce
     scene, chapter, project = _scene(session, scene_id)
     if chapter is None:
         raise HTTPException(409, "chapter_not_found")
-    model = _text_model(session, project.id)
+    model = _text_model(session, project.id, "prompts")
     try:
         scene.prompt, scene.reference_ids = service.video_prompt(
             session, model, project, scene, body.note
@@ -259,7 +259,7 @@ def refine(scene_id: str, body: RefineRequest, session: SessionDep) -> SceneOut:
     scene, chapter, project = _scene(session, scene_id)
     if not scene.prompt:
         raise HTTPException(409, "no_prompt_yet")
-    model = _text_model(session, project.id)
+    model = _text_model(session, project.id, "prompts")
     try:
         scene.prompt = service.refine_prompt(model, scene.prompt, body.change)
     except Exception as exc:

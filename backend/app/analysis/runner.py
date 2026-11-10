@@ -84,7 +84,7 @@ def _work(run_id: str) -> None:
     with sessionmaker(get_engine(), expire_on_commit=False)() as session:
         run = session.get(AnalysisRun, run_id)
         try:
-            model = TextModel(session, run.project_id)
+            model = TextModel(session, run.project_id, "analysis")
         except Exception as exc:  # noqa: BLE001 - same: report it on the run
             run.status = RUN_FAILED
             run.error = str(exc)[:500]

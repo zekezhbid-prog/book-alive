@@ -36,7 +36,7 @@ def review(project_id: str, body: ReviewRequest, session: SessionDep) -> ReviewO
         if chapter is None:
             raise HTTPException(404, "chapter_not_found")
     try:
-        model = TextModel(session, project.id)
+        model = TextModel(session, project.id, "chat")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     try:

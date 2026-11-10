@@ -175,3 +175,32 @@ def test_upload_file_name_cannot_escape_the_project_folder(client):
         assert response.status_code == 200, (name, response.text)
         stored = response.json()["source_filename"]
         assert "/" not in stored and stored not in ("", ".", "..")
+
+
+def test_a_task_uses_its_own_model_or_falls_back_to_the_main_one(client):
+    from sqlalchemy.orm import Session
+
+    from app.db import get_engine
+    from app.llm.calls import TextModel
+
+    conn = client.post(
+        "/api/connections",
+        json={"name": "R", "base_url": "https://example.test/v1", "api_key": "k"},
+    ).json()["id"]
+    client.put(
+        "/api/settings",
+        json={
+            "text_connection_id": conn,
+            "text_model": "main",
+            "text_chat_connection_id": conn,
+            "text_chat_model": "talker",
+        },
+    )
+    with Session(get_engine()) as session:
+        assert TextModel(session, None, "chat").model_name == "talker"
+        assert TextModel(session, None, "analysis").model_name == "main"
+        assert TextModel(session, None).model_name == "main"
+    # Deleting the connection clears the task choice too.
+    client.delete(f"/api/connections/{conn}")
+    settings = client.get("/api/settings").json()
+    assert (settings["text_chat_connection_id"], settings["text_chat_model"]) == ("", "")

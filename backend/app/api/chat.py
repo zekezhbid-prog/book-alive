@@ -62,7 +62,7 @@ def messages(project_id: str, session: SessionDep) -> list[MessageOut]:
 def ask(project_id: str, body: Question, session: SessionDep) -> list[MessageOut]:
     project = _project(session, project_id)
     try:
-        model = TextModel(session, project.id)
+        model = TextModel(session, project.id, "chat")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     try:
@@ -88,7 +88,7 @@ def _text_model(project_id: str, session: SessionDep) -> TextModel:
     """Checked before the stream starts, so these failures still get a proper status code."""
     _project(session, project_id)
     try:
-        return TextModel(session, project_id)
+        return TextModel(session, project_id, "chat")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -125,7 +125,7 @@ def suggest(project_id: str, body: Question, session: SessionDep) -> list[Messag
     if project.mode != MODE_WRITER:
         raise HTTPException(409, "reader_mode_readonly")
     try:
-        model = TextModel(session, project.id)
+        model = TextModel(session, project.id, "chat")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     try:

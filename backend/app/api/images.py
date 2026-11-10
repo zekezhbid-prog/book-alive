@@ -331,7 +331,7 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
     drawing = _drawing(session, entity, body)
     view_free = body.view_free and drawing.chapters is None
     try:
-        model = TextModel(session, drawing.project.id)
+        model = TextModel(session, drawing.project.id, "prompts")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     try:

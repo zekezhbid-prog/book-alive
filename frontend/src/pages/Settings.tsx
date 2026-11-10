@@ -116,6 +116,32 @@ export default function Settings() {
               save({ text_connection_id: connectionId, text_model: model })
             }
           />
+          <details className="subform">
+            <summary>
+              <b>{t("settings.tasks")}</b>
+              <span className="muted small"> — {t("settings.tasks.hint")}</span>
+            </summary>
+            <div className="stack">
+              {TEXT_TASKS.map((task) => (
+                <ModelPicker
+                  key={task}
+                  title={t(`settings.task.${task}`)}
+                  hint={t(`settings.task.${task}.hint`)}
+                  noneLabel={t("settings.task.main")}
+                  kind="text"
+                  connections={connections}
+                  connectionId={settings[`text_${task}_connection_id`]}
+                  model={settings[`text_${task}_model`]}
+                  onChange={(connectionId, model) =>
+                    save({
+                      [`text_${task}_connection_id`]: connectionId,
+                      [`text_${task}_model`]: model,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </details>
           <ModelPicker
             title={t("settings.models.image")}
             kind="image"
@@ -240,8 +266,14 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+/** Text work that may get its own model; empty means the main text model. */
+const TEXT_TASKS = ["analysis", "chat", "prompts"] as const;
+
 interface PickerProps {
   title: string;
+  hint?: string;
+  /** The label of "nothing chosen" in the connection list. */
+  noneLabel?: string;
   kind: "text" | "image" | "video";
   connections: Connection[];
   connectionId: string;
@@ -251,6 +283,8 @@ interface PickerProps {
 
 function ModelPicker({
   title,
+  hint,
+  noneLabel,
   kind,
   connections,
   connectionId,
@@ -311,6 +345,7 @@ function ModelPicker({
   return (
     <div className="stack subform">
       <h3>{title}</h3>
+      {hint && <p className="muted small">{hint}</p>}
       <div className="row wrap">
         <label className="field grow">
           {t("settings.connection")}
@@ -319,7 +354,7 @@ function ModelPicker({
             value={known ? connectionId : ""}
             onChange={(e) => onChange(e.target.value, "")}
           >
-            <option value="">{t("settings.connection.none")}</option>
+            <option value="">{noneLabel ?? t("settings.connection.none")}</option>
             {connections.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

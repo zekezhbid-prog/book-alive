@@ -7,9 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.models import AppSetting, Project
 
+# Text work falls into a few tasks that may each use their own model; an empty choice for a
+# task means the main text model.
+TEXT_TASKS = ("analysis", "chat", "prompts")
+
 NAMES = (
     "text_connection_id",
     "text_model",
+    *(f"text_{task}_{part}" for task in TEXT_TASKS for part in ("connection_id", "model")),
     "image_connection_id",
     "image_model",
     "video_connection_id",

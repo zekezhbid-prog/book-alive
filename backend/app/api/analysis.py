@@ -146,7 +146,7 @@ def _run_out(run: AnalysisRun) -> RunOut:
 def estimate(project_id: str, body: RunRequest, session: SessionDep) -> analysis.Estimate:
     project = _project(session, project_id)
     try:
-        overhead = TextModel(session, project.id).request_overhead
+        overhead = TextModel(session, project.id, "analysis").request_overhead
     except ModelNotConfigured:
         overhead = 0  # the estimate is still useful before a model is chosen
     return analysis.estimate(
@@ -164,7 +164,7 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
     if runner.active_run(session, project.id):
         raise HTTPException(409, "analysis_already_running")
     try:
-        TextModel(session, project.id)
+        TextModel(session, project.id, "analysis")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     if body.fresh:

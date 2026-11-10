@@ -99,6 +99,13 @@ export interface ModelInfo {
 export interface ModelSettings {
   text_connection_id: string
   text_model: string
+  /** Per task; empty means the main text model. */
+  text_analysis_connection_id: string
+  text_analysis_model: string
+  text_chat_connection_id: string
+  text_chat_model: string
+  text_prompts_connection_id: string
+  text_prompts_model: string
   image_connection_id: string
   image_model: string
   video_connection_id: string

@@ -65,7 +65,9 @@ demo/                a short original story used for demos and end-to-end checks
 - Derived data (characters, locations, scenes) is read-only for the user and records the
   `content_hash` of the chapter text it was computed from. Different hash means stale.
   Nothing is recomputed automatically.
-- Every model call goes through `TextModel` so it lands in the usage journal. Raw model
+- Every model call goes through `TextModel` so it lands in the usage journal. Pass the task
+  (`analysis`, `chat`, `prompts`, see `prefs.TEXT_TASKS`): a task may have its own model in
+  Settings, otherwise the main text model is used. Raw model
   answers are stored per chapter (`chapter_extractions`) keyed by text hash and
   `PROMPT_VERSION`; bump the version when the extraction prompt changes.
 - Quotes shown as sources are verified against the chapter text; an unverified quote is
