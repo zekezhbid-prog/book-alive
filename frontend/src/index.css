@@ -333,10 +333,13 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .nav-add { display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; color: var(--faint); font-size: 14px; text-align: left; }
 .nav-add:hover { color: var(--accent); background: rgba(250, 204, 21, 0.06); }
 .warn { color: var(--accent-2); }
-.nav-actions { display: flex; gap: 8px; margin: 0 4px 6px; }
-.nav-actions .btn { flex: 1; justify-content: center; }
-.btn.gold-outline { background: rgba(250, 204, 21, 0.1); color: var(--accent); border-color: var(--accent); }
-.btn.gold-outline:hover { background: rgba(250, 204, 21, 0.2); color: var(--accent); }
+.nav-list-head { display: flex; align-items: center; gap: 8px; }
+.nav-list-head h4 { margin: 0 0 0 12px; flex: 1; }
+.nav-actions { display: flex; gap: 6px; }
+.nav-action { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--accent); background: rgba(250, 204, 21, 0.14); color: var(--accent); cursor: pointer; box-shadow: 0 0 14px rgba(250, 204, 21, 0.25); }
+.nav-action:hover { background: rgba(250, 204, 21, 0.28); box-shadow: 0 0 20px rgba(250, 204, 21, 0.45); }
+.nav-action svg { width: 18px; height: 18px; }
+.nav-action-plus { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 700 13px/16px var(--sans); text-align: center; }
 @media (max-width: 900px) {
   .workspace > .project-nav { flex-direction: column; }
   .nav-rail, .nav-list { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }

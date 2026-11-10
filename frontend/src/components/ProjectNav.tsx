@@ -232,22 +232,30 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     )
   }
 
-  /** On top of the card list, where they are seen at once: find in the book or add by hand. */
+  /** Beside the list's heading, where they are seen at once: add by hand or find in the book. */
   function cardActions(section: 'characters' | 'locations') {
     return (
-      <div className="nav-actions">
+      <span className="nav-actions">
+        <button
+          className="nav-action"
+          title={t(`nav.add.${section}`)}
+          aria-label={t(`nav.add.${section}`)}
+          onClick={() => addCard(section)}
+        >
+          <HandIcon />
+          <span className="nav-action-plus">+</span>
+        </button>
         {/* AI reads the chosen chapters and fills the list; the dialog opens on the section's page. */}
         <button
-          className="btn primary small"
-          title={t(`entities.search.hint.${KIND[section]}`)}
+          className="nav-action"
+          title={t(`nav.find.${section}`)}
+          aria-label={t(`nav.find.${section}`)}
           onClick={() => navigate(`${base}/${section}?find=1`)}
         >
-          <SparklesIcon /> {t('nav.find.short')}
+          <SparklesIcon />
+          <span className="nav-action-plus">+</span>
         </button>
-        <button className="btn gold-outline small" title={t(`nav.add.${section}`)} onClick={() => addCard(section)}>
-          <HandIcon /> {t('nav.add.short')}
-        </button>
-      </div>
+      </span>
     )
   }
 
@@ -317,8 +325,10 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
             </>
           ) : (
             <>
-              <h4>{t(`nav.${current}`)}</h4>
-              {(current === 'characters' || current === 'locations') && cardActions(current)}
+              <div className="nav-list-head">
+                <h4>{t(`nav.${current}`)}</h4>
+                {(current === 'characters' || current === 'locations') && cardActions(current)}
+              </div>
               <nav>{body[current]}</nav>
             </>
           )}
