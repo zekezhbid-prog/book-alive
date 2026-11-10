@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useI18n } from '../i18n'
 
+const TASKS = ['analysis', 'chat', 'prompts'] as const
+
 /**
- * Whether a text model is chosen in Settings: true / false, null while it is not known yet.
+ * Whether a model for text tasks is chosen in Settings: true / false, null while it is not known yet.
  * Asked on every mount, so coming back from Settings shows the new choice.
  */
 export function useTextModelReady(): boolean | null {
@@ -12,7 +14,14 @@ export function useTextModelReady(): boolean | null {
   useEffect(() => {
     let alive = true
     api.settings().then(
-      (s) => alive && setReady(Boolean(s.text_connection_id && s.text_model)),
+      (s) => {
+        // Models are chosen per task; any chosen one (or a shared default) makes the AI usable.
+        const chosen = (connection?: string, model?: string) => Boolean(connection && model)
+        const any =
+          chosen(s.text_connection_id, s.text_model) ||
+          TASKS.some((task) => chosen(s[`text_${task}_connection_id`], s[`text_${task}_model`]))
+        if (alive) setReady(any)
+      },
       // Settings that cannot be read are not a reason to block anything: the server still answers.
       () => alive && setReady(true),
     )

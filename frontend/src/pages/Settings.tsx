@@ -125,42 +125,26 @@ export default function Settings() {
             <h2>{t("settings.models")}</h2>
             <p className="muted">{t("settings.models.hint")}</p>
           </div>
-          <ModelPicker
-            title={t("settings.models.text")}
-            kind="text"
-            connections={connections}
-            connectionId={settings.text_connection_id}
-            model={settings.text_model}
-            onChange={(connectionId, model) =>
-              save({ text_connection_id: connectionId, text_model: model })
-            }
-          />
-          <details className="subform">
-            <summary>
-              <b>{t("settings.tasks")}</b>
-              <span className="muted small"> — {t("settings.tasks.hint")}</span>
-            </summary>
-            <div className="stack">
-              {TEXT_TASKS.map((task) => (
-                <ModelPicker
-                  key={task}
-                  title={t(`settings.task.${task}`)}
-                  hint={t(`settings.task.${task}.hint`)}
-                  noneLabel={t("settings.task.main")}
-                  kind="text"
-                  connections={connections}
-                  connectionId={settings[`text_${task}_connection_id`]}
-                  model={settings[`text_${task}_model`]}
-                  onChange={(connectionId, model) =>
-                    save({
-                      [`text_${task}_connection_id`]: connectionId,
-                      [`text_${task}_model`]: model,
-                    })
-                  }
-                />
-              ))}
-            </div>
-          </details>
+          {/* Each text task has its own model; there is no common one to fall back on here
+              (the server still uses a shared default an administrator may have set). */}
+          {TEXT_TASKS.map((task) => (
+            <ModelPicker
+              key={task}
+              title={t(`settings.task.${task}`)}
+              hint={t(`settings.task.${task}.hint`)}
+              noneLabel={t("settings.task.main")}
+              kind="text"
+              connections={connections}
+              connectionId={settings[`text_${task}_connection_id`]}
+              model={settings[`text_${task}_model`]}
+              onChange={(connectionId, model) =>
+                save({
+                  [`text_${task}_connection_id`]: connectionId,
+                  [`text_${task}_model`]: model,
+                })
+              }
+            />
+          ))}
           <ModelPicker
             title={t("settings.models.image")}
             kind="image"
