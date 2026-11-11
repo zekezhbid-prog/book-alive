@@ -148,8 +148,10 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .history li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .reading { padding: 32px 40px 120px; background: rgba(12, 11, 8, 0.9); }
-/* Content starts at the left edge, right after the menu, so zooming never slides it sideways. */
-.chapter { max-width: 720px; margin: 0; }
+/* Content starts at the left edge, right after the menu, so zooming never slides it sideways,
+   and fills the work zone up to the chat: zooming out puts more cards in a row and lets the
+   text run wider instead of leaving an empty band on the right. */
+.chapter { margin: 0; }
 .chapter-tools { display: flex; align-items: center; gap: 4px; min-height: 34px; }
 .chapter-title { width: 100%; background: transparent; border: 0; border-bottom: 1px solid transparent; outline: none; font: 800 34px/1.15 var(--serif); letter-spacing: -0.5px; padding: 8px 0; margin-bottom: 24px; }
 .chapter-title:hover, .chapter-title:focus { border-bottom-color: var(--line-2); }
@@ -594,7 +596,7 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .tile-text { color: var(--muted); font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tile-meta { margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); opacity: 0.85; }
 .tile.faded { opacity: 0.7; }
-.card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.card-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
 .card-actions .tile { min-height: 104px; padding-right: 96px; }
 .tile-action .tile-title { color: var(--accent); }
 .tile-action .tile-text { -webkit-line-clamp: 4; }
