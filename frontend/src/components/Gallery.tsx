@@ -22,10 +22,12 @@ interface Props {
   chapters: ChapterBrief[]
   /** Whether a project style is chosen: pictures cannot be generated without one. */
   hasStyle: boolean
+  /** After any picture was added or removed: the card's tile shows one of them. */
+  onChanged?: () => void
 }
 
 /** Reference pictures: uploaded by the user or generated here, labelled with their style. */
-export default function Gallery({ projectId, entityId, kind, chapters, hasStyle }: Props) {
+export default function Gallery({ projectId, entityId, kind, chapters, hasStyle, onChanged }: Props) {
   const { t } = useI18n()
   const [images, setImages] = useState<ImageInfo[] | null>(null)
   const [error, setError] = useState('')
@@ -41,18 +43,22 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
     setImages(null)
     load()
   }, [load])
+  const changed = () => {
+    load()
+    onChanged?.()
+  }
 
   const upload = async (files: FileList | null) => {
     if (!files?.length) return
     setBusy(true)
     setError('')
-    await api.uploadImages(projectId, [...files], entityId).then(load, fail)
+    await api.uploadImages(projectId, [...files], entityId).then(changed, fail)
     setBusy(false)
     setOpen(true) // show what was just added
     if (picker.current) picker.current.value = ''
   }
   const remove = async (image: ImageInfo) => {
-    if (await ask(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(load, fail)
+    if (await ask(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(changed, fail)
   }
   // A card's references start folded so the description is in view; the project's
   // general gallery is the whole point of its page and stays open.
@@ -109,7 +115,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
           chapters={chapters}
           hasStyle={hasStyle}
           onChanged={() => {
-            load()
+            changed()
             setOpen(true) // a new picture is in view once the window closes
           }}
           onClose={closeDialog}

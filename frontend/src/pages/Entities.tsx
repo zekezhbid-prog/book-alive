@@ -305,6 +305,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                     kind={entity.kind}
                     chapters={project.chapters}
                     hasStyle={Boolean(project.style_id)}
+                    onChanged={loadList}
                   />
                   )
                 }
