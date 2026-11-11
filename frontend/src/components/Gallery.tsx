@@ -314,6 +314,8 @@ export function ImageDialog({
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort'>('')
   // After the first face of an empty set: the views still to draw once the user likes it.
   const [pending, setPending] = useState<{ views: Angle[]; references: string[] } | null>(null)
+  // The face shown large in its own little window, waiting for "like it" or "redraw".
+  const [faceCheck, setFaceCheck] = useState<ImageInfo | null>(null)
   const [progress, setProgress] = useState('')
   const [autoPrompt, setAutoPrompt] = useState(readAuto)
   const chooseAuto = (on: boolean) => {
@@ -358,10 +360,11 @@ export function ImageDialog({
   const ready = isMain ? !asSet || wanted.length > 0 : Boolean(look.trim() || chapter)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    // While the face waits for an answer, Escape does not throw the window away.
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !faceCheck && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, faceCheck])
 
   // The text model writes the prompt; null when it failed (the error is shown).
   const collect = async (reference_ids: string[] = []) => {
@@ -401,6 +404,7 @@ export function ImageDialog({
 
   // The views of a set, one after another; each new one is drawn from those already there.
   const drawViews = async (order: Angle[], text: string, reference_ids: string[]) => {
+    let last: ImageInfo | null = null
     for (const [n, view] of order.entries()) {
       setProgress(t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }))
       setDrawing(view)
@@ -414,7 +418,9 @@ export function ImageDialog({
       })
       setCurrent(made)
       onChanged()
+      last = made
     }
+    return last
   }
 
   // Before a set is drawn from samples, the AI looks at all of them: someone else among them
@@ -486,10 +492,11 @@ export function ImageDialog({
         // The face front comes first and sets the face for every other view: the set waits
         // until the user likes it.
         const first = order[0] === 'face_front' && order.length > 1
-        await drawViews(first ? ['face_front'] : order, text, reference_ids)
+        const made = await drawViews(first ? ['face_front'] : order, text, reference_ids)
         if (first) {
           setPending({ views: order.slice(1), references: reference_ids })
-          setProgress(t('generate.face.check'))
+          setFaceCheck(made)
+          setProgress('')
         } else setProgress(t('generate.set.done', { n: order.length }))
       } else {
         const made = await api.generateImage(entityId, { ...request, prompt: text, size, reference_ids })
@@ -507,16 +514,17 @@ export function ImageDialog({
   // The face is liked: the remaining views are drawn from it with the prompt as it is now.
   const goOn = async () => {
     if (!pending) return
+    setFaceCheck(null)
     setError('')
     setBusy('image')
     try {
       await drawViews(pending.views, prompt, pending.references)
-      setPending(null)
       setProgress(t('generate.set.done', { n: pending.views.length + 1 }))
     } catch (e) {
       setProgress('')
       setError(errorText(t, e))
     }
+    setPending(null)
     setDrawing('')
     setBusy('')
   }
@@ -525,16 +533,19 @@ export function ImageDialog({
   // prompt as it is now (it may have been changed in the meantime).
   const redrawFace = async () => {
     if (!pending) return
-    const face = latest(bases, 'face_front') ?? (current?.angle === 'face_front' ? current : null)
+    const face = faceCheck
+    setFaceCheck(null)
     setError('')
     setBusy('image')
     try {
       if (face) await api.deleteImage(face.id)
       setCurrent(null)
       onChanged()
-      await drawViews(['face_front'], prompt, pending.references)
-      setProgress(t('generate.face.check'))
+      const made = await drawViews(['face_front'], prompt, pending.references)
+      setFaceCheck(made)
+      setProgress('')
     } catch (e) {
+      setPending(null)
       setProgress('')
       setError(errorText(t, e))
     }
@@ -1010,17 +1021,6 @@ export function ImageDialog({
             </select>
             {/* At the bottom of the column, in one row with the last row of slots. */}
             <div className="stack generate-row">
-            {pending ? (
-              <div className="row wrap face-check">
-                <button className="btn primary generate-big" disabled={busy !== '' || !prompt.trim()} onClick={goOn}>
-                  <SparklesIcon />
-                  {busy === 'image' ? t('generate.image.busy') : t('generate.face.go_on', { n: pending.views.length })}
-                </button>
-                <button className="btn ghost" disabled={busy !== '' || !prompt.trim()} onClick={redrawFace}>
-                  {t('generate.face.redraw')}
-                </button>
-              </div>
-            ) : (
             <div className="row wrap">
           <button
             className="btn primary generate-big"
@@ -1041,7 +1041,6 @@ export function ImageDialog({
                 : t('generate.image')}
           </button>
         </div>
-            )}
         {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
         {progress && <p className="muted small">{progress}</p>}
             </div>
@@ -1049,6 +1048,24 @@ export function ImageDialog({
         </div>
         {error && <p className="error">{error}</p>}
       </div>
+      {/* The first face of a set, large: it sets the face of every other view. */}
+      {faceCheck && pending && (
+        <div className="overlay face-check-overlay">
+          <div className="dialog face-check">
+            <h3>{t('generate.face.title')}</h3>
+            <img src={faceCheck.url} alt="" />
+            <div className="row wrap face-check-buttons">
+              <button className="btn primary" onClick={goOn}>
+                <SparklesIcon />
+                {t('generate.face.go_on', { n: pending.views.length })}
+              </button>
+              <button className="btn" onClick={redrawFace}>
+                {t('generate.face.redraw')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

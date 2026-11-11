@@ -633,4 +633,7 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .generate-row { gap: 6px; margin-top: auto; }
 
 .sample.odd { outline: 2px solid var(--err); outline-offset: 1px; }
-.face-check { gap: 8px; }
+.face-check-overlay { z-index: 60; }
+.dialog.face-check { width: min(560px, 100%); display: flex; flex-direction: column; gap: 16px; align-items: center; padding: 24px; }
+.dialog.face-check img { display: block; max-width: 100%; max-height: 64vh; border-radius: var(--radius); border: 1px solid var(--accent-line); }
+.face-check-buttons { gap: 10px; justify-content: center; }
