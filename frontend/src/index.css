@@ -379,6 +379,19 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .view-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
 .view-choice label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); }
 .view-choice input { accent-color: var(--accent); }
+.image-dialog .picture-slot img { max-height: 340px; }
+.view-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.view-slot { display: flex; flex-direction: column; gap: 4px; }
+.view-slot-face { position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); background: var(--panel-2); cursor: default; }
+.view-slot.filled .view-slot-face { border-style: solid; cursor: pointer; }
+.view-slot.filled .view-slot-face:hover { border-color: var(--accent); }
+.view-slot.ticked .view-slot-face { border-color: var(--accent); }
+.view-slot.shown .view-slot-face { box-shadow: 0 0 0 2px var(--accent); }
+.view-slot-face img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.view-slot-busy { position: absolute; inset: 0; margin: auto; width: 26px; height: 26px; border: 3px solid var(--accent-line); border-top-color: var(--accent); border-radius: 50%; animation: slot-spin 0.9s linear infinite; }
+@keyframes slot-spin { to { transform: rotate(360deg); } }
+.view-slot-label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); line-height: 1.2; }
+.view-slot-label input { accent-color: var(--accent); flex: none; }
 
 /* Top bar of a project: the title alone, bright; the project's own links sit in the left menu. */
 .book-title { flex: none; max-width: 28vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--book); font-size: 20px; font-weight: 800; color: #ffe7a0; text-shadow: 0 0 18px rgba(250, 204, 21, 0.35); }

@@ -449,6 +449,10 @@ const ru = {
   'generate.hint.look':
     'Рисуется от базовых картинок. Укажите, что это за облик и к какой главе он относится: в промпт попадут детали из этой главы.',
   'generate.views': 'Ракурсы',
+  'generate.views.hint': 'Отметьте под картинкой ракурсы, которые нарисовать. Готовый ракурс можно открыть крупно, а отметив его, — перерисовать.',
+  'generate.slot.show': 'Показать крупно',
+  'generate.slot.draw': 'Нарисовать этот ракурс',
+  'generate.slot.redraw': 'Перерисовать этот ракурс',
   'generate.set': 'Сгенерировать набор · {n}',
   'generate.set.progress': 'Рисую {done} из {total}: {view}…',
   'generate.set.done': 'Готово: {n} в референсах.',
@@ -1057,6 +1061,10 @@ const en: Record<keyof typeof ru, string> = {
   'generate.hint.look':
     'Drawn from the base pictures. Say what look it is and which chapter it belongs to: details from that chapter go into the prompt.',
   'generate.views': 'Views',
+  'generate.views.hint': 'Tick the views to draw under the picture. A finished view opens large on click; tick it to redraw.',
+  'generate.slot.show': 'Show large',
+  'generate.slot.draw': 'Draw this view',
+  'generate.slot.redraw': 'Redraw this view',
   'generate.set': 'Generate the set · {n}',
   'generate.set.progress': 'Drawing {done} of {total}: {view}…',
   'generate.set.done': 'Done: {n} added to the references.',

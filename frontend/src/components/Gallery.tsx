@@ -254,6 +254,13 @@ const SET_ORDER: Angle[] = [
   'full_back',
 ]
 
+/** The newest base picture of a view: the one its slot shows. */
+function latest(bases: ImageInfo[], view: Angle) {
+  return bases
+    .filter((b) => b.angle === view)
+    .reduce<ImageInfo | null>((best, b) => (!best || b.created_at > best.created_at ? b : best), null)
+}
+
 /**
  * One window for a picture: adding a new one (drawn or uploaded) and changing an existing
  * one's settings. A base picture shows the face or figure; a character's base pictures can
@@ -289,6 +296,8 @@ export function ImageDialog({
   const [size, setSize] = useState<ImageSize | ''>('')
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'save'>('')
   const [progress, setProgress] = useState('')
+  // The view of a set being drawn right now: its slot shows a spinner.
+  const [drawing, setDrawing] = useState<Angle | ''>('')
   const [error, setError] = useState('')
   const picker = useRef<HTMLInputElement>(null)
 
@@ -297,6 +306,9 @@ export function ImageDialog({
   const asSet = isMain && withAngles && !image
   // Pictures in context are drawn from base ones, so they wait for the first.
   const contextLocked = !image && bases.length === 0 && !current?.is_main
+  // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
+  const shown =
+    current ?? (asSet ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null) : null)
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
     ? { angle: withAngles ? angle : ('' as const), look_label: '', chapter_from_id: '', chapter_to_id: '' }
@@ -334,6 +346,7 @@ export function ImageDialog({
           setProgress(
             t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }),
           )
+          setDrawing(view)
           const made = await api.generateImage(entityId, {
             ...request,
             angle: view,
@@ -345,6 +358,8 @@ export function ImageDialog({
           onChanged()
         }
         setProgress(t('generate.set.done', { n: order.length }))
+        // A drawn view is not drawn again by the next press unless ticked anew.
+        setViews([])
       } else {
         const made = await api.generateImage(entityId, { ...request, prompt, size })
         setCurrent(made)
@@ -355,6 +370,7 @@ export function ImageDialog({
       setProgress('')
       setError(errorText(t, e))
     }
+    setDrawing('')
     setBusy('')
   }
 
@@ -415,13 +431,14 @@ export function ImageDialog({
           </button>
         </div>
         <div className="dialog-body">
+          <div className="stack">
           <div className="picture-slot">
-            {current ? (
+            {shown ? (
               <div className="stack slot-picture">
-                <a href={current.url} target="_blank" rel="noreferrer">
-                  <img src={current.url} alt="" />
+                <a href={shown.url} target="_blank" rel="noreferrer">
+                  <img src={shown.url} alt="" />
                 </a>
-                {current.origin === 'upload' && (
+                {shown.origin === 'upload' && (
                   <span className="muted small slot-note">
                     <UploadIcon />
                     {t('gallery.uploaded')}
@@ -434,8 +451,48 @@ export function ImageDialog({
               </span>
             )}
           </div>
+          {/* The set as slots: what is there, what is missing, what is drawn on the next press. */}
+          {asSet && (
+            <div className="view-slots">
+              {SET_ORDER.map((view) => {
+                const made = latest(bases, view)
+                const ticked = views.includes(view)
+                return (
+                  <div
+                    key={view}
+                    className={`view-slot ${made ? 'filled' : ''} ${ticked ? 'ticked' : ''} ${
+                      made && shown?.id === made.id ? 'shown' : ''
+                    }`}
+                  >
+                    <button
+                      className="view-slot-face"
+                      disabled={!made}
+                      title={made ? t('generate.slot.show') : ''}
+                      onClick={() => made && setCurrent(made)}
+                    >
+                      {made && <img src={made.url} alt="" loading="lazy" />}
+                      {drawing === view && <span className="view-slot-busy" aria-hidden />}
+                    </button>
+                    <label className="view-slot-label small">
+                      <input
+                        type="checkbox"
+                        checked={ticked}
+                        disabled={busy !== ''}
+                        title={t(made ? 'generate.slot.redraw' : 'generate.slot.draw')}
+                        onChange={() => toggleView(view)}
+                      />
+                      {t(`angle.${view}`)}
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          </div>
           <div className="stack">
-            {/* One of the two is always pressed. */}
+            {/* One of the two is always pressed. Pictures in context are drawn from base ones,
+                so before the first base picture there is nothing to choose. */}
+            {!contextLocked && (
             <div className="segmented mode-switch" role="radiogroup">
               {(['base', 'context'] as const).map((option) => (
                 <button
@@ -443,8 +500,7 @@ export function ImageDialog({
                   role="radio"
                   aria-checked={mode === option}
                   className={mode === option ? 'active' : ''}
-                  disabled={busy !== '' || (option === 'context' && contextLocked)}
-                  title={option === 'context' && contextLocked ? t('gallery.mode.context.locked') : ''}
+                  disabled={busy !== ''}
                   onClick={() => setMode(option)}
                 >
                   {option === 'base' && <StarIcon on={mode === 'base'} />}
@@ -452,27 +508,14 @@ export function ImageDialog({
                 </button>
               ))}
             </div>
+            )}
             {/* Both sets of fields sit in one grid cell, the hidden one keeping its space:
                 switching never changes the window's size or moves the buttons. */}
             <div className="mode-fields">
               <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
                 <p className="muted small">{t(asSet ? 'generate.hint.base_set' : 'generate.hint.main')}</p>
                 {asSet ? (
-                  <div className="stack field">
-                    <span className="small muted">{t('generate.views')}</span>
-                    <div className="view-choice">
-                      {SET_ORDER.map((view) => (
-                        <label key={view} className="small">
-                          <input
-                            type="checkbox"
-                            checked={views.includes(view)}
-                            onChange={() => toggleView(view)}
-                          />
-                          {t(`angle.${view}`)}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  <p className="muted small">{t('generate.views.hint')}</p>
                 ) : (
                   withAngles && (
                     <label className="stack field">
