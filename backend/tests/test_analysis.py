@@ -805,3 +805,29 @@ def test_rebuild_api_starts_a_card_run(client, session, project, monkeypatch):
     stray = session.get(AnalysisRun, data["id"])
     stray.status = "done"  # nothing really ran: other tests must not see it running
     session.commit()
+
+
+def test_balance_reads_hubris_key_answer(monkeypatch):
+    """GET /v1/key wraps its answer in "data" (Hubris docs): the old reader looked at the
+    top level and never found the balance."""
+    import httpx
+
+    from app.llm import registry as reg
+    from app.models import Connection as Conn
+
+    answers = {
+        "account": {"data": {"money_view": "account", "balance_kopecks": 152030}},
+        "own": {"data": {"money_view": "own", "balance_kopecks": None}},
+        "limit": {"data": {"money_view": "own", "limit_remaining_kopecks": "19488"}},
+    }
+    for name, body in answers.items():
+        monkeypatch.setattr(reg, "decrypt", lambda _: "sk-gw-test")
+        monkeypatch.setattr(
+            httpx,
+            "get",
+            lambda *a, _b=body, **k: httpx.Response(
+                200, json=_b, request=httpx.Request("GET", "https://x/v1/key")
+            ),
+        )
+        got = reg.balance_rub(Conn(name="Hubris", base_url="https://x/v1", api_key_encrypted="e"))
+        assert got == {"account": 1520.3, "own": reg.BALANCE_NO_LIMIT, "limit": 194.88}[name]
