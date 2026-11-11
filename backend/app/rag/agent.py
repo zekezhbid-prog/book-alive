@@ -26,7 +26,6 @@ from app.rag.index import search
 MAX_STEPS = 6
 # A chapter longer than this is opened only in part; search reaches the rest.
 READ_CHARS = 60_000
-NAMES_PER_CHAPTER = 25
 
 SYSTEM = """You answer questions about one book, using only its text. You do not see the \
 book itself. You have its table of contents below and three tools:
@@ -169,9 +168,9 @@ def contents(
         people = [n for k, ns in found.items() if k != KIND_LOCATION for n in ns]
         places = found.get(KIND_LOCATION, [])
         if people:
-            line += f"; characters: {', '.join(people[:NAMES_PER_CHAPTER])}"
+            line += f"; characters: {', '.join(people)}"
         if places:
-            line += f"; places: {', '.join(places[:NAMES_PER_CHAPTER])}"
+            line += f"; places: {', '.join(places)}"
         if chapter.id == open_chapter_id:
             line += " (open now)"
         lines.append(line)

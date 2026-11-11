@@ -602,8 +602,8 @@ def test_translated_query_is_the_same_on_a_repeat(monkeypatch):
     assert len(calls) == 1
 
 
-def test_a_crowded_chapter_lists_the_main_characters_first(session, project):
-    """A hero whose name comes late in the alphabet must not vanish from busy chapters."""
+def test_a_crowded_chapter_lists_everyone_main_characters_first(session, project):
+    """No name is cut off however busy the chapter; the main characters come first."""
     from app.rag import agent
 
     first, second = project.chapters
@@ -613,7 +613,7 @@ def test_a_crowded_chapter_lists_the_main_characters_first(session, project):
             EntityFact(chapter_id=chapter.id, chapter_hash="", category="mention", text="")
         )
     session.add(hero)
-    for n in range(agent.NAMES_PER_CHAPTER + 3):
+    for n in range(40):
         extra = Entity(project_id=project.id, kind="character", name=f"А{n:02d}", aliases=[])
         extra.facts.append(
             EntityFact(chapter_id=second.id, chapter_hash="", category="mention", text="")
@@ -622,6 +622,7 @@ def test_a_crowded_chapter_lists_the_main_characters_first(session, project):
     session.commit()
     line = agent.contents(session, project).split("\n")[1]
     assert "characters: Цмок, " in line
+    assert "А39" in line  # the 41st name is there too
 
 
 def test_a_card_shows_where_the_story_of_someone_ends(session, project):
