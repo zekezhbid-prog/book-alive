@@ -513,13 +513,13 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: 184px; gap: 12px; }
 .card-grid-subhead { margin: 28px 0 12px; align-items: center; }
 .card-grid-subhead h4 { margin: 0; }
-.card-grid-tools { justify-content: flex-end; margin: 4px 0 8px; }
+.card-grid-tools { justify-content: flex-end; align-items: center; gap: 10px; min-height: 36px; margin: 4px 0 8px; }
+.present-list { margin: 0; line-height: 1.7; }
 .pick-all { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .tile-wrap { position: relative; height: 100%; }
 .tile-check { position: absolute; z-index: 2; top: 12px; right: 12px; width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--accent); }
 .tile.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
 .tile-wrap .tile-title { padding-right: 22px; }
-.select-bar { position: sticky; top: 8px; z-index: 5; align-items: center; }
 .tile { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 18px; text-align: left; cursor: pointer; color: var(--text); background: rgba(14, 12, 8, 0.55); border: 1px solid var(--line-2); border-radius: 14px; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; }
 .tile:hover { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line), 0 10px 30px rgba(250, 190, 40, 0.15); }
 .tile > :not(.tile-cover) { position: relative; z-index: 1; }

@@ -234,17 +234,6 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             )}
             <AiNotice ready={aiReady} />
             {/* Nothing open: every card as a tile, adding by hand and finding with AI first. */}
-            {list && !entityId && picked.size > 0 && !running && (
-              <div className="notice row select-bar">
-                <span className="grow">{t('entities.picked', { n: picked.size })}</span>
-                <button className="btn small" onClick={() => setPicked(new Set())}>
-                  {t('entities.picked.clear')}
-                </button>
-                <button className="btn small danger" onClick={deletePicked}>
-                  {t('entities.picked.delete')}
-                </button>
-              </div>
-            )}
             {list && !entityId && (
               <CardGrid
                 actions={[
@@ -276,8 +265,13 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                     : {
                         selected: picked,
                         onChange: setPicked,
+                        onDelete: deletePicked,
                         label: t('entities.pick'),
+                        startLabel: t('entities.pick.start'),
                         allLabel: t('entities.pick.all'),
+                        countLabel: t('entities.picked', { n: picked.size }),
+                        deleteLabel: t('entities.picked.delete'),
+                        doneLabel: t('entities.pick.done'),
                       }
                 }
               />
@@ -489,17 +483,35 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
       )}
       {gallery}
       <h4>{t(`entities.timeline.${entity.kind}`)}</h4>
-      {entity.timeline.map((entry) => (
-        <div key={entry.chapter_id} className="timeline-entry">
-          <div className="row">
-            <Link to={`/projects/${projectId}/chapters/${entry.chapter_id}`}>
-              <b>{entry.chapter_title || t('book.untitled')}</b>
-            </Link>
-            {entry.stale && <span title={t('entities.stale.hint')}>{stale}</span>}
-          </div>
-          {entry.facts.length === 0 ? (
-            <p className="faint small">{t('entities.present')}</p>
-          ) : (
+      {/* Chapters where the card only takes part go together in one line, so the list stays short. */}
+      {entity.timeline.some((entry) => entry.facts.length === 0) && (
+        <div className="timeline-entry">
+          <b>{t('entities.present')}</b>
+          <p className="present-list">
+            {entity.timeline
+              .filter((entry) => entry.facts.length === 0)
+              .map((entry, i) => (
+                <span key={entry.chapter_id}>
+                  {i > 0 && ', '}
+                  <Link to={`/projects/${projectId}/chapters/${entry.chapter_id}`}>
+                    {entry.chapter_title || t('book.untitled')}
+                  </Link>
+                  {entry.stale && <span title={t('entities.stale.hint')}> {stale}</span>}
+                </span>
+              ))}
+          </p>
+        </div>
+      )}
+      {entity.timeline
+        .filter((entry) => entry.facts.length > 0)
+        .map((entry) => (
+          <div key={entry.chapter_id} className="timeline-entry">
+            <div className="row">
+              <Link to={`/projects/${projectId}/chapters/${entry.chapter_id}`}>
+                <b>{entry.chapter_title || t('book.untitled')}</b>
+              </Link>
+              {entry.stale && <span title={t('entities.stale.hint')}>{stale}</span>}
+            </div>
             <ul className="facts">
               {entry.facts.map((fact, i) => (
                 <li key={i}>
@@ -508,9 +520,8 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-      ))}
+          </div>
+        ))}
     </>
   )
 }

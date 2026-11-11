@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { TrashIcon } from './icons'
 
 export interface Tile {
   id: string
@@ -32,17 +33,29 @@ interface Props {
   onOpen: (id: string) => void
   /** Under the grid, a heading and more tiles (doubtful cards). */
   more?: { title: string; hint?: string; tiles: Tile[] }
-  /** Tiles get a check box: several cards are picked and removed at once. */
+  /** Tiles can be picked and removed several at once. The boxes show only after "Select cards". */
   selection?: {
     selected: Set<string>
     onChange: (next: Set<string>) => void
+    onDelete: () => void
     label: string
+    startLabel: string
     allLabel: string
+    countLabel: string
+    deleteLabel: string
+    doneLabel: string
   }
 }
 
 /** The page of a section when nothing is open: every card as a tile, the actions first. */
 export default function CardGrid({ actions, tiles, onOpen, more, selection }: Props) {
+  // Picking mode: the boxes are hidden until asked for, so the tiles stay clean.
+  const [picking, setPicking] = useState(false)
+  const active = picking && selection ? selection : undefined
+  const stop = () => {
+    setPicking(false)
+    selection?.onChange(new Set())
+  }
   const toggle = (ids: string[], on: boolean) => {
     if (!selection) return
     const next = new Set(selection.selected)
@@ -53,12 +66,13 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
     selection.onChange(next)
   }
   const tile = (item: Tile) => {
-    const picked = selection?.selected.has(item.id) ?? false
+    const picked = active?.selected.has(item.id) ?? false
     const body = (
     <button
       key={item.id}
       className={`tile ${item.cover ? 'with-cover' : ''} ${item.faded ? 'faded' : ''} ${picked ? 'picked' : ''}`}
-      onClick={() => onOpen(item.id)}
+      // In picking mode a click on the tile ticks it instead of opening the card.
+      onClick={() => (active ? toggle([item.id], !picked) : onOpen(item.id))}
     >
       {item.cover && <img className="tile-cover" src={item.cover} alt="" loading="lazy" />}
       <span className="tile-title">
@@ -72,7 +86,7 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
       </span>
     </button>
     )
-    if (!selection) return body
+    if (!active) return body
     // The box sits beside the button, not inside it: a control inside a button is not allowed.
     return (
       <div key={item.id} className="tile-wrap">
@@ -81,22 +95,22 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
           type="checkbox"
           className="tile-check"
           checked={picked}
-          aria-label={`${selection.label}: ${item.title}`}
+          aria-label={`${active.label}: ${item.title}`}
           onChange={(e) => toggle([item.id], e.target.checked)}
         />
       </div>
     )
   }
   const pickAll = (list: Tile[]) =>
-    selection &&
+    active &&
     list.length > 1 && (
       <label className="pick-all muted">
         <input
           type="checkbox"
-          checked={list.every((item) => selection.selected.has(item.id))}
+          checked={list.every((item) => active.selected.has(item.id))}
           onChange={(e) => toggle(list.map((item) => item.id), e.target.checked)}
         />{' '}
-        {selection.allLabel}
+        {active.allLabel}
       </label>
     )
   return (
@@ -118,7 +132,37 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
           </button>
         ))}
       </div>
-      {tiles.length > 0 && selection && <div className="row card-grid-tools">{pickAll(tiles)}</div>}
+      {/* One row of fixed height for every picking control: entering the mode moves nothing. */}
+      {tiles.length + (more?.tiles.length ?? 0) > 0 && selection && (
+        <div className="row card-grid-tools">
+          {active ? (
+            <>
+              <span className="muted small">{active.countLabel}</span>
+              <span className="spacer" />
+              {pickAll(tiles)}
+              <button
+                className="btn ghost icon danger"
+                title={active.deleteLabel}
+                aria-label={active.deleteLabel}
+                disabled={active.selected.size === 0}
+                onClick={active.onDelete}
+              >
+                <TrashIcon />
+              </button>
+              <button className="btn ghost small" onClick={stop}>
+                {active.doneLabel}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="spacer" />
+              <button className="btn ghost small" onClick={() => setPicking(true)}>
+                {selection.startLabel}
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {tiles.length > 0 && <div className="card-grid">{tiles.map(tile)}</div>}
       {more && more.tiles.length > 0 && (
         <>
