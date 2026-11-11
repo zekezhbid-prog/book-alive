@@ -18,7 +18,7 @@ import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, TrashIcon } from '../components/icons'
-import { errorText, useI18n, type Translate } from '../i18n'
+import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
 
@@ -40,6 +40,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const [choosing, setChoosing] = useState<string[] | null>(null)
   const [staleChapters, setStaleChapters] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
+  // Tiles ticked for removing several at once; a new section starts with none.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  useEffect(() => setPicked(new Set()), [projectId, section])
   const view = useView({ id: projectId, mode: project?.mode ?? 'reader' })
   const [error, setError] = useState('')
 
@@ -133,6 +136,14 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const cancel = () =>
     run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
   const runError = run?.error === 'interrupted' ? t('run.interrupted') : run?.error
+  const deletePicked = async () => {
+    const ids = [...picked].filter((id) => list?.some((e) => e.id === id))
+    if (!ids.length || !(await ask(t('entities.delete.many.confirm', { n: ids.length })))) return
+    Promise.all(ids.map((id) => api.deleteEntity(id))).then(
+      () => setPicked(new Set()),
+      fail,
+    ).finally(loadList)
+  }
 
   return (
     <>
@@ -147,7 +158,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {running && run && (
               <div className="notice stack run-progress">
                 <div className="row">
-                  <b className="run-progress-text">{t('run.progress', { done: run.done, total: run.total })}</b>
+                  <b className="run-progress-text">{runText(run, t)}</b>
                   <span className="spacer" />
                   <button className="btn small" onClick={cancel}>
                     {t('run.cancel')}
@@ -157,13 +168,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 <div
                   className="live-progress"
                   role="progressbar"
-                  aria-valuenow={run.done}
-                  aria-valuemax={run.total}
+                  aria-valuenow={Math.round(runPercent(run))}
+                  aria-valuemax={100}
                 >
-                  <div
-                    className="live-progress-fill"
-                    style={{ width: `${Math.max(4, run.total ? (run.done / run.total) * 100 : 0)}%` }}
-                  />
+                  <div className="live-progress-fill" style={{ width: `${Math.max(4, runPercent(run))}%` }} />
                 </div>
               </div>
             )}
@@ -217,6 +225,17 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             )}
             <AiNotice ready={aiReady} />
             {/* Nothing open: every card as a tile, adding by hand and finding with AI first. */}
+            {list && !entityId && picked.size > 0 && !running && (
+              <div className="notice row select-bar">
+                <span className="grow">{t('entities.picked', { n: picked.size })}</span>
+                <button className="btn small" onClick={() => setPicked(new Set())}>
+                  {t('entities.picked.clear')}
+                </button>
+                <button className="btn small danger" onClick={deletePicked}>
+                  {t('entities.picked.delete')}
+                </button>
+              </div>
+            )}
             {list && !entityId && (
               <CardGrid
                 actions={[
@@ -241,6 +260,17 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   tiles: list.filter((e) => e.uncertain).map(tile),
                 }}
                 onOpen={(id) => navigate(`/projects/${projectId}/${section}/${id}`)}
+                // While a search runs the cards are being rewritten: nothing is removed then.
+                selection={
+                  running
+                    ? undefined
+                    : {
+                        selected: picked,
+                        onChange: setPicked,
+                        label: t('entities.pick'),
+                        allLabel: t('entities.pick.all'),
+                      }
+                }
               />
             )}
             {entity && entityId && (
@@ -706,4 +736,28 @@ function duration(seconds: number, t: Translate): string {
   if (h) return t('time.hm', { h, m })
   if (m) return t('time.ms', { m, s })
   return t('time.s', { s })
+}
+
+// After the chapters the run still has its final steps; the bar keeps a part for them,
+// so it never sits at the end while work goes on.
+const FINAL_STAGES = ['reconcile', 'adopt', 'summarize', 'general', 'looks']
+const READING_SHARE = 80
+
+function runPercent(run: Run): number {
+  const reading = run.total ? (run.done / run.total) * READING_SHARE : 0
+  const index = FINAL_STAGES.indexOf(run.stage)
+  if (index < 0) return reading
+  const step = (100 - READING_SHARE) / FINAL_STAGES.length
+  const inside = run.stage_total ? run.stage_done / run.stage_total : 0
+  return Math.min(99, READING_SHARE + step * (index + inside))
+}
+
+function runText(run: Run, t: Translate): string {
+  if (FINAL_STAGES.includes(run.stage)) {
+    return t(`run.stage.${run.stage}` as MessageKey, {
+      done: run.stage_done,
+      total: run.stage_total,
+    })
+  }
+  return t('run.progress', { done: run.done, total: run.total })
 }

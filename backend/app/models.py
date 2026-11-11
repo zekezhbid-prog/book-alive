@@ -255,6 +255,11 @@ class AnalysisRun(Base):
     created_at: Mapped[datetime] = mapped_column(default=now)
     # When it ended (done, stopped or failed): how long a run takes is shown to the user.
     finished_at: Mapped[datetime | None] = mapped_column(default=None)
+    # Once the chapters are read: the final step it is on ("reconcile", "adopt",
+    # "summarize", "general", "looks") and how many of its items are done.
+    stage: Mapped[str] = mapped_column(String(20), default="")
+    stage_done: Mapped[int] = mapped_column(default=0)
+    stage_total: Mapped[int] = mapped_column(default=0)
 
 
 class UsageEvent(Base):

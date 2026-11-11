@@ -62,6 +62,10 @@ not actions, speech or plot. At most 8 per entry, the most visual ones.
 - A "permanent" fact only when the text states a lasting feature. Never draw one from an \
 action, a gesture or a moment (squinting, limping once, a flushed face): such a moment is \
 at most a "state" fact, or nothing.
+- A bodily lack or defect (one eye, blindness, a lame leg, a missing hand, deafness, a \
+hunchback) is a fact only when the words say it outright ("he had one eye", "blind in one \
+eye", "his empty sleeve"). Closing, narrowing or covering an eye, a sideways look, limping \
+after a blow, holding an arm are actions: write no looks fact from them at all.
 - "profile" facts are the general description of the entry, not looks. At most 4 per entry, \
 outside the limit of 8, each short and plain, only what this chapter says.
 - Each fact is one detail:
@@ -93,9 +97,9 @@ Group only entries you are confident are the same:
 - An entry marked [no proper name] belongs with a named one when its details fit (sex, age, \
 role, occupation, looks) and it appears together with the same companions as the named one: \
 the book calls a known one by a common word in a scene with the people around them.
-- Two different proper names are different ones, unless one is plainly a short form or \
-nickname of the other, or everything points to one: the same role and companions, details \
-that fit, and the two names never appear in the same chapter.
+- Two entries that both have a proper name are always different ones: never group them \
+together. Every group has at most one entry without the [no proper name] mark; it may also \
+be made of [no proper name] entries only.
 - A man and a woman are never the same. Companions, relatives and entries that merely \
 appear together are different. Two entries that act side by side in the same chapter are \
 different.
@@ -163,11 +167,20 @@ matters more than brevity: as long as the details need, usually three to eight s
 - Check each detail against the words of the book: if they show it belongs to someone or \
 something else, or to a moment (a gesture, an action, a flushed face, squinting once), \
 leave it out.
+- A bodily lack or defect (one eye, blindness, a limp, a missing hand) stays only when the \
+quoted words state it outright. When the quote shows only an action (closing or narrowing \
+one eye, a sideways look, limping after a blow), the detail is a misreading: drop it.
 - When details contradict (grey hair and red hair), keep the one the book repeats, or the \
 one it states plainly, never both and never a mix.
 - Clothes, objects and marks seen in one chapter belong too. When they differ between \
 chapters, describe what repeats as the usual look and name the rest with where it is worn \
 ("in the chapter X he wears ...").
+- The details come in story order with chapter numbers. A change that happens in the \
+story (a burn, a wound, a new scar, grey or cut hair, a lost eye or limb, thinness after \
+hunger, new clothes for good) is not the look of the whole book: describe the look before \
+it first, then the change with the chapter it first appears in ("from chapter 48: burned \
+hands and face"). Treat a detail as such a change when it first shows up late, comes from \
+an event, or earlier chapters describe the same body part without it.
 Looks only: no role, plot or character traits. Use only the details below; never invent.
 
 Reply with one JSON object and nothing else:

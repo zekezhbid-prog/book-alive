@@ -223,6 +223,17 @@ def _context(config: RunnableConfig) -> tuple[Session, TextModel, AnalysisRun]:
     return session, config["configurable"]["model"], run
 
 
+def show_stage(
+    session: Session, run: AnalysisRun | None, stage: str, done: int = 0, total: int = 0
+) -> None:
+    """After the chapters are read the run is still busy: the step it is on and how far
+    along it is are shown to the user instead of a bar stuck at the end."""
+    if run is None:
+        return
+    run.stage, run.stage_done, run.stage_total = stage, done, total
+    session.commit()
+
+
 def _known_line(entity: Entity) -> str:
     """A known card for the model: its main name and a hint who it is, so a chapter that calls
     them "the girl" can be matched. Aliases stay out: an earlier mistake would come back."""
@@ -396,6 +407,7 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     )
     if len(entities) < 2:
         return {}
+    show_stage(session, run, "reconcile", 0, 1)
 
     # Where each one appears and with whom: the book often calls a known one "the old man"
     # in a scene with the same people, and a nickname never shares a chapter with the name.
@@ -435,7 +447,10 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
     report: list[list[str]] = []
     for group in answer.groups:
         members = [n for n in dict.fromkeys(group) if 1 <= n <= len(entities) and n not in merged]
-        if len(members) < 2:
+        # Two cards with proper names are two different ones, whatever the model says: only
+        # an unnamed card ("the old man") joins a named one or another unnamed one. A group
+        # with several named cards is not trusted at all.
+        if len(members) < 2 or sum(not entities[n - 1].uncertain for n in members) > 1:
             continue
         merged.update(members)
         # The entry with the most facts is the best known one: it keeps its name.
@@ -447,7 +462,7 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
             report.append([other.name, main.name])
             absorb(session, main, other)
     session.commit()
-    adopted = adopt_uncertain(session, model, run.project_id, run.kind)
+    adopted = adopt_uncertain(session, model, run.project_id, run.kind, run)
     run.report = {"merged": report, "adopted": adopted}
     session.commit()
     return {}
@@ -468,7 +483,11 @@ LETTERS = "ABCDEFGHIJ"
 
 
 def adopt_uncertain(
-    session: Session, model: TextModel, project_id: str, kind: str
+    session: Session,
+    model: TextModel,
+    project_id: str,
+    kind: str,
+    run: AnalysisRun | None = None,
 ) -> list[list[str]]:
     """After the whole cast is merged: each card without a proper name ("the old man", "the
     mentor") is weighed against the named ones most likely to be it - those who appear in
@@ -519,6 +538,7 @@ def adopt_uncertain(
     work = [(e, candidates(e)) for e in sorted(unnamed, key=lambda e: e.name)]
     work = [(e, found) for e, found in work if found]
     for start in range(0, len(work), ADOPT_BATCH):
+        show_stage(session, run, "adopt", start, len(work))
         batch = work[start : start + ADOPT_BATCH]
         blocks = []
         for number, (entity, found) in enumerate(batch, 1):
@@ -561,7 +581,7 @@ LOOKS_FACTS = 50
 def summarize(state: State, config: RunnableConfig) -> dict:
     """Last step of a run that finished or was cancelled: a coherent description per card."""
     session, model, run = _context(config)
-    summarize_cards(session, model, run.project_id, run.kind)
+    summarize_cards(session, model, run.project_id, run.kind, run)
     return {}
 
 
@@ -615,10 +635,15 @@ def _looks_text(session: Session, entity: Entity) -> str | None:
         {f.chapter_id for f in entity.facts if f.chapter_id in chapters}, key=positions.get
     )
     lines.append(f"chapters ({len(where)}): " + ", ".join(_title(chapters[c]) for c in where[:20]))
-    for fact in _spread(looks, positions, LOOKS_FACTS, set()):
+    lines.append(f"the book has {len(chapters)} chapters; details below in story order")
+    picked = _spread(looks, positions, LOOKS_FACTS, set())
+    # In story order with the chapter number: a burn first seen near the end must read as a
+    # change that comes late, not as the look of the whole book.
+    for fact in sorted(picked, key=lambda f: positions.get(f.chapter_id, 10**6)):
         chapter = chapters.get(fact.chapter_id)
         quote = " ".join(fact.quote.split())
-        line = f"- [{_title(chapter) if chapter else '?'}] {fact.text.strip()}"
+        place = f"ch. {chapter.position + 1} «{_title(chapter)}»" if chapter else "?"
+        line = f"- [{place}] {fact.text.strip()}"
         if fact.category == FACT_STATE:
             line += " (this chapter)"
         if quote:
@@ -631,11 +656,18 @@ def _title(chapter: Chapter) -> str:
     return chapter.title or f"#{chapter.position + 1}"
 
 
-def describe_looks(session: Session, model: TextModel, cards: list[Entity], kind: str) -> None:
+def describe_looks(
+    session: Session,
+    model: TextModel,
+    cards: list[Entity],
+    kind: str,
+    run: AnalysisRun | None = None,
+) -> None:
     """The appearance is written card by card, apart from the description: with all its looks
     details and nothing of another card in the same request, so no detail crosses over. An
     answer that cannot be read keeps the old text."""
-    for card in cards:
+    for index, card in enumerate(cards):
+        show_stage(session, run, "looks", index, len(cards))
         listing = _looks_text(session, card)
         if listing is None:
             continue
@@ -681,7 +713,13 @@ def _fact_line(fact, label: str) -> str:
     return f"- {label}: {fact.text.strip()} (text: «{quote[:140]}»)"
 
 
-def summarize_cards(session: Session, model: TextModel, project_id: str, kind: str) -> None:
+def summarize_cards(
+    session: Session,
+    model: TextModel,
+    project_id: str,
+    kind: str,
+    run: AnalysisRun | None = None,
+) -> None:
     """A card with no facts but its name is left as it is: there is nothing to tell.
     A batch whose answer cannot be read keeps the old text; the rest still gets written."""
     cards = [
@@ -690,6 +728,7 @@ def summarize_cards(session: Session, model: TextModel, project_id: str, kind: s
         if any(f.text.strip() for f in e.facts)
     ]
     for start in range(0, len(cards), SUMMARY_BATCH):
+        show_stage(session, run, "summarize", start, len(cards))
         batch = cards[start : start + SUMMARY_BATCH]
         listing = "\n\n".join(_card_text(session, n, e) for n, e in enumerate(batch, 1))
         try:
@@ -707,19 +746,26 @@ def summarize_cards(session: Session, model: TextModel, project_id: str, kind: s
             if item.text.strip():
                 card.summary = item.text.strip()
         session.commit()
-    keep_general(session, model, cards, kind)
-    describe_looks(session, model, cards, kind)
+    keep_general(session, model, cards, kind, run)
+    describe_looks(session, model, cards, kind, run)
 
 
 GENERAL_BATCH = 8
 
 
-def keep_general(session: Session, model: TextModel, cards: list[Entity], kind: str) -> None:
+def keep_general(
+    session: Session,
+    model: TextModel,
+    cards: list[Entity],
+    kind: str,
+    run: AnalysisRun | None = None,
+) -> None:
     """A separate last pass over the written descriptions: whatever belongs to one chapter
     or scene ("reminds her to eat") is taken out, only the general part stays. The pass may
     only remove: an answer that is empty or grew noticeably keeps the text as it was."""
     cards = [c for c in cards if c.summary.strip()]
     for start in range(0, len(cards), GENERAL_BATCH):
+        show_stage(session, run, "general", start, len(cards))
         batch = cards[start : start + GENERAL_BATCH]
         listing = "\n\n".join(
             f"[{n}] {c.name}\n{c.summary.strip()}" for n, c in enumerate(batch, 1)

@@ -108,13 +108,18 @@ def model_prices(connection: Connection) -> dict[str, tuple[float, float]]:
     return found
 
 
-def balance_rub(connection: Connection) -> float | None:
+BALANCE_NO_LIMIT = "no_limit"  # the key does not see account money and has no limit
+BALANCE_UNREACHABLE = "unreachable"
+
+
+def balance_rub(connection: Connection) -> float | str | None:
     """What is left on the account behind the key (Hubris `GET /key`: `balance_kopecks`,
     or the key's own `limit_remaining_kopecks` when it does not see the account money).
-    None when the endpoint has no such thing or cannot be reached."""
+    A key that sees neither gives BALANCE_NO_LIMIT; an endpoint that cannot be reached or
+    read gives BALANCE_UNREACHABLE."""
     key = decrypt(connection.api_key_encrypted)
     if not key:
-        return None
+        return BALANCE_UNREACHABLE
     try:
         response = httpx.get(
             f"{connection.base_url.rstrip('/')}/key",
@@ -122,9 +127,13 @@ def balance_rub(connection: Connection) -> float | None:
             timeout=10,
         )
         data = response.raise_for_status().json()
-        kopecks = data.get("balance_kopecks")
+        data = data.get("data", data) if isinstance(data, dict) else data
+        kopecks = data.get("balance_kopecks", data.get("balanceKopecks"))
         if kopecks is None:
-            kopecks = data.get("limit_remaining_kopecks")
-        return None if kopecks is None else int(kopecks) / 100
+            kopecks = data.get("limit_remaining_kopecks", data.get("limitRemainingKopecks"))
+        if kopecks is None:
+            view = data.get("money_view", data.get("moneyView"))
+            return BALANCE_NO_LIMIT if view == "own" else BALANCE_UNREACHABLE
+        return int(kopecks) / 100
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
-        return None
+        return BALANCE_UNREACHABLE

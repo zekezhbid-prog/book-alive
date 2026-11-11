@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -52,6 +52,10 @@ class RunOut(BaseModel):
     adopted: list[list[str]] = []
     # How long the run took, once it has ended.
     seconds: int | None = None
+    # The final step after the chapters, while it runs: name and progress.
+    stage: str = ""
+    stage_done: int = 0
+    stage_total: int = 0
 
 
 class EntityBrief(BaseModel):
@@ -135,6 +139,9 @@ class UsageOut(BaseModel):
     # What is left on the provider account (Hubris), None when it cannot be told.
     balance_rub: float | None = None
     balance_connection: str = ""
+    # Why there is no balance: "no_connection", "no_limit" (the key sees no account money
+    # and has no limit of its own) or "unreachable".
+    balance_problem: str = ""
 
 
 def _project(session: SessionDep, project_id: str) -> Project:
@@ -170,6 +177,9 @@ def _run_out(run: AnalysisRun) -> RunOut:
         merged=(run.report or {}).get("merged", []),
         adopted=(run.report or {}).get("adopted", []),
         seconds=_seconds(run),
+        stage=run.stage or "",
+        stage_done=run.stage_done or 0,
+        stage_total=run.stage_total or 0,
     )
 
 
@@ -473,13 +483,20 @@ USAGE_PAGE = 20
 
 @router.get("/projects/{project_id}/usage")
 def usage(
-    project_id: str, session: SessionDep, offset: int = 0, limit: int = USAGE_PAGE
+    project_id: str,
+    session: SessionDep,
+    offset: int = 0,
+    limit: int = USAGE_PAGE,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ) -> UsageOut:
-    events = session.scalars(
-        select(UsageEvent)
-        .where(UsageEvent.project_id == project_id)
-        .order_by(UsageEvent.created_at)
-    ).all()
+    """`since` and `until` (UTC) bound the period: the page asks for the user's own day."""
+    query = select(UsageEvent).where(UsageEvent.project_id == project_id)
+    if since is not None:
+        query = query.where(UsageEvent.created_at >= _utc_naive(since))
+    if until is not None:
+        query = query.where(UsageEvent.created_at < _utc_naive(until))
+    events = session.scalars(query.order_by(UsageEvent.created_at)).all()
     names = {e.connection_name for e in events}
     connections = {
         c.name: c for c in session.scalars(select(Connection).where(Connection.name.in_(names)))
@@ -499,10 +516,13 @@ def usage(
     rows = [_usage_row(calls, cost) for calls in actions.values()]
     rows.sort(key=lambda r: r.created_at, reverse=True)
     costs = [r.cost_rub for r in rows]
-    balance, where = None, ""
-    hubris = session.scalar(select(Connection).where(Connection.name == HUBRIS_NAME))
-    if hubris is not None:
-        balance, where = registry.balance_rub(hubris), hubris.name
+    balance, where, problem = None, "", "no_connection"
+    for candidate in _balance_connections(session, names):
+        found = registry.balance_rub(candidate)
+        if isinstance(found, float | int):
+            balance, where, problem = float(found), candidate.name, ""
+            break
+        problem = found or registry.BALANCE_UNREACHABLE
     return UsageOut(
         rows=rows[max(0, offset) : max(0, offset) + max(1, min(limit, 200))],
         total_rows=len(rows),
@@ -513,7 +533,23 @@ def usage(
         else None,
         balance_rub=balance,
         balance_connection=where if balance is not None else "",
+        balance_problem=problem,
     )
+
+
+def _utc_naive(moment: datetime) -> datetime:
+    """Usage times are stored as naive UTC."""
+    if moment.tzinfo is None:
+        return moment
+    return moment.astimezone(UTC).replace(tzinfo=None)
+
+
+def _balance_connections(session: SessionDep, used: set[str]) -> list[Connection]:
+    """The Hubris connection first, then any other Hubris one (by its address), including
+    those this project's calls went through."""
+    rows = session.scalars(select(Connection)).all()
+    hubris = [c for c in rows if c.name == HUBRIS_NAME or "hubris" in (c.base_url or "").casefold()]
+    return sorted(hubris, key=lambda c: (c.name != HUBRIS_NAME, c.name not in used))
 
 
 ANALYSIS_STEPS = ("find_", "merge_", "summarize_", "check_", "looks_", "adopt_")

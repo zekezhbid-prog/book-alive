@@ -141,6 +141,9 @@ export interface Run {
   adopted: [string, string][]
   /** How long the run took, once it has ended. */
   seconds: number | null
+  stage: string
+  stage_done: number
+  stage_total: number
 }
 
 export interface EntityBrief {
@@ -210,6 +213,13 @@ export interface Usage {
   cost_rub: number | null
   balance_rub: number | null
   balance_connection: string
+  balance_problem: string
+}
+
+/** A span of time for the usage page, as UTC moments; missing ends are open. */
+export interface Period {
+  since?: string
+  until?: string
 }
 
 export interface Citation {
@@ -640,8 +650,12 @@ export const api = {
     return request<Scene>('POST', `/scenes/${id}/frame/upload`, form)
   },
   sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
-  usage: (projectId: string, offset = 0) =>
-    request<Usage>('GET', `/projects/${projectId}/usage?offset=${offset}`),
+  usage: (projectId: string, offset = 0, period: Period = {}) => {
+    const query = new URLSearchParams({ offset: String(offset) })
+    if (period.since) query.set('since', period.since)
+    if (period.until) query.set('until', period.until)
+    return request<Usage>('GET', `/projects/${projectId}/usage?${query}`)
+  },
 
   connections: () => request<Connection[]>('GET', '/connections'),
   createConnection: (body: {

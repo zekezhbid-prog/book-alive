@@ -50,6 +50,7 @@ ANSWERS = {
         "entities": [
             {
                 "name": "Дед",
+                "named": False,
                 "facts": [{"category": "state", "text": "кольчуга", "quote": "надел кольчугу"}],
             },
             {"name": "Люта", "facts": []},
@@ -155,6 +156,9 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
     assert set(people) == {"Рыхташ", "Люта"}  # "Дед" was merged into "Рыхташ"
     assert record.report == {"merged": [["Дед", "Рыхташ"]], "adopted": []}  # shown at the end
     assert record.finished_at is not None  # how long it took is shown too
+    assert (
+        record.stage == "looks" and record.stage_done == record.stage_total - 1
+    )  # last step shown
     rykhtash = people["Рыхташ"]
     # "старик" is a common noun, not a name: it is not kept as an alias.
     assert set(rykhtash.aliases) == {"Мельник", "Дед"}
@@ -703,6 +707,31 @@ def test_usage_shows_one_line_per_action_with_rubles_and_balance(
     assert data["balance_rub"] == 1520.3
     page = client.get(f"/api/projects/{project.id}/usage?offset=1&limit=1").json()
     assert len(page["rows"]) == 1 and page["total_rows"] == 2
+    later = client.get(f"/api/projects/{project.id}/usage?since=2999-01-01T00:00:00Z").json()
+    assert later["total_rows"] == 0 and later["input_tokens"] == 0  # the period bounds rows
+    monkeypatch.setattr(registry, "balance_rub", lambda c: registry.BALANCE_NO_LIMIT)
+    data = client.get(f"/api/projects/{project.id}/usage").json()
+    assert data["balance_rub"] is None and data["balance_problem"] == "no_limit"
     if made:  # other tests expect no such connection
         session.delete(session.scalar(select(Connection).where(Connection.name == "Hubris")))
         session.commit()
+
+
+def test_two_named_cards_are_never_merged(session, project):
+    """The model may say "Люта" and "Рыхташ" are one: both have proper names, so they stay
+    apart; only a card without a proper name joins a named one."""
+
+    class SaysNamedAreOne(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is analysis.Groups:
+                # In name order: 1 Дед, 2 Люта, 3 Рыхташ.
+                self.calls.append(operation)
+                return analysis.Groups(groups=[[2, 3]])
+            if schema is analysis.Adoptions:
+                self.calls.append(operation)
+                return analysis.Adoptions(matches=[])
+            return super().invoke_json(operation, messages, schema)
+
+    record = run(session, project, SaysNamedAreOne())
+    assert {"Люта", "Рыхташ"} <= set(cast(session, project))
+    assert record.report["merged"] == []
