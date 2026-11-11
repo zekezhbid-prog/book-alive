@@ -17,6 +17,7 @@ from app.models import (
     AnalysisRun,
     Entity,
     Project,
+    now,
 )
 
 # A model now and then answers with broken JSON or the service hiccups. Instead of stopping
@@ -64,6 +65,7 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
         session.refresh(run)
         run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
         break
+    run.finished_at = now()
     session.commit()
 
 
@@ -88,6 +90,7 @@ def _work(run_id: str) -> None:
         except Exception as exc:  # noqa: BLE001 - same: report it on the run
             run.status = RUN_FAILED
             run.error = str(exc)[:500]
+            run.finished_at = now()
             session.commit()
             return
         execute(session, run, model)

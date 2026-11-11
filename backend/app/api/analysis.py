@@ -47,6 +47,8 @@ class RunOut(BaseModel):
     # What the reconciliation did: [name, merged into] and [unnamed card, joined to].
     merged: list[list[str]] = []
     adopted: list[list[str]] = []
+    # How long the run took, once it has ended.
+    seconds: int | None = None
 
 
 class EntityBrief(BaseModel):
@@ -154,7 +156,17 @@ def _run_out(run: AnalysisRun) -> RunOut:
         created_at=run.created_at,
         merged=(run.report or {}).get("merged", []),
         adopted=(run.report or {}).get("adopted", []),
+        seconds=_seconds(run),
     )
+
+
+def _seconds(run: AnalysisRun) -> int | None:
+    if run.finished_at is None:
+        return None
+    started, ended = run.created_at, run.finished_at
+    # The database may hand back naive datetimes; both are UTC.
+    started, ended = started.replace(tzinfo=None), ended.replace(tzinfo=None)
+    return max(0, round((ended - started).total_seconds()))
 
 
 @router.post("/projects/{project_id}/analysis/estimate")

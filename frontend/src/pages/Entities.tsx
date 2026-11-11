@@ -18,7 +18,7 @@ import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, TrashIcon } from '../components/icons'
-import { errorText, useI18n } from '../i18n'
+import { errorText, useI18n, type Translate } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
 
@@ -183,7 +183,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {finished && run && (
               <div className="notice row run-done">
                 <div className="grow stack">
-                  <span>✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}</span>
+                  <span>
+                    ✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}
+                    {run.seconds != null && ` ${t('run.took', { time: duration(run.seconds, t) })}`}
+                  </span>
                   {/* What the reconciliation did, so a merge is never invisible. */}
                   <span className="muted">
                     {t('run.report', { merged: run.merged.length, adopted: run.adopted.length })}
@@ -207,7 +210,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
               </div>
             )}
             {run?.status === 'cancelled' && (
-              <p className="notice">{t('run.cancelled', { done: run.done, total: run.total })}</p>
+              <p className="notice">
+                {t('run.cancelled', { done: run.done, total: run.total })}
+                {run.seconds != null && ` ${t('run.took', { time: duration(run.seconds, t) })}`}
+              </p>
             )}
             <AiNotice ready={aiReady} />
             {/* Nothing open: every card as a tile, adding by hand and finding with AI first. */}
@@ -690,4 +696,14 @@ function EditableText({ title, editLabel, own: savedOwn, generated, placeholder,
       )}
     </div>
   )
+}
+
+/** "1 ч 5 мин", "12 мин 30 с", "40 с". */
+function duration(seconds: number, t: Translate): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h) return t('time.hm', { h, m })
+  if (m) return t('time.ms', { m, s })
+  return t('time.s', { s })
 }

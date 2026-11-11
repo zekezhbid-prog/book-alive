@@ -253,6 +253,8 @@ class AnalysisRun(Base):
     # "adopted": [[unnamed, into]]}.
     report: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=now)
+    # When it ended (done, stopped or failed): how long a run takes is shown to the user.
+    finished_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 class UsageEvent(Base):

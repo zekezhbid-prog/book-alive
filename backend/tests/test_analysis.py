@@ -154,6 +154,7 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
     people = cast(session, project)
     assert set(people) == {"Рыхташ", "Люта"}  # "Дед" was merged into "Рыхташ"
     assert record.report == {"merged": [["Дед", "Рыхташ"]], "adopted": []}  # shown at the end
+    assert record.finished_at is not None  # how long it took is shown too
     rykhtash = people["Рыхташ"]
     # "старик" is a common noun, not a name: it is not kept as an alias.
     assert set(rykhtash.aliases) == {"Мельник", "Дед"}

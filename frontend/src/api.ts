@@ -139,6 +139,8 @@ export interface Run {
   /** What the reconciliation did: [name, merged into] and [unnamed card, joined to]. */
   merged: [string, string][]
   adopted: [string, string][]
+  /** How long the run took, once it has ended. */
+  seconds: number | null
 }
 
 export interface EntityBrief {
