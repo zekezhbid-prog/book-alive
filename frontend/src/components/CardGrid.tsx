@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { TrashIcon } from './icons'
+import { CloseIcon, TrashIcon } from './icons'
 
 export interface Tile {
   id: string
@@ -149,8 +149,13 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
               >
                 <TrashIcon />
               </button>
-              <button className="btn ghost small" onClick={stop}>
-                {active.doneLabel}
+              <button
+                className="btn ghost icon"
+                title={active.doneLabel}
+                aria-label={active.doneLabel}
+                onClick={stop}
+              >
+                <CloseIcon />
               </button>
             </>
           ) : (

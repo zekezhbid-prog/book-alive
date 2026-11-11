@@ -174,7 +174,7 @@ export const by: Record<string, string> = {
   'entities.pick': 'Выбраць',
   'entities.pick.all': 'Выбраць усе',
   'entities.pick.start': 'Выбраць карткі',
-  'entities.pick.done': 'Гатова',
+  'entities.pick.done': 'Выйсці з выбару',
   'entities.picked': 'Выбрана: {n}',
   'entities.picked.delete': 'Выдаліць выбраныя',
   'entities.stale': 'састарэла',
