@@ -356,6 +356,8 @@ export interface LookRequest {
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
+  /** The user's own samples, sent to the image model first. */
+  reference_ids?: string[]
 }
 
 export interface SceneBrief {

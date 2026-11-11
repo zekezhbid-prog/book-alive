@@ -72,6 +72,9 @@ class LookRequest(BaseModel):
     look_label: str = Field(default="", max_length=200)
     chapter_from_id: str = ""
     chapter_to_id: str = ""
+    # The user's own samples ("make it look like this"): pictures of the project, sent to
+    # the image model first; the card's main pictures fill the remaining places.
+    reference_ids: list[str] = Field(default_factory=list, max_length=angles.DRAWING_LIMIT)
 
 
 class PromptRequest(LookRequest):
@@ -320,8 +323,13 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
             raise HTTPException(422, "bad_angle")
         angle = body.angle or angles.next_angle(entity.images, key)
     # Every new picture is drawn from the main ones, so the face stays the same;
-    # the very first main picture starts from nothing.
-    return Drawing(project, chapters, angle, angles.for_drawing(entity.images, key))
+    # the very first main picture starts from nothing. The user's samples go first.
+    samples = [session.get(Image, image_id) for image_id in dict.fromkeys(body.reference_ids)]
+    if any(image is None or image.project_id != project.id for image in samples):
+        raise HTTPException(404, "image_not_found")
+    references = [image for image in samples if image is not None]
+    references += [i for i in angles.for_drawing(entity.images, key) if i not in references]
+    return Drawing(project, chapters, angle, references[: angles.DRAWING_LIMIT])
 
 
 @router.post("/entities/{entity_id}/image-prompt")

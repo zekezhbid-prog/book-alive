@@ -313,3 +313,29 @@ def test_deleting_a_card_keeps_its_pictures(client, session, project):
     assert client.get(f"/api/entities/{project.hero_id}").status_code == 404
     left = client.get(f"/api/projects/{project.id}/images").json()
     assert [(i["id"], i["entity_id"]) for i in left] == [(image["id"], None)]
+
+
+def test_the_users_samples_go_to_the_image_model_first(client, project, monkeypatch):
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append([path.name for path in references])
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.images.ImageModel", Painter)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    base = upload(client, project, project.hero_id)[0]  # the first upload is a main picture
+    sample = upload(client, project, project.hero_id)[0]
+    client.patch(f"/api/images/{sample['id']}", json={"is_main": False})
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    made = client.post(
+        url, json={"prompt": "x", "angle": "face_front", "reference_ids": [sample["id"]]}
+    )
+    assert made.status_code == 200, made.text
+    names = drawn[0]
+    assert len(names) == 2 and names[0].startswith(sample["id"]) and names[1].startswith(base["id"])
+    assert client.post(url, json={"prompt": "x", "reference_ids": ["nope"]}).status_code == 404
