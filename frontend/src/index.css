@@ -416,6 +416,13 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .look-tile:hover { border-color: var(--accent); }
 .look-tile.shown { box-shadow: 0 0 0 2px var(--accent); }
 .look-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.view-slot { position: relative; }
+.slot-plus { position: absolute; top: 6px; right: 6px; z-index: 2; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--accent-line); background: rgba(14, 12, 8, 0.75); color: var(--accent); cursor: pointer; }
+.slot-plus:hover { background: var(--accent-soft); border-color: var(--accent); }
+.slot-plus svg { width: 14px; height: 14px; }
+.insert-menu { top: 36px; right: 0; }
+.look-new-wrap { position: relative; }
+.look-new-wrap .insert-menu { left: 0; right: auto; top: 78px; }
 .prompt-last { margin: 6px 0 0; white-space: pre-wrap; color: var(--muted); max-height: 160px; overflow: auto; }
 
 /* Top bar of a project: the title alone, bright; the project's own links sit in the left menu. */

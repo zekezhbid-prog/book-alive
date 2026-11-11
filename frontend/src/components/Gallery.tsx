@@ -264,18 +264,35 @@ interface Sample {
   id?: string
 }
 
-/** The middle of a picture cut to the given width/height ratio, as a PNG. */
-async function cropTo(file: File, ratio: number): Promise<File> {
+/** The picture whole, centred on a canvas of the given width/height ratio; the margins are
+ * the same picture blurred, so nothing in the picture itself changes. */
+async function padTo(file: File, ratio: number): Promise<File> {
   const bitmap = await createImageBitmap(file)
   const { width, height } = bitmap
-  const w = Math.min(width, Math.round(height * ratio))
-  const h = Math.min(height, Math.round(width / ratio))
+  const w = Math.max(width, Math.round(height * ratio))
+  const h = Math.max(height, Math.round(width / ratio))
+  if (w === width && h === height) return file
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
-  canvas.getContext('2d')!.drawImage(bitmap, (width - w) / 2, (height - h) / 2, w, h, 0, 0, w, h)
+  const ctx = canvas.getContext('2d')!
+  const cover = Math.max(w / width, h / height)
+  ctx.filter = 'blur(24px) brightness(0.7)'
+  ctx.drawImage(bitmap, (w - width * cover) / 2, (h - height * cover) / 2, width * cover, height * cover)
+  ctx.filter = 'none'
+  ctx.drawImage(bitmap, (w - width) / 2, (h - height) / 2)
   const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'))
   return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.png', { type: 'image/png' }) : file
+}
+
+/** Pictures in the clipboard; throws when the browser does not let it be read. */
+async function readClipboard(): Promise<File[]> {
+  const files: File[] = []
+  for (const item of await navigator.clipboard.read()) {
+    const type = item.types.find((kind) => kind.startsWith('image/'))
+    if (type) files.push(new File([await item.getType(type)], `pasted.${type.split('/')[1]}`, { type }))
+  }
+  return files
 }
 
 // Whether "Generate" writes the prompt itself: remembered in this browser.
@@ -345,7 +362,9 @@ export function ImageDialog({
   }
   // The user's own samples, kept in the window until used: drawn from, or put in as they are.
   const [samples, setSamples] = useState<Sample[]>([])
-  const [sampleUse, setSampleUse] = useState<'draw' | 'insert'>('draw')
+  // Where a picture put in as it is goes: a view's slot, or a new picture in context.
+  const [menuFor, setMenuFor] = useState<Angle | 'look' | ''>('')
+  const slotPicker = useRef<HTMLInputElement>(null)
   const [adding, setAdding] = useState(false)
   // A sample clicked to see it large.
   const [peek, setPeek] = useState('')
@@ -366,10 +385,6 @@ export function ImageDialog({
   const pickedLook = looks.find((l) => l.id === picked) ?? null
   const firstView = asSet ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null) : null
   const shown = current ?? firstView ?? (!isMain ? pickedLook : null)
-  const inserting = samples.length > 0 && sampleUse === 'insert'
-  // Put in as they are, samples fill the ticked views in order.
-  const order = SET_ORDER.filter((view) => views.includes(view))
-  const insertCount = asSet ? Math.min(samples.length, order.length) : samples.length
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
     ? { angle: withAngles ? angle : ('' as const), look_label: '', chapter_from_id: '', chapter_to_id: '' }
@@ -423,7 +438,6 @@ export function ImageDialog({
 
   const draw = async () => {
     setError('')
-    if (inserting) return insert()
     let reference_ids: string[] = []
     if (samples.length) {
       setBusy('upload')
@@ -487,35 +501,64 @@ export function ImageDialog({
     setBusy('')
   }
 
-  // Samples put in as they are: in a set each fills the next ticked view, cut to the chosen
-  // shape; otherwise a base picture, or a picture in context with its look and chapter.
-  const insert = async () => {
+  // A picture put in as it is: checked against the project style first (a picture in
+  // another style is refused, not redrawn), then only padded to the chosen shape.
+  const putIn = async (files: FileList | File[] | null, target: Angle | 'look') => {
+    const file = [...(files ?? [])].find((f) => f.type.startsWith('image/'))
+    setMenuFor('')
+    if (slotPicker.current) slotPicker.current.value = ''
+    if (!file) return
     setBusy('upload')
+    setError('')
     try {
       const ratio = size ? size.split(':').map(Number) : null
-      let last: ImageInfo | null = null
-      for (const [n, sample] of samples.slice(0, insertCount).entries()) {
-        const file = ratio ? await cropTo(sample.file, ratio[0] / ratio[1]) : sample.file
-        const [made] = await api.uploadImages(projectId, [file], entityId)
-        last = await api.updateImage(
-          made.id,
-          !isMain
-            ? { ...request, is_main: false }
-            : asSet
-              ? { is_main: true, angle: order[n] }
-              : { is_main: true, angle: request.angle },
-        )
+      const ready = ratio ? await padTo(file, ratio[0] / ratio[1]) : file
+      const verdict = await api.checkStyle(projectId, ready)
+      if (!verdict.matches) {
+        setError(t('gallery.style.mismatch', { reason: verdict.reason }))
+        return setBusy('')
       }
-      // Filled views are not filled again by the next press unless ticked anew.
-      if (asSet) setViews((had) => had.filter((v) => !order.slice(0, insertCount).includes(v)))
-      setSamples([])
-      setCurrent(last)
+      const [made] = await api.uploadImages(projectId, [ready], entityId)
+      const saved = await api.updateImage(
+        made.id,
+        target === 'look'
+          ? { ...request, is_main: false }
+          : { is_main: true, angle: target, look_label: '' },
+      )
+      // A filled view is not drawn by the next press.
+      if (target !== 'look') setViews((had) => had.filter((v) => v !== target))
+      setPeek('')
+      setCurrent(saved)
       onChanged()
     } catch (e) {
       setError(errorText(t, e))
     }
     setBusy('')
   }
+  const pasteInto = async (target: Angle | 'look') => {
+    try {
+      const files = await readClipboard()
+      if (files.length) putIn(files, target)
+      else setError(t('gallery.paste.empty'))
+    } catch {
+      setError(t('gallery.paste.denied'))
+    }
+  }
+  // The small menu of a slot's or the new picture's plus: from a file or from the clipboard.
+  const insertMenu = (target: Angle | 'look') =>
+    menuFor === target && (
+      <div className="add-sample-menu insert-menu">
+        <button className="btn ghost small" onClick={() => slotPicker.current?.click()}>
+          <UploadIcon />
+          {t('gallery.upload.file')}
+        </button>
+        <button className="btn ghost small" onClick={() => pasteInto(target)}>
+          <CopyIcon />
+          {t('gallery.paste')}
+        </button>
+        <span className="faint small">{t('gallery.insert.hint')}</span>
+      </div>
+    )
 
   const addSamples = (files: FileList | File[] | null) => {
     const list = [...(files ?? [])].filter((f) => f.type.startsWith('image/'))
@@ -544,11 +587,7 @@ export function ImageDialog({
   })
   const pasteClipboard = async () => {
     try {
-      const files: File[] = []
-      for (const item of await navigator.clipboard.read()) {
-        const type = item.types.find((kind) => kind.startsWith('image/'))
-        if (type) files.push(new File([await item.getType(type)], `pasted.${type.split('/')[1]}`, { type }))
-      }
+      const files = await readClipboard()
       if (files.length) addSamples(files)
       else setError(t('gallery.paste.empty'))
     } catch {
@@ -630,6 +669,13 @@ export function ImageDialog({
           {/* The set as slots: what is there, what is missing, what is drawn on the next press. */}
           {asSet && (
             <div className="view-slots">
+              <input
+                ref={slotPicker}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                onChange={(e) => menuFor && putIn(e.target.files, menuFor)}
+              />
               {SET_ORDER.map((view) => {
                 const made = latest(bases, view)
                 const ticked = views.includes(view)
@@ -652,6 +698,16 @@ export function ImageDialog({
                       {made && <img src={made.url} alt="" loading="lazy" />}
                       {drawing === view && <span className="view-slot-busy" aria-hidden />}
                     </button>
+                    <button
+                      className="slot-plus"
+                      disabled={busy !== ''}
+                      title={t('gallery.insert')}
+                      aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
+                      onClick={() => setMenuFor(menuFor === view ? '' : view)}
+                    >
+                      <PlusIcon />
+                    </button>
+                    {insertMenu(view)}
                     <label className="view-slot-label small">
                       <input
                         type="checkbox"
@@ -670,17 +726,29 @@ export function ImageDialog({
           {/* In context: the new picture first, then every earlier one; a click takes its settings. */}
           {!isMain && !image && (
             <div className="look-strip">
-              <button
-                className={`look-tile look-new ${picked === '' ? 'shown' : ''}`}
-                disabled={busy !== ''}
-                onClick={() => {
-                  setPeek('')
-                  pickLook('')
-                }}
-              >
-                <PlusIcon />
-                <span className="small">{t('gallery.look.new')}</span>
-              </button>
+              <input
+                ref={slotPicker}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                onChange={(e) => putIn(e.target.files, 'look')}
+              />
+              <div className="look-new-wrap">
+                <button
+                  className={`look-tile look-new ${picked === '' ? 'shown' : ''}`}
+                  disabled={busy !== ''}
+                  title={t('gallery.insert.look')}
+                  onClick={() => {
+                    setPeek('')
+                    pickLook('')
+                    setMenuFor(menuFor === 'look' ? '' : 'look')
+                  }}
+                >
+                  <PlusIcon />
+                  <span className="small">{t('gallery.look.new')}</span>
+                </button>
+                {insertMenu('look')}
+              </div>
               {looks.map((item) => (
                 <button
                   key={item.id}
@@ -712,7 +780,13 @@ export function ImageDialog({
                   aria-checked={mode === option}
                   className={mode === option ? 'active' : ''}
                   disabled={busy !== ''}
-                  onClick={() => setMode(option)}
+                  onClick={() => {
+                    setMode(option)
+                    setMenuFor('')
+                    setPeek('')
+                    // A picture just made in the other mode is not this mode's picture.
+                    if (!image) setCurrent(null)
+                  }}
                 >
                   {t(`gallery.mode.${option}`)}
                 </button>
@@ -806,8 +880,9 @@ export function ImageDialog({
                 </div>
                 {samples.length > 0 && (
                   <>
+                    <p className="faint small">{t('gallery.samples.hint')}</p>
                     <div className="sample-strip">
-                      {samples.map((sample, n) => (
+                      {samples.map((sample) => (
                         <div key={sample.url} className={`sample ${peek === sample.url ? 'shown' : ''}`}>
                           <button
                             className="sample-face"
@@ -825,27 +900,7 @@ export function ImageDialog({
                           >
                             ✕
                           </button>
-                          {inserting && asSet && (
-                            <span className="faint small sample-view">
-                              {n < order.length ? `→ ${t(`angle.${order[n]}`)}` : t('gallery.sample.extra')}
-                            </span>
-                          )}
                         </div>
-                      ))}
-                    </div>
-                    <div className="segmented small-switch sample-use" role="radiogroup">
-                      {(['draw', 'insert'] as const).map((use) => (
-                        <button
-                          key={use}
-                          role="radio"
-                          aria-checked={sampleUse === use}
-                          className={sampleUse === use ? 'active' : ''}
-                          disabled={busy !== ''}
-                          title={t(`gallery.sample.${use}.hint`)}
-                          onClick={() => setSampleUse(use)}
-                        >
-                          {t(`gallery.sample.${use}`)}
-                        </button>
                       ))}
                     </div>
                   </>
@@ -917,17 +972,12 @@ export function ImageDialog({
             <div className="row wrap">
               <button
                 className="btn primary generate-big"
-                disabled={
-                  busy !== '' ||
-                  (inserting ? insertCount === 0 || (!isMain && !ready) : !hasStyle || (!autoPrompt && !prompt.trim()) || !ready)
-                }
+                disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
                 onClick={draw}
               >
-                {inserting ? <UploadIcon /> : <SparklesIcon />}
+                <SparklesIcon />
                 {busy === 'upload'
                   ? t('gallery.uploading')
-                  : inserting
-                  ? t('gallery.sample.insert.button', { n: insertCount })
                   : busy === 'prompt' && autoPrompt
                   ? t('generate.prompt.busy')
                   : busy === 'image'

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_engine
 from app.images.generate import ImageGenerationFailed, ImageModel
 from app.images.prompts import build_image_prompt, chapters_between
+from app.images.style_check import StyleVerdict
 from app.models import AppSetting, Chapter, Connection, Entity, EntityFact, Project, text_hash
 
 # The smallest valid PNG: one transparent pixel.
@@ -339,3 +340,25 @@ def test_the_users_samples_go_to_the_image_model_first(client, project, monkeypa
     names = drawn[0]
     assert len(names) == 2 and names[0].startswith(sample["id"]) and names[1].startswith(base["id"])
     assert client.post(url, json={"prompt": "x", "reference_ids": ["nope"]}).status_code == 404
+
+
+def test_a_picture_put_in_as_it_is_is_checked_against_the_style(client, project, monkeypatch):
+    url = f"/api/projects/{project.id}/style-check"
+    files = {"file": ("x.png", PNG, "image/png")}
+    assert client.post(url, files=files).json()["matches"] is True  # no style yet
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    seen = {}
+
+    def judge(model, style, data, mime):
+        seen["style"], seen["mime"] = style, mime
+        return StyleVerdict(matches=False, reason="Фото, а не аниме.")
+
+    class Model:
+        def __init__(self, session, project_id, task=None):
+            pass
+
+    monkeypatch.setattr("app.api.images.check_style", judge)
+    monkeypatch.setattr("app.api.images.TextModel", Model)
+    verdict = client.post(url, files=files).json()
+    assert verdict == {"matches": False, "reason": "Фото, а не аниме."}
+    assert seen["mime"] == "image/png" and seen["style"]

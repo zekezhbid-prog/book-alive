@@ -624,6 +624,11 @@ export const api = {
       `/entities/${entityId}/image-prompt`,
       look,
     ),
+  checkStyle: (projectId: string, file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    return request<{ matches: boolean; reason: string }>('POST', `/projects/${projectId}/style-check`, form)
+  },
   generateImage: (
     entityId: string,
     body: LookRequest & { prompt: string; size: ImageSize | ''; add_view?: boolean },

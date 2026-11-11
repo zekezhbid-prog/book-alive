@@ -19,6 +19,7 @@ from app.images.generate import (
     ImageModelNotConfigured,
 )
 from app.images.prompts import build_image_prompt, chapters_between
+from app.images.style_check import StyleVerdict, check_style
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import KIND_CHARACTER, KIND_LOCATION, Chapter, Entity, Image, Project, new_id
@@ -244,6 +245,30 @@ def upload_images(
         created.append(image)
     session.commit()
     return [_out(image, project) for image in created]
+
+
+@router.post("/projects/{project_id}/style-check")
+def style_check(project_id: str, session: SessionDep, file: UploadFile) -> StyleVerdict:
+    """Before a picture is put in as it is: the text model looks at it and says whether it is
+    in the project style. Without a chosen style there is nothing to compare with."""
+    project = _project(session, project_id)
+    style = style_prompt(project)
+    if not style:
+        return StyleVerdict(matches=True)
+    data = file.file.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(413, "file_too_large")
+    mime = _sniff(data)
+    if mime is None:
+        raise HTTPException(422, "not_an_image")
+    try:
+        model = TextModel(session, project.id, "prompts")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        return check_style(model, style, data, mime)
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
 
 
 def _sniff(data: bytes) -> str | None:
