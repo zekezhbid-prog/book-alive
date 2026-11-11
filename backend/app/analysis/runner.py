@@ -6,6 +6,7 @@ import time
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.analysis.card import rebuild_card
 from app.analysis.entities import GRAPH
 from app.db import get_engine
 from app.llm.calls import TextModel
@@ -30,6 +31,9 @@ RESTART_PAUSE = 5  # seconds, times the number of the restart
 def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
     """Run to completion in the caller's thread. Chapters finished before a failure
     stay finished; starting again continues from there."""
+    if run.entity_id:
+        rebuild(session, run, model)
+        return
     project = session.get(Project, run.project_id)
     forget_deleted_chapters(session, project, run.kind)
     if not run.done_chapter_ids and {c.id for c in project.chapters} <= set(run.chapter_ids):
@@ -65,6 +69,21 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
         session.refresh(run)
         run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
         break
+    run.finished_at = now()
+    session.commit()
+
+
+def rebuild(session: Session, run: AnalysisRun, model: TextModel) -> None:
+    """One card across the book. Cheap enough to start over by hand if it fails."""
+    try:
+        rebuild_card(session, model, run)
+        session.refresh(run)
+        run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
+    except Exception as exc:  # noqa: BLE001 - the run must always end in a recorded state
+        session.rollback()
+        session.refresh(run)
+        run.status = RUN_FAILED
+        run.error = str(exc)[:500]
     run.finished_at = now()
     session.commit()
 

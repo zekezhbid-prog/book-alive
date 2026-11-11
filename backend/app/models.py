@@ -260,6 +260,10 @@ class AnalysisRun(Base):
     stage: Mapped[str] = mapped_column(String(20), default="")
     stage_done: Mapped[int] = mapped_column(default=0)
     stage_total: Mapped[int] = mapped_column(default=0)
+    # A run over one card only ("rebuild this character"): which card and what to rebuild
+    # ("facts", "summary", "appearance").
+    entity_id: Mapped[str | None] = mapped_column(String(32), default=None)
+    parts: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
 class UsageEvent(Base):

@@ -86,6 +86,14 @@ export function TrashIcon() {
   )
 }
 
+export function RefreshIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2M18.5 2.5v3.7h-3.7M5.5 21.5v-3.7h3.7" />
+    </svg>
+  )
+}
+
 export function GearIcon() {
   return (
     <svg {...stroke}>

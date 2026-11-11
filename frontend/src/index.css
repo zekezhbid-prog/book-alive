@@ -553,3 +553,11 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 @keyframes progress-flow { from { background-position: 0 0; } to { background-position: -61px 0; } }
 @keyframes progress-sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
 @media (prefers-reduced-motion: reduce) { .live-progress::after, .live-progress-fill, .live-progress-fill::after { animation: none; } }
+
+/* On a phone the name takes its own line; merge, rebuild and delete go under it. */
+@media (max-width: 640px) {
+  .card-head { flex-wrap: wrap; }
+  .card-head > * { order: 2; }
+  .card-head .entity-name { order: 0; flex: 1 1 calc(100% - 80px); min-width: 0; }
+  .card-head .card-close { order: 1; }
+}

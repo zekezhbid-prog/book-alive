@@ -3,7 +3,9 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import object_session
 
+from app.analysis import card as card_rebuild
 from app.analysis import entities as analysis
 from app.analysis import prompts, runner
 from app.db import SessionDep
@@ -39,6 +41,11 @@ class RunRequest(BaseModel):
     fresh: bool = False
 
 
+class RebuildRequest(BaseModel):
+    # Any of "facts", "summary", "appearance"; empty means all three.
+    parts: list[str] = []
+
+
 class RunOut(BaseModel):
     id: str
     kind: str
@@ -56,6 +63,10 @@ class RunOut(BaseModel):
     stage: str = ""
     stage_done: int = 0
     stage_total: int = 0
+    # A run over one card: which one.
+    entity_id: str | None = None
+    entity_name: str = ""
+    parts: list[str] = []
 
 
 class EntityBrief(BaseModel):
@@ -180,7 +191,17 @@ def _run_out(run: AnalysisRun) -> RunOut:
         stage=run.stage or "",
         stage_done=run.stage_done or 0,
         stage_total=run.stage_total or 0,
+        entity_id=run.entity_id,
+        entity_name=(target.name if (target := _card_of(run)) else ""),
+        parts=list(run.parts or []),
     )
+
+
+def _card_of(run: AnalysisRun) -> Entity | None:
+    if not run.entity_id:
+        return None
+    session = object_session(run)
+    return session.get(Entity, run.entity_id) if session else None
 
 
 def _seconds(run: AnalysisRun) -> int | None:
@@ -221,6 +242,34 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
         analysis.start_fresh(session, project.id, chapters, _kind(body.kind))
     run = AnalysisRun(
         project_id=project.id, kind=_kind(body.kind), chapter_ids=[c.id for c in chapters]
+    )
+    session.add(run)
+    session.commit()
+    runner.start(run.id)
+    return _run_out(run)
+
+
+@router.post("/entities/{entity_id}/rebuild")
+def rebuild_entity(entity_id: str, body: RebuildRequest, session: SessionDep) -> RunOut:
+    """Read the book again for this one card and write what was asked anew."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    parts = [p for p in dict.fromkeys(body.parts) if p in card_rebuild.PARTS] or list(
+        card_rebuild.PARTS
+    )
+    if runner.active_run(session, entity.project_id):
+        raise HTTPException(409, "analysis_already_running")
+    try:
+        TextModel(session, entity.project_id, "analysis")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    run = AnalysisRun(
+        project_id=entity.project_id,
+        kind=entity.kind,
+        chapter_ids=[],
+        entity_id=entity.id,
+        parts=parts,
     )
     session.add(run)
     session.commit()

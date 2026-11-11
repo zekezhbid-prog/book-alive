@@ -727,6 +727,18 @@ def summarize_cards(
         for e in sorted(_entities(session, project_id, kind), key=lambda e: e.name)
         if any(f.text.strip() for f in e.facts)
     ]
+    write_summaries(session, model, cards, kind, run)
+    keep_general(session, model, cards, kind, run)
+    describe_looks(session, model, cards, kind, run)
+
+
+def write_summaries(
+    session: Session,
+    model: TextModel,
+    cards: list[Entity],
+    kind: str,
+    run: AnalysisRun | None = None,
+) -> None:
     for start in range(0, len(cards), SUMMARY_BATCH):
         show_stage(session, run, "summarize", start, len(cards))
         batch = cards[start : start + SUMMARY_BATCH]
@@ -746,8 +758,6 @@ def summarize_cards(
             if item.text.strip():
                 card.summary = item.text.strip()
         session.commit()
-    keep_general(session, model, cards, kind, run)
-    describe_looks(session, model, cards, kind, run)
 
 
 GENERAL_BATCH = 8

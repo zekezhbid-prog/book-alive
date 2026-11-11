@@ -13,7 +13,10 @@ weapons, buildings, places, plants, weather, natural phenomena, illnesses or abs
 things, however vividly the text describes them; a thing becomes a character only when \
 the story makes it alive (it speaks or acts by itself)",
         "permanent": "age, face, build, height, hair, eyes, skin, scars, species, voice, "
-        "lasting traits of personality",
+        "lasting traits of personality; for a creature that is not human (a spirit, "
+        "monster, mythical being, animal, bird): what kind of being it is, the exact animal "
+        "or bird when the text names it, size, body shape, skin, scales, fur or feathers, "
+        "colour, wings, tail, horns, claws, number of heads or limbs, human features if any",
         "state": "clothes, hairstyle, injuries, dirt or blood, weapons and objects they "
         "carry, a visible change of form or condition",
         "profile": "lasting traits of behaviour and character that show again and again "
@@ -181,6 +184,13 @@ hunger, new clothes for good) is not the look of the whole book: describe the lo
 it first, then the change with the chapter it first appears in ("from chapter 48: burned \
 hands and face"). Treat a detail as such a change when it first shows up late, comes from \
 an event, or earlier chapters describe the same body part without it.
+- A creature that is not human (a spirit, a monster, a mythical being, an animal, a bird) \
+is drawn by someone who has never seen it: start with what it is (its kind as the book \
+calls it, the exact species of an animal or bird when the details name it), then its size \
+and body shape, and every described part of it - head, eyes, skin, scales, fur or feathers, \
+colour, wings, tail, horns, claws, how many heads or limbs, what in it is human-like and \
+what is not, how it moves. A being that takes several forms gets each form apart, with the \
+chapter where it shows.
 Looks only: no role, plot or character traits. Use only the details below; never invent.
 
 Reply with one JSON object and nothing else:
@@ -214,7 +224,8 @@ def _noun(kind: str) -> str:
 
 _APPEARANCE = {
     "character": "age, sex, build and height, face, hair, eyes, skin, scars or marks, and "
-    "the clothes they usually wear",
+    "the clothes they usually wear; for a creature that is not human: what kind of being it "
+    "is, size, body shape and every part of the body the book describes",
     "location": "what kind of place or thing it is, its size and shape, materials, colours, "
     "architecture or make, and what surrounds it",
 }
@@ -222,6 +233,47 @@ _APPEARANCE = {
 
 def summary_system(kind: str) -> str:
     return SUMMARY_SYSTEM.format(noun=_noun(kind))
+
+
+CARD_FACTS_SYSTEM = """You read one chapter of a book and collect what it says about ONE entry \
+only: {target}. Ignore every other {noun_one}.
+
+Find it in the chapter also when it is called by another of its names, a common word (the \
+old man, the girl) or a pronoun, as long as the text makes plain it is the same one. If it \
+does not take part in the chapter, reply with no facts and "present": false.
+
+Rules:
+- Use only what this chapter states. Never invent details and never guess beyond the text.
+- Looks facts ("permanent" and "state") are what an illustrator needs to draw it: looks, \
+not actions, speech or plot. At most 10, the most visual ones.
+- A "permanent" fact only when the text states a lasting feature. Never draw one from an \
+action, a gesture or a moment (squinting, limping once, a flushed face).
+- A bodily lack or defect (one eye, blindness, a lame leg, a missing hand) is a fact only \
+when the words say it outright. Closing, narrowing or covering an eye, a sideways look, \
+limping after a blow are actions: write no looks fact from them.
+- Never take a detail of someone or something else standing near it.
+- "profile" facts are the general description, not looks: at most 5, short and plain.
+- Each fact:
+  - "category": "permanent" for what stays the same through the book ({permanent}); \
+"state" for what is true at this point of the story ({state}); \
+"profile" for the general description ({profile}).
+  - "text": the detail, written in the language of the chapter.
+  - "quote": the phrase from the chapter that supports it, copied character for character, \
+under 200 characters.
+
+Reply with one JSON object and nothing else:
+{{"present": true, "facts": [{{"category": "permanent", "text": "", "quote": ""}}]}}"""
+
+
+def card_facts_system(kind: str, target: str) -> str:
+    subject = _SUBJECT[kind]
+    return CARD_FACTS_SYSTEM.format(
+        target=target,
+        noun_one="character" if kind == KIND_CHARACTER else "place or thing",
+        permanent=subject["permanent"],
+        state=subject["state"],
+        profile=subject["profile"],
+    )
 
 
 def looks_system(kind: str) -> str:

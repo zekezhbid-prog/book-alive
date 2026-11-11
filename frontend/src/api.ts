@@ -144,7 +144,13 @@ export interface Run {
   stage: string
   stage_done: number
   stage_total: number
+  /** A run over one card ("rebuild"): which card and what is written anew. */
+  entity_id: string | null
+  entity_name: string
+  parts: RebuildPart[]
 }
+
+export type RebuildPart = 'facts' | 'summary' | 'appearance'
 
 export interface EntityBrief {
   id: string
@@ -549,6 +555,8 @@ export const api = {
     ),
   latestRun: (projectId: string, kind: EntityKind) =>
     request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
+  rebuildEntity: (entityId: string, parts: RebuildPart[]) =>
+    request<Run>('POST', `/entities/${entityId}/rebuild`, { parts }),
   cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),
   stale: (projectId: string, kind: EntityKind) =>
     request<{ chapter_ids: string[]; orphaned_facts: number }>(

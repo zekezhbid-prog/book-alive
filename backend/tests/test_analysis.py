@@ -735,3 +735,73 @@ def test_two_named_cards_are_never_merged(session, project):
     record = run(session, project, SaysNamedAreOne())
     assert {"Люта", "Рыхташ"} <= set(cast(session, project))
     assert record.report["merged"] == []
+
+
+def test_rebuild_one_card_reads_its_chapters_and_rewrites_it(session, project):
+    """ "Rebuild" on one card: only the chapters it is in or named in are read, and only
+    for it; its facts, description and appearance are written anew, others stay."""
+    from app.analysis import card as card_rebuild
+
+    model = FakeModel()
+    run(session, project, model)
+    people = cast(session, project)
+    lyuta_facts = len(people["Люта"].facts)
+    rykhtash = people["Рыхташ"]
+    rykhtash.summary = "Старое описание с ошибкой."
+    session.commit()
+
+    class Reader(FakeModel):
+        def invoke_json(self, operation, messages, schema):
+            if schema is card_rebuild.CardFacts:
+                self.calls.append(operation)
+                assert '"Рыхташ"' in messages[0].content
+                if "Мельница" in messages[-1].content:
+                    return card_rebuild.CardFacts(
+                        facts=[
+                            analysis.ExtractedFact(
+                                category="permanent",
+                                text="седая борода",
+                                quote="длинная седая борода",
+                            )
+                        ]
+                    )
+                return card_rebuild.CardFacts(present=False)
+            return super().invoke_json(operation, messages, schema)
+
+    reader = Reader()
+    record = AnalysisRun(
+        project_id=project.id,
+        kind="character",
+        chapter_ids=[],
+        entity_id=rykhtash.id,
+        parts=["facts", "summary", "appearance"],
+    )
+    session.add(record)
+    session.commit()
+    runner.execute(session, record, reader)
+
+    assert record.status == "done" and record.finished_at is not None
+    assert reader.calls.count("rebuild_characters") == 2  # both chapters have it
+    people = cast(session, project)
+    texts = [f.text for f in people["Рыхташ"].facts if f.text]
+    assert "седая борода" in texts and "хромает" not in texts
+    assert "кольчуга" in texts  # "not here" where it was found before keeps the old facts
+    assert people["Рыхташ"].summary.startswith("Связный рассказ")
+    assert people["Рыхташ"].appearance.startswith("Облик")
+    assert len(people["Люта"].facts) == lyuta_facts  # nobody else is touched
+    assert "merge_characters" not in reader.calls
+
+
+def test_rebuild_api_starts_a_card_run(client, session, project, monkeypatch):
+    model = FakeModel()
+    run(session, project, model)
+    rykhtash = cast(session, project)["Рыхташ"]
+    started = []
+    monkeypatch.setattr(runner, "start", started.append)
+    monkeypatch.setattr(analysis_api, "TextModel", lambda *a: None)
+    data = client.post(f"/api/entities/{rykhtash.id}/rebuild", json={"parts": ["summary"]}).json()
+    assert data["entity_id"] == rykhtash.id and data["entity_name"] == "Рыхташ"
+    assert data["parts"] == ["summary"] and len(started) == 1
+    stray = session.get(AnalysisRun, data["id"])
+    stray.status = "done"  # nothing really ran: other tests must not see it running
+    session.commit()

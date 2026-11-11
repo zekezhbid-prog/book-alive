@@ -9,6 +9,7 @@ import {
   type Estimate,
   type Fact,
   type Project,
+  type RebuildPart,
   type Run,
 } from '../api'
 import { AddCardDialog } from '../components/AddCardDialog'
@@ -17,7 +18,7 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, TrashIcon } from '../components/icons'
+import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, RefreshIcon, TrashIcon } from '../components/icons'
 import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -40,6 +41,8 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const [choosing, setChoosing] = useState<string[] | null>(null)
   const [staleChapters, setStaleChapters] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
+  // The open card's "rebuild" dialog.
+  const [rebuilding, setRebuilding] = useState(false)
   // Tiles ticked for removing several at once; a new section starts with none.
   const [picked, setPicked] = useState<Set<string>>(new Set())
   useEffect(() => setPicked(new Set()), [projectId, section])
@@ -69,8 +72,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
     else if (wasRunning.current && run?.status === 'done') {
       wasRunning.current = false
       setFinished(true)
+      loadList() // the last words of the run (a rebuilt card's appearance) show at once
     }
-  }, [running, run?.status])
+  }, [running, run?.status, loadList])
   useEffect(() => {
     if (!running) return
     const timer = setInterval(() => {
@@ -192,13 +196,16 @@ export default function Entities({ kind }: { kind: EntityKind }) {
               <div className="notice row run-done">
                 <div className="grow stack">
                   <span>
-                    ✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}
+                    ✅{' '}
+                    {run.entity_id
+                      ? t('rebuild.done', { name: run.entity_name })
+                      : t('run.done', { total: run.total, cards: list?.length ?? 0 })}
                     {run.seconds != null && ` ${t('run.took', { time: duration(run.seconds, t) })}`}
                   </span>
                   {/* What the reconciliation did, so a merge is never invisible. */}
-                  <span className="muted">
+                  {!run.entity_id && <span className="muted">
                     {t('run.report', { merged: run.merged.length, adopted: run.adopted.length })}
-                  </span>
+                  </span>}
                   {run.merged.length + run.adopted.length > 0 && (
                     <details>
                       <summary className="muted">{t('run.report.list')}</summary>
@@ -219,7 +226,9 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             )}
             {run?.status === 'cancelled' && (
               <p className="notice">
-                {t('run.cancelled', { done: run.done, total: run.total })}
+                {run.entity_id
+                  ? t('rebuild.cancelled', { name: run.entity_name })
+                  : t('run.cancelled', { done: run.done, total: run.total })}
                 {run.seconds != null && ` ${t('run.took', { time: duration(run.seconds, t) })}`}
               </p>
             )}
@@ -283,6 +292,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                   loadList()
                   navigate(`/projects/${projectId}/${section}/${next.id}`)
                 }}
+                onRebuild={running ? undefined : () => setRebuilding(true)}
                 onDelete={async () => {
                   if (!(await ask(t('entities.delete.confirm', { name: entity.name })))) return
                   api.deleteEntity(entity.id).then(() => {
@@ -308,6 +318,19 @@ export default function Entities({ kind }: { kind: EntityKind }) {
           </div>
         </section>
       </div>
+      {rebuilding && entity && (
+        <RebuildDialog
+          name={entity.name}
+          onClose={() => setRebuilding(false)}
+          onStart={(parts) =>
+            api.rebuildEntity(entity.id, parts).then((started) => {
+              setRebuilding(false)
+              setError('')
+              setRun(started)
+            }, fail)
+          }
+        />
+      )}
       {adding && (
         <AddCardDialog
           projectId={projectId}
@@ -343,6 +366,8 @@ interface CardProps {
   onClose: () => void
   /** The bin beside "merge with": a card that is not needed. */
   onDelete: () => void
+  /** Read the book again for this card; missing while a run is going. */
+  onRebuild?: () => void
   entity: Entity
   projectId: string
   others: EntityBrief[]
@@ -354,7 +379,7 @@ interface CardProps {
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ onClose, onDelete, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
+function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
@@ -380,7 +405,7 @@ function Card({ onClose, onDelete, entity, projectId, others, onChanged, onError
   return (
     <>
       <div className="stack">
-        <div className="row">
+        <div className="row card-head">
           <h1 className="entity-name grow">{entity.name}</h1>
           {others.length > 0 && (
             <select className="input merge-select" value="" onChange={(e) => merge(e.target.value)}>
@@ -392,6 +417,15 @@ function Card({ onClose, onDelete, entity, projectId, others, onChanged, onError
               ))}
             </select>
           )}
+          <button
+            className="btn ghost icon"
+            title={t(onRebuild ? 'rebuild.button' : 'rebuild.busy')}
+            aria-label={t('rebuild.button')}
+            disabled={!onRebuild}
+            onClick={onRebuild}
+          >
+            <RefreshIcon />
+          </button>
           <button
             className="btn ghost icon"
             title={t('entities.delete')}
@@ -753,6 +787,13 @@ function runPercent(run: Run): number {
 }
 
 function runText(run: Run, t: Translate): string {
+  if (run.entity_id) {
+    // One card: its chapters first, then the description and the appearance.
+    if (run.stage === 'summarize' || run.stage === 'general')
+      return t('rebuild.stage.summary', { name: run.entity_name })
+    if (run.stage === 'looks') return t('rebuild.stage.looks', { name: run.entity_name })
+    return t('rebuild.progress', { name: run.entity_name, done: run.done, total: run.total })
+  }
   if (FINAL_STAGES.includes(run.stage)) {
     return t(`run.stage.${run.stage}` as MessageKey, {
       done: run.stage_done,
@@ -760,4 +801,57 @@ function runText(run: Run, t: Translate): string {
     })
   }
   return t('run.progress', { done: run.done, total: run.total })
+}
+
+const REBUILD_PARTS: RebuildPart[] = ['facts', 'summary', 'appearance']
+
+/** What to write anew for one card: everything is ticked, the user takes off what to keep. */
+function RebuildDialog({
+  name,
+  onClose,
+  onStart,
+}: {
+  name: string
+  onClose: () => void
+  onStart: (parts: RebuildPart[]) => void
+}) {
+  const { t } = useI18n()
+  const [parts, setParts] = useState<Set<RebuildPart>>(new Set(REBUILD_PARTS))
+  const toggle = (part: RebuildPart) => {
+    const next = new Set(parts)
+    if (!next.delete(part)) next.add(part)
+    setParts(next)
+  }
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="dialog stack">
+        <h2>{t('rebuild.title', { name })}</h2>
+        <p className="muted">{t('rebuild.hint')}</p>
+        <div className="stack">
+          {REBUILD_PARTS.map((part) => (
+            <label key={part} className="row">
+              <input type="checkbox" checked={parts.has(part)} onChange={() => toggle(part)} />
+              <span className="grow">
+                {t(`rebuild.part.${part}` as MessageKey)}
+                <span className="faint small"> — {t(`rebuild.part.${part}.hint` as MessageKey)}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="row">
+          <span className="spacer" />
+          <button className="btn" onClick={onClose}>
+            {t('app.cancel')}
+          </button>
+          <button
+            className="btn primary"
+            disabled={parts.size === 0}
+            onClick={() => onStart(REBUILD_PARTS.filter((p) => parts.has(p)))}
+          >
+            {t('rebuild.start')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
