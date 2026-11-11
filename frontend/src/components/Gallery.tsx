@@ -10,7 +10,7 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { CopyIcon, GearIcon, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
+import { CopyIcon, GearIcon, GoldPlusSymbol, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 
 interface Props {
@@ -705,7 +705,7 @@ export function ImageDialog({
                       aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
                       onClick={() => setMenuFor(menuFor === view ? '' : view)}
                     >
-                      <PlusIcon />
+                      <GoldPlusSymbol />
                     </button>
                     {insertMenu(view)}
                     <label className="view-slot-label small">
@@ -744,7 +744,9 @@ export function ImageDialog({
                     setMenuFor(menuFor === 'look' ? '' : 'look')
                   }}
                 >
-                  <PlusIcon />
+                  <span className="look-new-icon" aria-hidden>
+                    <GoldPlusSymbol />
+                  </span>
                   <span className="small">{t('gallery.look.new')}</span>
                 </button>
                 {insertMenu('look')}
@@ -969,27 +971,30 @@ export function ImageDialog({
                 </option>
               ))}
             </select>
-            <div className="row wrap">
-              <button
-                className="btn primary generate-big"
-                disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
-                onClick={draw}
-              >
-                <SparklesIcon />
-                {busy === 'upload'
-                  ? t('gallery.uploading')
-                  : busy === 'prompt' && autoPrompt
-                  ? t('generate.prompt.busy')
-                  : busy === 'image'
-                  ? t('generate.image.busy')
-                  : asSet
-                    ? t('generate.set', { n: views.length })
-                    : t('generate.image')}
-              </button>
-            </div>
-            {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
-            {progress && <p className="muted small">{progress}</p>}
           </div>
+        </div>
+        {/* The main action across the whole window, in its bottom row. */}
+        <div className="stack generate-row">
+            <div className="row wrap">
+          <button
+            className="btn primary generate-big"
+            disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
+            onClick={draw}
+          >
+            <SparklesIcon />
+            {busy === 'upload'
+              ? t('gallery.uploading')
+              : busy === 'prompt' && autoPrompt
+              ? t('generate.prompt.busy')
+              : busy === 'image'
+              ? t('generate.image.busy')
+              : asSet
+                ? t('generate.set', { n: views.length })
+                : t('generate.image')}
+          </button>
+        </div>
+        {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+        {progress && <p className="muted small">{progress}</p>}
         </div>
         {error && <p className="error">{error}</p>}
         {/* A new picture is stored as soon as it is made: the cross above closes the window. */}
