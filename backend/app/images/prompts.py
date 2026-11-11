@@ -16,6 +16,7 @@ Rules:
 - Use the facts below and nothing that contradicts them. Translate them faithfully. \
 Where the facts are silent, stay neutral rather than inventing striking details.
 - {continuity}
+- {age}
 - End with the style, word for word: {style}
 
 Reply with the prompt only."""
@@ -62,11 +63,16 @@ def build_image_prompt(
         ids = {c.id for c in chapters}
         state = [f.text for f in entity.facts if f.category == FACT_STATE and f.chapter_id in ids]
     appearance = entity.appearance_own.strip() or entity.appearance.strip()
+    who = ""
+    if entity.kind == KIND_CHARACTER:
+        who = " ".join((entity.description or entity.summary).split())[:400]
     facts = "\n".join(
         [
             f"Name: {entity.name}",
             # The coherent picture first; the facts below add detail and the quoted wording.
             *([f"Appearance: {appearance}"] if appearance else []),
+            # Who it is often tells the age (a boy, a grandmother) when the looks do not.
+            *([f"Who it is: {who}"] if who else []),
             "Permanent traits:",
             *(f"- {t}" for t in permanent or ["(none described)"]),
             *(["At this point of the story:", *(f"- {t}" for t in state)] if state else []),
@@ -79,7 +85,15 @@ def build_image_prompt(
         if has_reference
         else "No reference picture exists yet: describe the appearance completely."
     )
+    age = (
+        "A person or human-like being: start with the age and sex as the facts give them "
+        "(a 14-year-old boy, an old woman of about 70). A child or teenager is drawn as one, "
+        "with a young face and body, never with a beard or moustache unless the facts say so."
+        if entity.kind == KIND_CHARACTER
+        else "No people in the picture."
+    )
     system = SYSTEM.format(
+        age=age,
         subject="character" if entity.kind == KIND_CHARACTER else "location",
         framing=VIEW_FREE if view_free else ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,

@@ -413,3 +413,17 @@ def test_the_references_are_looked_at_together(client, project, monkeypatch):
     assert seen == {"count": 2, "character": "Люта"}
     too_many = [("files", (f"r{n}.png", PNG, "image/png")) for n in range(7)]
     assert client.post(url, files=too_many).status_code == 422
+
+
+def test_the_image_prompt_is_told_the_age(session, project):
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.system, self.facts = messages[0].content, messages[1].content
+            return "x"
+
+    hero = session.get(Entity, project.hero_id)
+    hero.summary = "Мальчик четырнадцати лет, сын мельника."
+    model = Recorder()
+    build_image_prompt(model, project, hero, None, "", has_reference=False)
+    assert "Who it is: Мальчик четырнадцати лет" in model.facts
+    assert "never with a beard" in model.system

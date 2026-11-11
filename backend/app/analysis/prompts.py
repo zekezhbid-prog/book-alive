@@ -164,7 +164,7 @@ and every looks detail found in the text, each with its chapter and the words of
 
 Write "appearance": how it looks, for an illustrator who will draw it, in the language of \
 the details: {appearance}.
-- Keep every concrete detail: colours, materials, cut and ornament of clothes (buttons, \
+{age}- Keep every concrete detail: colours, materials, cut and ornament of clothes (buttons, \
 embroidery, belts), hair and beard, marks, size and shape, what it is made of. Precision \
 matters more than brevity: as long as the details need, usually three to eight sentences.
 - Check each detail against the words of the book: if they show it belongs to someone or \
@@ -222,6 +222,15 @@ def _noun(kind: str) -> str:
     return "characters" if kind == KIND_CHARACTER else "locations and objects"
 
 
+# An illustrator who is not told the age draws an adult: a boy of fourteen came out bearded.
+_AGE = (
+    "- A human or human-like being: the first sentence gives the sex and the age. The "
+    'number when the book states it ("14 years old"); otherwise an estimate from the details '
+    'and from who it is ("about 13-15, a teenager", "about 70, an old man"), said to be an '
+    "estimate. Never leave the age out. When the book shows the age changing (years pass), "
+    "give the age at first appearance, then the later one with its chapter.\n"
+)
+
 _APPEARANCE = {
     "character": "age, sex, build and height, face, hair, eyes, skin, scars or marks, and "
     "the clothes they usually wear; for a creature that is not human: what kind of being it "
@@ -277,7 +286,8 @@ def card_facts_system(kind: str, target: str) -> str:
 
 
 def looks_system(kind: str) -> str:
-    return LOOKS_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind])
+    age = _AGE if kind == KIND_CHARACTER else ""
+    return LOOKS_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind], age=age)
 
 
 def extract_system(kind: str) -> str:

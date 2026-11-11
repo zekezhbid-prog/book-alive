@@ -26,6 +26,7 @@ from app.models import (
     FACT_PERMANENT,
     FACT_PROFILE,
     FACT_STATE,
+    KIND_CHARACTER,
     AnalysisRun,
     Chapter,
     ChapterExtraction,
@@ -576,6 +577,14 @@ def adopt_uncertain(
 SUMMARY_BATCH = 4
 SUMMARY_FACTS = 60
 LOOKS_FACTS = 50
+# Details that tell a character's age: always given to the looks step, whatever their
+# category, so a "fourteen years old" said once in a long book is never cut off.
+AGE_WORDS = re.compile(
+    r"\d+\s*(лет|год|years?)|возраст|лет от роду|years old|\baged?\b|"
+    r"мальчи|девоч|девушк|юнош|подрост|ребён|ребен|младен|старик|старух|отрок|парнишк|"
+    r"\bboy|\bgirl|teen|child|\bold (man|woman)",
+    re.IGNORECASE,
+)
 
 
 def summarize(state: State, config: RunnableConfig) -> dict:
@@ -629,14 +638,24 @@ def _looks_text(session: Session, entity: Entity) -> str | None:
     ]
     if not looks:
         return None
+    ages = [
+        f
+        for f in entity.facts
+        if f.text.strip() and (AGE_WORDS.search(f.text) or AGE_WORDS.search(f.quote or ""))
+    ]
     also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
     lines = [f"{entity.name}{also}"]
+    who = (entity.description or entity.summary).strip()
+    if who and entity.kind == KIND_CHARACTER:
+        # Who it is (a boy, a grandmother, a king's son) is often the only hint of the age.
+        lines.append(f"who it is (for the age only): {' '.join(who.split())[:600]}")
     where = sorted(
         {f.chapter_id for f in entity.facts if f.chapter_id in chapters}, key=positions.get
     )
     lines.append(f"chapters ({len(where)}): " + ", ".join(_title(chapters[c]) for c in where[:20]))
     lines.append(f"the book has {len(chapters)} chapters; details below in story order")
     picked = _spread(looks, positions, LOOKS_FACTS, set())
+    picked += [f for f in ages if f not in picked]
     # In story order with the chapter number: a burn first seen near the end must read as a
     # change that comes late, not as the look of the whole book.
     for fact in sorted(picked, key=lambda f: positions.get(f.chapter_id, 10**6)):

@@ -831,3 +831,22 @@ def test_balance_reads_hubris_key_answer(monkeypatch):
         )
         got = reg.balance_rub(Conn(name="Hubris", base_url="https://x/v1", api_key_encrypted="e"))
         assert got == {"account": 1520.3, "own": reg.BALANCE_NO_LIMIT, "limit": 194.88}[name]
+
+
+def test_the_looks_step_always_gets_the_age(session, project):
+    hero = Entity(project_id=project.id, kind="character", name="Утей", aliases=[])
+    session.add(hero)
+    session.flush()
+    chapter = project.chapters[0]
+    hero.summary = "Сын рыбака."
+    hero.facts = [
+        EntityFact(
+            chapter_id=chapter.id, chapter_hash="", category="permanent", text=f"примета {n}"
+        )
+        for n in range(analysis.LOOKS_FACTS + 5)
+    ] + [EntityFact(chapter_id=chapter.id, chapter_hash="", category="profile", text="ему 14 лет")]
+    session.flush()
+    listing = analysis._looks_text(session, hero)
+    assert "ему 14 лет" in listing and "who it is (for the age only): Сын рыбака." in listing
+    assert "the sex and the age" in prompts.looks_system("character")
+    assert "the sex and the age" not in prompts.looks_system("location")
