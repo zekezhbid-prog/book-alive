@@ -254,6 +254,23 @@ const SET_ORDER: Angle[] = [
   'full_back',
 ]
 
+// Whether "Generate" writes the prompt itself: remembered in this browser.
+const AUTO_KEY = 'imagePrompt:auto'
+function readAuto() {
+  try {
+    return localStorage.getItem(AUTO_KEY) !== 'manual'
+  } catch {
+    return true
+  }
+}
+function saveAuto(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_KEY, on ? 'auto' : 'manual')
+  } catch {
+    /* private mode: the choice lasts while the window is open */
+  }
+}
+
 /** The newest base picture of a view: the one its slot shows. */
 function latest(bases: ImageInfo[], view: Angle) {
   return bases
@@ -296,6 +313,11 @@ export function ImageDialog({
   const [size, setSize] = useState<ImageSize | ''>('')
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'save'>('')
   const [progress, setProgress] = useState('')
+  const [autoPrompt, setAutoPrompt] = useState(readAuto)
+  const chooseAuto = (on: boolean) => {
+    setAutoPrompt(on)
+    saveAuto(on)
+  }
   // The view of a set being drawn right now: its slot shows a spinner.
   const [drawing, setDrawing] = useState<Angle | ''>('')
   const [error, setError] = useState('')
@@ -322,23 +344,40 @@ export function ImageDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const writePrompt = async () => {
-    setBusy('prompt')
-    setError('')
+  // The text model writes the prompt; null when it failed (the error is shown).
+  const collect = async () => {
     try {
       const written = await api.imagePrompt(entityId, { ...request, view_free: asSet })
       setPrompt(written.prompt)
       // The view the service picked stays chosen, so the picture is drawn as written.
       if (isMain && !asSet) setAngle(written.angle)
+      return written
     } catch (e) {
       setError(errorText(t, e))
+      return null
     }
+  }
+
+  const writePrompt = async () => {
+    setBusy('prompt')
+    setError('')
+    await collect()
     setBusy('')
   }
 
   const draw = async () => {
-    setBusy('image')
     setError('')
+    // Automatic prompt: written quietly right before drawing, nothing to check in between.
+    let text = prompt
+    let chosen = angle
+    if (autoPrompt) {
+      setBusy('prompt')
+      const written = await collect()
+      if (!written) return setBusy('')
+      text = written.prompt
+      if (isMain && !asSet) chosen = written.angle
+    }
+    setBusy('image')
     try {
       if (asSet) {
         const order = SET_ORDER.filter((view) => views.includes(view))
@@ -350,7 +389,7 @@ export function ImageDialog({
           const made = await api.generateImage(entityId, {
             ...request,
             angle: view,
-            prompt,
+            prompt: text,
             size,
             add_view: true,
           })
@@ -361,7 +400,12 @@ export function ImageDialog({
         // A drawn view is not drawn again by the next press unless ticked anew.
         setViews([])
       } else {
-        const made = await api.generateImage(entityId, { ...request, prompt, size })
+        const made = await api.generateImage(entityId, {
+          ...request,
+          ...(isMain && withAngles ? { angle: chosen } : {}),
+          prompt: text,
+          size,
+        })
         setCurrent(made)
         setAngle(made.angle)
         onChanged()
@@ -376,7 +420,7 @@ export function ImageDialog({
 
   // An uploaded file is filed as the mode says: a base picture (a reference for drawing) or
   // a picture in context with its look and chapter.
-  const upload = async (files: FileList | null) => {
+  const upload = async (files: FileList | File[] | null) => {
     if (!files?.length) return
     setBusy('upload')
     setError('')
@@ -392,6 +436,33 @@ export function ImageDialog({
     }
     if (picker.current) picker.current.value = ''
     setBusy('')
+  }
+
+  // A picture copied elsewhere goes in like a file: Ctrl+V in the window or the "Paste" button.
+  const canAdd = !image && busy === '' && ready
+  useEffect(() => {
+    if (!canAdd) return
+    const onPaste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+      if (!files.length) return
+      e.preventDefault()
+      upload(files)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  })
+  const pasteClipboard = async () => {
+    try {
+      const files: File[] = []
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((kind) => kind.startsWith('image/'))
+        if (type) files.push(new File([await item.getType(type)], `pasted.${type.split('/')[1]}`, { type }))
+      }
+      if (files.length) upload(files)
+      else setError(t('gallery.paste.empty'))
+    } catch {
+      setError(t('gallery.paste.denied'))
+    }
   }
 
   const apply = async () => {
@@ -503,7 +574,6 @@ export function ImageDialog({
                   disabled={busy !== ''}
                   onClick={() => setMode(option)}
                 >
-                  {option === 'base' && <StarIcon on={mode === 'base'} />}
                   {t(`gallery.mode.${option}`)}
                 </button>
               ))}
@@ -552,14 +622,66 @@ export function ImageDialog({
                 </label>
               </div>
             </div>
+            <div className="row">
+              {!image && (
+                <>
+                  <input
+                    ref={picker}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    hidden
+                    onChange={(e) => upload(e.target.files)}
+                  />
+                  <button
+                    className="btn ghost small upload-ref"
+                    disabled={busy !== '' || !ready}
+                    title={isMain ? t('gallery.upload.reference.hint') : ''}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <UploadIcon />
+                    {busy === 'upload'
+                      ? t('gallery.uploading')
+                      : t(isMain ? 'gallery.upload.reference' : 'gallery.upload.file')}
+                  </button>
+                  <button
+                    className="btn ghost small"
+                    disabled={!canAdd}
+                    title={t('gallery.paste.hint')}
+                    onClick={pasteClipboard}
+                  >
+                    <CopyIcon />
+                    {t('gallery.paste')}
+                  </button>
+                </>
+              )}
+            </div>
             <div className="stack field">
               <div className="row">
                 <span className="small muted">{t('generate.prompt.label')}</span>
+                {/* Auto: pressing "Generate" writes the prompt and draws at once. By hand: the
+                    prompt is written first and shown for editing, drawing is the next press. */}
+                <div className="segmented small-switch" role="radiogroup">
+                  {([true, false] as const).map((on) => (
+                    <button
+                      key={String(on)}
+                      role="radio"
+                      aria-checked={autoPrompt === on}
+                      className={autoPrompt === on ? 'active' : ''}
+                      disabled={busy !== ''}
+                      onClick={() => chooseAuto(on)}
+                    >
+                      {t(on ? 'generate.prompt.auto' : 'generate.prompt.manual')}
+                    </button>
+                  ))}
+                </div>
                 <span className="spacer" />
-                <button className="btn ghost small" disabled={busy !== '' || !ready} onClick={writePrompt}>
-                  <SparklesIcon />
-                  {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
-                </button>
+                {!autoPrompt && (
+                  <button className="btn ghost small" disabled={busy !== '' || !ready} onClick={writePrompt}>
+                    <SparklesIcon />
+                    {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
+                  </button>
+                )}
                 <button
                   className="btn ghost small icon"
                   disabled={!prompt}
@@ -570,14 +692,26 @@ export function ImageDialog({
                   <CopyIcon />
                 </button>
               </div>
-              <textarea
-                className="input prompt"
-                rows={6}
-                value={prompt}
-                maxLength={4000}
-                placeholder={t('generate.prompt.placeholder')}
-                onChange={(e) => setPrompt(e.target.value)}
-              />
+              {autoPrompt ? (
+                <>
+                  <p className="faint small">{t('generate.prompt.auto.hint')}</p>
+                  {prompt && (
+                    <details>
+                      <summary className="muted small">{t('generate.prompt.last')}</summary>
+                      <p className="small prompt-last">{prompt}</p>
+                    </details>
+                  )}
+                </>
+              ) : (
+                <textarea
+                  className="input prompt"
+                  rows={6}
+                  value={prompt}
+                  maxLength={4000}
+                  placeholder={t('generate.prompt.placeholder')}
+                  onChange={(e) => setPrompt(e.target.value)}
+                />
+              )}
             </div>
             <select
               className="input small"
@@ -594,40 +728,19 @@ export function ImageDialog({
             </select>
             <div className="row wrap">
               <button
-                className="btn small primary"
-                disabled={busy !== '' || !hasStyle || !prompt.trim() || !ready}
+                className="btn primary generate-big"
+                disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
                 onClick={draw}
               >
                 <SparklesIcon />
-                {busy === 'image'
+                {busy === 'prompt' && autoPrompt
+                  ? t('generate.prompt.busy')
+                  : busy === 'image'
                   ? t('generate.image.busy')
                   : asSet
                     ? t('generate.set', { n: views.length })
                     : t('generate.image')}
               </button>
-              {!image && (
-                <>
-                  <input
-                    ref={picker}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    hidden
-                    onChange={(e) => upload(e.target.files)}
-                  />
-                  <button
-                    className="btn small"
-                    disabled={busy !== '' || !ready}
-                    title={isMain ? t('gallery.upload.reference.hint') : ''}
-                    onClick={() => picker.current?.click()}
-                  >
-                    <UploadIcon />
-                    {busy === 'upload'
-                      ? t('gallery.uploading')
-                      : t(isMain ? 'gallery.upload.reference' : 'gallery.upload.file')}
-                  </button>
-                </>
-              )}
             </div>
             {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
             {progress && <p className="muted small">{progress}</p>}

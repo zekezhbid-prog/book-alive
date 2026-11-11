@@ -392,6 +392,11 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 @keyframes slot-spin { to { transform: rotate(360deg); } }
 .view-slot-label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); line-height: 1.2; }
 .view-slot-label input { accent-color: var(--accent); flex: none; }
+.segmented.small-switch { padding: 2px; margin-left: 10px; }
+.segmented.small-switch button { padding: 3px 10px; font-size: 12px; }
+.generate-big { width: 100%; justify-content: center; padding: 12px 18px; font-size: 16px; font-weight: 700; }
+.upload-ref { margin-left: -10px; }
+.prompt-last { margin: 6px 0 0; white-space: pre-wrap; color: var(--muted); max-height: 160px; overflow: auto; }
 
 /* Top bar of a project: the title alone, bright; the project's own links sit in the left menu. */
 .book-title { flex: none; max-width: 28vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--book); font-size: 20px; font-weight: 800; color: #ffe7a0; text-shadow: 0 0 18px rgba(250, 204, 21, 0.35); }
