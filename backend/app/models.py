@@ -271,6 +271,9 @@ class UsageEvent(Base):
     model: Mapped[str] = mapped_column(String(200))
     input_tokens: Mapped[int] = mapped_column(default=0)
     output_tokens: Mapped[int] = mapped_column(default=0)
+    # One user action (a whole search, one chat question, one picture) may take many calls:
+    # they share this id, and the usage page shows them as one line.
+    action_id: Mapped[str | None] = mapped_column(String(32), default=None, index=True)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 

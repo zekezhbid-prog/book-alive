@@ -2,14 +2,16 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.analysis import entities as analysis
 from app.analysis import prompts, runner
 from app.db import SessionDep
 from app.images import angles
 from app.images.styles import style_key
+from app.llm import registry
 from app.llm.calls import ModelNotConfigured, TextModel
+from app.llm.provision import HUBRIS_NAME
 from app.models import (
     FACT_PERMANENT,
     FACT_PROFILE,
@@ -19,6 +21,7 @@ from app.models import (
     AnalysisRun,
     Chapter,
     ChapterExtraction,
+    Connection,
     Entity,
     Image,
     Project,
@@ -110,18 +113,28 @@ class SplitRequest(BaseModel):
 
 
 class UsageRow(BaseModel):
+    """One user action: a whole search, one chat question, one picture."""
+
+    created_at: datetime
     operation: str
     connection_name: str
     model: str
     calls: int
     input_tokens: int
     output_tokens: int
+    # Rubles at the provider's current prices; None when it publishes none for the model.
+    cost_rub: float | None = None
 
 
 class UsageOut(BaseModel):
-    rows: list[UsageRow]
+    rows: list[UsageRow]  # newest first, one page
+    total_rows: int
     input_tokens: int
     output_tokens: int
+    cost_rub: float | None = None
+    # What is left on the provider account (Hubris), None when it cannot be told.
+    balance_rub: float | None = None
+    balance_connection: str = ""
 
 
 def _project(session: SessionDep, project_id: str) -> Project:
@@ -455,34 +468,74 @@ def split_entity(entity_id: str, body: SplitRequest, session: SessionDep) -> Ent
     return get_entity(separate.id, session)
 
 
+USAGE_PAGE = 20
+
+
 @router.get("/projects/{project_id}/usage")
-def usage(project_id: str, session: SessionDep) -> UsageOut:
-    grouped = session.execute(
-        select(
-            UsageEvent.operation,
-            UsageEvent.connection_name,
-            UsageEvent.model,
-            func.count(),
-            func.sum(UsageEvent.input_tokens),
-            func.sum(UsageEvent.output_tokens),
-        )
+def usage(
+    project_id: str, session: SessionDep, offset: int = 0, limit: int = USAGE_PAGE
+) -> UsageOut:
+    events = session.scalars(
+        select(UsageEvent)
         .where(UsageEvent.project_id == project_id)
-        .group_by(UsageEvent.operation, UsageEvent.connection_name, UsageEvent.model)
-        .order_by(UsageEvent.operation)
+        .order_by(UsageEvent.created_at)
     ).all()
-    rows = [
-        UsageRow(
-            operation=operation,
-            connection_name=connection,
-            model=model,
-            calls=calls,
-            input_tokens=tokens_in,
-            output_tokens=tokens_out,
-        )
-        for operation, connection, model, calls, tokens_in, tokens_out in grouped
-    ]
+    names = {e.connection_name for e in events}
+    connections = {
+        c.name: c for c in session.scalars(select(Connection).where(Connection.name.in_(names)))
+    }
+    prices = {name: registry.model_prices(c) for name, c in connections.items()}
+
+    def cost(event: UsageEvent) -> float | None:
+        price = prices.get(event.connection_name, {}).get(event.model)
+        if price is None:
+            return None
+        return (event.input_tokens * price[0] + event.output_tokens * price[1]) / 1_000_000
+
+    # Calls of one action share its id; older calls, made before ids, stand alone.
+    actions: dict[str, list[UsageEvent]] = {}
+    for event in events:
+        actions.setdefault(event.action_id or event.id, []).append(event)
+    rows = [_usage_row(calls, cost) for calls in actions.values()]
+    rows.sort(key=lambda r: r.created_at, reverse=True)
+    costs = [r.cost_rub for r in rows]
+    balance, where = None, ""
+    hubris = session.scalar(select(Connection).where(Connection.name == HUBRIS_NAME))
+    if hubris is not None:
+        balance, where = registry.balance_rub(hubris), hubris.name
     return UsageOut(
-        rows=rows,
+        rows=rows[max(0, offset) : max(0, offset) + max(1, min(limit, 200))],
+        total_rows=len(rows),
         input_tokens=sum(r.input_tokens for r in rows),
         output_tokens=sum(r.output_tokens for r in rows),
+        cost_rub=sum(c for c in costs if c is not None)
+        if any(c is not None for c in costs)
+        else None,
+        balance_rub=balance,
+        balance_connection=where if balance is not None else "",
+    )
+
+
+ANALYSIS_STEPS = ("find_", "merge_", "summarize_", "check_", "looks_", "adopt_")
+
+
+def _usage_row(calls: list[UsageEvent], cost) -> UsageRow:
+    operations = [c.operation for c in calls]
+    operation = operations[0]
+    # A search is many kinds of calls; it is named after what the user started.
+    for step in ANALYSIS_STEPS:
+        found = next((o for o in operations if o.startswith(step)), None)
+        if found:
+            operation = "find_" + found.removeprefix(step)
+            break
+    costs = [cost(c) for c in calls]
+    return UsageRow(
+        created_at=calls[0].created_at,
+        operation=operation,
+        connection_name=calls[0].connection_name,
+        model=", ".join(dict.fromkeys(c.model for c in calls)),
+        calls=len(calls),
+        input_tokens=sum(c.input_tokens for c in calls),
+        output_tokens=sum(c.output_tokens for c in calls),
+        cost_rub=None if all(c is None for c in costs) else sum(c or 0 for c in costs),
     )

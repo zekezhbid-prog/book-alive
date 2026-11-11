@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db import release_connection
 from app.llm import prefs, registry
-from app.models import Connection, UsageEvent
+from app.models import Connection, UsageEvent, new_id
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +50,9 @@ class TextModel:
         self.request_overhead = 0  # tokens the connection adds to every request on its own
         self.model_name = model_name
         self.connection = connection
+        # A model is made for one user action (a run, a question): its calls are one line
+        # on the usage page.
+        self.action_id = new_id()
         # The chat should answer the same question the same way: no sampling randomness.
         # Some models accept only their default temperature; see `invoke`.
         self.temperature = STEADY_TEMPERATURE if task in STEADY_TASKS else None
@@ -82,6 +85,7 @@ class TextModel:
                     model=self.model_name,
                     input_tokens=usage.get("input_tokens", 0),
                     output_tokens=usage.get("output_tokens", 0),
+                    action_id=getattr(self, "action_id", None),
                 )
             )
             journal.commit()

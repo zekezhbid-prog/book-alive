@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.crypto import decrypt
 from app.db import release_connection
 from app.llm import prefs
-from app.models import Connection, UsageEvent
+from app.models import Connection, UsageEvent, new_id
 
 TIMEOUT = httpx.Timeout(300, connect=20)
 
@@ -98,6 +98,7 @@ class ImageModel:
                     model=self.model_name,
                     input_tokens=usage.get("prompt_tokens", 0) or 0,
                     output_tokens=usage.get("completion_tokens", 0) or 0,
+                    action_id=new_id(),
                 )
             )
             journal.commit()

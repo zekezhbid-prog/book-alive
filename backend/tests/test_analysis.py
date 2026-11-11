@@ -656,3 +656,53 @@ def test_general_check_takes_out_one_chapter_and_never_adds(session, project):
     assert "[2] Рыхташ\nСтарый мельник, связной князя. Он напоминает ей поесть." in seen[0]
     assert people["Рыхташ"].summary == "Старый мельник, связной князя."
     assert people["Люта"].summary == "Княжна."  # the answer grew: it added, so it is ignored
+
+
+def test_usage_shows_one_line_per_action_with_rubles_and_balance(
+    client, session, project, monkeypatch
+):
+    from sqlalchemy import select
+
+    from app.llm import registry
+    from app.models import Connection, UsageEvent
+
+    made = session.scalar(select(Connection).where(Connection.name == "Hubris")) is None
+    if made:
+        session.add(Connection(name="Hubris", kind="openai", base_url="https://x/v1"))
+    for operation, tokens in [("find_characters", 1_000_000), ("summarize_characters", 0)]:
+        session.add(
+            UsageEvent(
+                project_id=project.id,
+                operation=operation,
+                connection_name="Hubris",
+                model="m/one",
+                input_tokens=tokens,
+                output_tokens=tokens // 2,
+                action_id="run1",
+            )
+        )
+    session.add(
+        UsageEvent(
+            project_id=project.id,
+            operation="chat",
+            connection_name="Hubris",
+            model="m/unpriced",
+            input_tokens=10,
+        )
+    )
+    session.commit()
+    monkeypatch.setattr(registry, "model_prices", lambda c: {"m/one": (10.0, 40.0)})
+    monkeypatch.setattr(registry, "balance_rub", lambda c: 1520.3)
+
+    data = client.get(f"/api/projects/{project.id}/usage").json()
+    assert data["total_rows"] == 2  # the search is one line, the question another
+    run_row = next(r for r in data["rows"] if r["operation"] == "find_characters")
+    assert run_row["calls"] == 2 and run_row["cost_rub"] == 30.0  # 10 + 0.5 * 40
+    assert next(r for r in data["rows"] if r["operation"] == "chat")["cost_rub"] is None
+    assert data["cost_rub"] == 30.0
+    assert data["balance_rub"] == 1520.3
+    page = client.get(f"/api/projects/{project.id}/usage?offset=1&limit=1").json()
+    assert len(page["rows"]) == 1 and page["total_rows"] == 2
+    if made:  # other tests expect no such connection
+        session.delete(session.scalar(select(Connection).where(Connection.name == "Hubris")))
+        session.commit()

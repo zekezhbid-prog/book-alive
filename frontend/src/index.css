@@ -184,6 +184,11 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .table th { color: var(--accent); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+/* A wide table scrolls inside itself on a phone instead of widening the page. */
+.table-scroll { overflow-x: auto; }
+.nowrap { white-space: nowrap; }
+.usage-page { max-width: 1080px; }
+.table.compact th, .table.compact td { padding: 9px 10px; }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table tfoot td { font-weight: 800; border-bottom: 0; }
 

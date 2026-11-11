@@ -189,17 +189,27 @@ export interface Entity {
   timeline: ChapterFacts[]
 }
 
-export interface Usage {
-  rows: {
-    operation: string
-    connection_name: string
-    model: string
-    calls: number
-    input_tokens: number
-    output_tokens: number
-  }[]
+export interface UsageRow {
+  created_at: string
+  operation: string
+  connection_name: string
+  model: string
+  calls: number
   input_tokens: number
   output_tokens: number
+  /** Rubles at the provider's current prices; null when it publishes none. */
+  cost_rub: number | null
+}
+
+/** One line per user action (a search, a chat question, a picture), newest first. */
+export interface Usage {
+  rows: UsageRow[]
+  total_rows: number
+  input_tokens: number
+  output_tokens: number
+  cost_rub: number | null
+  balance_rub: number | null
+  balance_connection: string
 }
 
 export interface Citation {
@@ -630,7 +640,8 @@ export const api = {
     return request<Scene>('POST', `/scenes/${id}/frame/upload`, form)
   },
   sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
-  usage: (projectId: string) => request<Usage>('GET', `/projects/${projectId}/usage`),
+  usage: (projectId: string, offset = 0) =>
+    request<Usage>('GET', `/projects/${projectId}/usage?offset=${offset}`),
 
   connections: () => request<Connection[]>('GET', '/connections'),
   createConnection: (body: {
