@@ -26,7 +26,7 @@ from app.rag.index import search
 MAX_STEPS = 6
 # A chapter longer than this is opened only in part; search reaches the rest.
 READ_CHARS = 60_000
-NAMES_PER_CHAPTER = 12
+NAMES_PER_CHAPTER = 25
 
 SYSTEM = """You answer questions about one book, using only its text. You do not see the \
 book itself. You have its table of contents below and three tools:
@@ -67,6 +67,9 @@ where they appear last: read the last chapters with them in the table of content
 one after, not the first ones.
 - Start the answer with the direct answer in one sentence. When the book only implies it, \
 say what it shows (where they were last seen, what happened there, who speaks of it after).
+- Cards and the names in the table of contents come from an earlier reading and are \
+incomplete: they help to plan, never to answer. Every answer comes from the book text you \
+have searched or read; details, nuances and anyone missing from the table are found there.
 - Plan with the table of contents: it lists who and what appears in each chapter. Open \
 the chapters where the people, places or things of the question appear; when the question \
 is about how something began or developed, start from the earliest of them.
