@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_engine
 from app.images.generate import ImageGenerationFailed, ImageModel
 from app.images.prompts import build_image_prompt, chapters_between
+from app.images.reference_sort import PictureVerdict, SortVerdict, decide
 from app.images.style_check import StyleVerdict
 from app.models import AppSetting, Chapter, Connection, Entity, EntityFact, Project, text_hash
 
@@ -362,3 +363,53 @@ def test_a_picture_put_in_as_it_is_is_checked_against_the_style(client, project,
     verdict = client.post(url, files=files).json()
     assert verdict == {"matches": False, "reason": "Фото, а не аниме."}
     assert seen["mime"] == "image/png" and seen["style"]
+
+
+def test_references_go_into_empty_slots_only_when_clean_and_in_style():
+    verdict = SortVerdict(
+        pictures=[
+            PictureVerdict(n=1, view="face_front", clean=True, style_ok=True),
+            PictureVerdict(n=2, view="face_front", clean=True, style_ok=True),  # view taken by 1
+            PictureVerdict(n=3, view="full_front", clean=True, style_ok=False),  # photo: redrawn
+            PictureVerdict(n=4, view="face_profile", clean=False, style_ok=True),  # busy picture
+            PictureVerdict(n=5, view="full_back", clean=True, style_ok=True),  # slot filled
+            PictureVerdict(n=6, view="sideways", clean=True, style_ok=True),  # unknown view
+        ]
+    )
+    result = decide(verdict, 6, taken={"full_back"})
+    assert result.same_person
+    assert [(p.index, p.angle) for p in result.placed] == [(0, "face_front")]
+    assert result.views[5] == "" and result.views[2] == "full_front"
+
+
+def test_references_of_different_people_are_refused():
+    named = decide(SortVerdict(same_person=False, others=[2, 9], reason="№2 — другой"), 3, set())
+    assert (named.same_person, named.others, named.placed) == (False, [1], [])
+    unnamed = decide(SortVerdict(same_person=False), 2, set())
+    assert unnamed.others == [0, 1]
+
+
+def test_the_references_are_looked_at_together(client, project, monkeypatch):
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    seen = {}
+
+    def look(model, style, pictures, character):
+        seen["count"], seen["character"] = len(pictures), character
+        return SortVerdict(
+            pictures=[PictureVerdict(n=1, view="face_front", clean=True, style_ok=True)]
+        )
+
+    class Model:
+        def __init__(self, session, project_id, task=None):
+            pass
+
+    monkeypatch.setattr("app.api.images.ask_model", look)
+    monkeypatch.setattr("app.api.images.TextModel", Model)
+    url = f"/api/entities/{project.hero_id}/references/sort"
+    files = [("files", (f"r{n}.png", PNG, "image/png")) for n in range(2)]
+    result = client.post(url, files=files)
+    assert result.status_code == 200, result.text
+    assert result.json()["placed"] == [{"index": 0, "angle": "face_front"}]
+    assert seen == {"count": 2, "character": "Люта"}
+    too_many = [("files", (f"r{n}.png", PNG, "image/png")) for n in range(7)]
+    assert client.post(url, files=too_many).status_code == 422

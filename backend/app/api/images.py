@@ -19,6 +19,7 @@ from app.images.generate import (
     ImageModelNotConfigured,
 )
 from app.images.prompts import build_image_prompt, chapters_between
+from app.images.reference_sort import SortResult, ask_model, decide
 from app.images.style_check import StyleVerdict, check_style
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
@@ -269,6 +270,40 @@ def style_check(project_id: str, session: SessionDep, file: UploadFile) -> Style
         return check_style(model, style, data, mime)
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+
+
+MAX_SORTED = 6
+
+
+@router.post("/entities/{entity_id}/references/sort")
+def sort_references(entity_id: str, session: SessionDep, files: list[UploadFile]) -> SortResult:
+    """Before a character's set is drawn from the user's own pictures: the text model looks
+    at all of them at once. Nothing is stored here; the browser puts the placed ones in and
+    sends the rest as references."""
+    entity = _entity(session, entity_id)
+    project = _project(session, entity.project_id)
+    if not 1 <= len(files) <= MAX_SORTED:
+        raise HTTPException(422, "too_many_references")
+    pictures = []
+    for file in files:
+        data = file.file.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "file_too_large")
+        mime = _sniff(data)
+        if mime is None:
+            raise HTTPException(422, "not_an_image")
+        pictures.append((data, mime))
+    taken = {image.angle for image in angles.mains(entity.images, style_key(project))}
+    character = entity.name
+    try:
+        model = TextModel(session, project.id, "prompts")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        verdict = ask_model(model, style_prompt(project), pictures, character)
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return decide(verdict, len(pictures), taken)
 
 
 def _sniff(data: bytes) -> str | None:

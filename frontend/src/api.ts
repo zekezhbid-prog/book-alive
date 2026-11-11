@@ -481,6 +481,17 @@ export interface SessionInfo {
   is_admin: boolean
 }
 
+/** How the user's own pictures of a character are used before its set is drawn. */
+export interface ReferenceSort {
+  same_person: boolean
+  /** Indexes (from 0) of the pictures showing someone else. */
+  others: number[]
+  reason: string
+  /** Pictures that go into empty slots as they are; the rest guide the drawing. */
+  placed: { index: number; angle: Angle }[]
+  views: (Angle | '')[]
+}
+
 export const api = {
   session: () => request<SessionInfo>('GET', '/session'),
   login: (email: string, password: string) =>
@@ -628,6 +639,11 @@ export const api = {
     const form = new FormData()
     form.set('file', file)
     return request<{ matches: boolean; reason: string }>('POST', `/projects/${projectId}/style-check`, form)
+  },
+  sortReferences: (entityId: string, files: File[]) => {
+    const form = new FormData()
+    for (const file of files) form.append('files', file)
+    return request<ReferenceSort>('POST', `/entities/${entityId}/references/sort`, form)
   },
   generateImage: (
     entityId: string,

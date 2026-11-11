@@ -73,6 +73,8 @@ ul { margin: 6px 0 0; padding-left: 18px; }
 .btn.ghost.active { color: #ffe7a0; background: linear-gradient(180deg, rgba(250, 204, 21, 0.2), rgba(250, 204, 21, 0.06)); border-color: rgba(250, 204, 21, 0.35); }
 .btn.small { padding: 6px 12px; font-size: 13px; border-radius: 10px; }
 .btn.danger:hover { border-color: var(--err); color: var(--err); }
+/* Deleting a picture: gold like every other control here, glowing so it is plain. */
+.btn.gold:hover { border-color: var(--accent); color: var(--accent); filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.8)); }
 .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; transform: none; }
 .btn:disabled::after { display: none; }
 .btn.icon { padding: 6px; width: 32px; height: 32px; }
@@ -620,3 +622,6 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
    row of slots. */
 .image-dialog .dialog-body { align-items: stretch; }
 .generate-row { gap: 6px; margin-top: auto; }
+
+.sample.odd { outline: 2px solid var(--err); outline-offset: 1px; }
+.face-check { gap: 8px; }

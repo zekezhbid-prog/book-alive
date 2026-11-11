@@ -143,7 +143,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
                   )}
                   <span className="spacer" />
                   <button
-                    className="btn ghost small icon danger"
+                    className="btn ghost small icon gold"
                     title={t('app.delete')}
                     aria-label={t('app.delete')}
                     onClick={() => remove(image)}
@@ -222,7 +222,12 @@ interface Sample {
   file: File
   url: string
   id?: string
+  /** The AI found someone else on it than on the other samples. */
+  odd?: boolean
 }
+
+/** At most this many samples are looked at together before a set is drawn. */
+const MAX_SAMPLES = 6
 
 /** The picture whole, centred on a canvas of the given width/height ratio; the margins are
  * the same picture blurred, so nothing in the picture itself changes. */
@@ -306,7 +311,9 @@ export function ImageDialog({
   const [chapter, setChapter] = useState('')
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageSize | ''>('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete'>('')
+  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort'>('')
+  // After the first face of an empty set: the views still to draw once the user likes it.
+  const [pending, setPending] = useState<{ views: Angle[]; references: string[] } | null>(null)
   const [progress, setProgress] = useState('')
   const [autoPrompt, setAutoPrompt] = useState(readAuto)
   const chooseAuto = (on: boolean) => {
@@ -315,8 +322,8 @@ export function ImageDialog({
   }
   // The user's own samples, kept in the window until used: drawn from, or put in as they are.
   const [samples, setSamples] = useState<Sample[]>([])
-  // Where a picture put in as it is goes: a view's slot, or a new picture in context.
-  const [menuFor, setMenuFor] = useState<Angle | 'look' | ''>('')
+  // The new picture in context, when its plus menu is open.
+  const [menuFor, setMenuFor] = useState<'look' | ''>('')
   const slotPicker = useRef<HTMLInputElement>(null)
   const [adding, setAdding] = useState(false)
   // A sample clicked to see it large.
@@ -332,6 +339,9 @@ export function ImageDialog({
   const isMain = mode === 'base'
   // A character's base pictures are a set of views drawn from one prompt.
   const asSet = isMain && withAngles
+  // A set is started from the user's samples only while it is empty: once there is a view,
+  // the rest are drawn from it.
+  const samplesAllowed = !(asSet && bases.length > 0)
   // The views the next press draws: ticked and still empty.
   const wanted = SET_ORDER.filter((view) => views.includes(view) && !latest(bases, view))
   // Pictures in context are drawn from base ones, so they wait for the first.
@@ -373,34 +383,95 @@ export function ImageDialog({
   }
 
   // Samples go to the server once; their ids are passed to the image model as references.
-  const storeSamples = async () => {
+  const storeSamples = async (list: Sample[]) => {
     const ids: string[] = []
-    const next = [...samples]
-    for (const [n, sample] of next.entries()) {
-      if (!sample.id) {
+    for (const sample of list) {
+      let id = sample.id
+      if (!id) {
         const [made] = await api.uploadImages(projectId, [sample.file], entityId)
         // A sample is not a base picture or a look: the card's pictures stay as they were.
         await api.updateImage(made.id, { is_main: false, angle: '', look_label: '' })
-        next[n] = { ...sample, id: made.id }
+        id = made.id
       }
-      ids.push(next[n].id!)
+      ids.push(id)
     }
-    setSamples(next)
-    return ids.slice(0, 3)
+    setSamples((had) => had.map((s) => ({ ...s, id: s.id ?? ids[list.indexOf(s)] })))
+    return ids
+  }
+
+  // The views of a set, one after another; each new one is drawn from those already there.
+  const drawViews = async (order: Angle[], text: string, reference_ids: string[]) => {
+    for (const [n, view] of order.entries()) {
+      setProgress(t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }))
+      setDrawing(view)
+      const made = await api.generateImage(entityId, {
+        ...request,
+        angle: view,
+        prompt: text,
+        size,
+        add_view: true,
+        reference_ids,
+      })
+      setCurrent(made)
+      onChanged()
+    }
+  }
+
+  // Before a set is drawn from samples, the AI looks at all of them: someone else among them
+  // stops everything; a clean picture in the project style goes into its empty slot as it is
+  // (padded to the chosen shape), the others guide the drawing. Returns the views put in and
+  // the ids of the samples left as references, or null when it stopped.
+  const sortSamples = async () => {
+    setBusy('sort')
+    const verdict = await api.sortReferences(entityId, samples.map((s) => s.file))
+    if (!verdict.same_person) {
+      setSamples((had) => had.map((s, n) => ({ ...s, odd: verdict.others.includes(n) })))
+      const numbers = verdict.others.map((n) => n + 1).join(', ')
+      setError(t('gallery.samples.others', { numbers, reason: verdict.reason }))
+      return null
+    }
+    setBusy('upload')
+    const ratio = size ? size.split(':').map(Number) : null
+    const filled: Angle[] = []
+    for (const { index, angle } of verdict.placed) {
+      const file = samples[index].file
+      const ready = ratio ? await padTo(file, ratio[0] / ratio[1]) : file
+      const [made] = await api.uploadImages(projectId, [ready], entityId)
+      const saved = await api.updateImage(made.id, { is_main: true, angle, look_label: '' })
+      setCurrent(saved)
+      filled.push(angle)
+    }
+    const rest = samples.filter((_, n) => !verdict.placed.some((p) => p.index === n))
+    const references = await storeSamples(rest.slice(0, 3))
+    setSamples(rest.map((s, n) => ({ ...s, id: references[n] ?? s.id })))
+    if (filled.length) {
+      setProgress(t('gallery.samples.placed', { views: filled.map((v) => t(`angle.${v}`)).join(', ') }))
+      onChanged()
+    }
+    return { filled, references: references.slice(0, 3) }
   }
 
   const draw = async () => {
     setError('')
+    setProgress('')
     let reference_ids: string[] = []
-    if (samples.length) {
-      setBusy('upload')
-      try {
-        reference_ids = await storeSamples()
-      } catch (e) {
-        setError(errorText(t, e))
-        return setBusy('')
+    let order = wanted
+    const useSamples = samplesAllowed && samples.length > 0
+    try {
+      if (useSamples && asSet) {
+        const sorted = await sortSamples()
+        if (!sorted) return setBusy('')
+        reference_ids = sorted.references
+        order = order.filter((view) => !sorted.filled.includes(view))
+      } else if (useSamples) {
+        setBusy('upload')
+        reference_ids = await storeSamples(samples.slice(0, 3))
       }
+    } catch (e) {
+      setError(errorText(t, e))
+      return setBusy('')
     }
+    if (asSet && !order.length) return setBusy('')
     // Automatic prompt: written quietly right before drawing, nothing to check in between.
     let text = prompt
     if (autoPrompt) {
@@ -412,24 +483,14 @@ export function ImageDialog({
     setBusy('image')
     try {
       if (asSet) {
-        const order = wanted
-        for (const [n, view] of order.entries()) {
-          setProgress(
-            t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }),
-          )
-          setDrawing(view)
-          const made = await api.generateImage(entityId, {
-            ...request,
-            angle: view,
-            prompt: text,
-            size,
-            add_view: true,
-            reference_ids,
-          })
-          setCurrent(made)
-          onChanged()
-        }
-        setProgress(t('generate.set.done', { n: order.length }))
+        // The face front comes first and sets the face for every other view: the set waits
+        // until the user likes it.
+        const first = order[0] === 'face_front' && order.length > 1
+        await drawViews(first ? ['face_front'] : order, text, reference_ids)
+        if (first) {
+          setPending({ views: order.slice(1), references: reference_ids })
+          setProgress(t('generate.face.check'))
+        } else setProgress(t('generate.set.done', { n: order.length }))
       } else {
         const made = await api.generateImage(entityId, { ...request, prompt: text, size, reference_ids })
         setCurrent(made)
@@ -443,9 +504,47 @@ export function ImageDialog({
     setBusy('')
   }
 
-  // A picture put in as it is: checked against the project style first (a picture in
+  // The face is liked: the remaining views are drawn from it with the prompt as it is now.
+  const goOn = async () => {
+    if (!pending) return
+    setError('')
+    setBusy('image')
+    try {
+      await drawViews(pending.views, prompt, pending.references)
+      setPending(null)
+      setProgress(t('generate.set.done', { n: pending.views.length + 1 }))
+    } catch (e) {
+      setProgress('')
+      setError(errorText(t, e))
+    }
+    setDrawing('')
+    setBusy('')
+  }
+
+  // The face is not liked: the user's own press removes it and draws it again, with the
+  // prompt as it is now (it may have been changed in the meantime).
+  const redrawFace = async () => {
+    if (!pending) return
+    const face = latest(bases, 'face_front') ?? (current?.angle === 'face_front' ? current : null)
+    setError('')
+    setBusy('image')
+    try {
+      if (face) await api.deleteImage(face.id)
+      setCurrent(null)
+      onChanged()
+      await drawViews(['face_front'], prompt, pending.references)
+      setProgress(t('generate.face.check'))
+    } catch (e) {
+      setProgress('')
+      setError(errorText(t, e))
+    }
+    setDrawing('')
+    setBusy('')
+  }
+
+  // A new picture in context put in as it is: checked against the project style first (a picture in
   // another style is refused, not redrawn), then only padded to the chosen shape.
-  const putIn = async (files: FileList | File[] | null, target: Angle | 'look') => {
+  const putIn = async (files: FileList | File[] | null) => {
     const file = [...(files ?? [])].find((f) => f.type.startsWith('image/'))
     setMenuFor('')
     if (slotPicker.current) slotPicker.current.value = ''
@@ -461,12 +560,7 @@ export function ImageDialog({
         return setBusy('')
       }
       const [made] = await api.uploadImages(projectId, [ready], entityId)
-      const saved = await api.updateImage(
-        made.id,
-        target === 'look'
-          ? { ...request, is_main: false }
-          : { is_main: true, angle: target, look_label: '' },
-      )
+      const saved = await api.updateImage(made.id, { ...request, is_main: false })
       setPeek('')
       setCurrent(saved)
       onChanged()
@@ -492,24 +586,24 @@ export function ImageDialog({
     }
     setBusy('')
   }
-  const pasteInto = async (target: Angle | 'look') => {
+  const pasteInto = async () => {
     try {
       const files = await readClipboard()
-      if (files.length) putIn(files, target)
+      if (files.length) putIn(files)
       else setError(t('gallery.paste.empty'))
     } catch {
       setError(t('gallery.paste.denied'))
     }
   }
-  // The small menu of a slot's or the new picture's plus: from a file or from the clipboard.
-  const insertMenu = (target: Angle | 'look') =>
+  // The small menu of the new picture's plus: from a file or from the clipboard.
+  const insertMenu = (target: 'look') =>
     menuFor === target && (
       <div className="add-sample-menu insert-menu">
         <button className="btn ghost small" onClick={() => slotPicker.current?.click()}>
           <UploadIcon />
           {t('gallery.upload.file')}
         </button>
-        <button className="btn ghost small" onClick={() => pasteInto(target)}>
+        <button className="btn ghost small" onClick={pasteInto}>
           <CopyIcon />
           {t('gallery.paste')}
         </button>
@@ -520,17 +614,22 @@ export function ImageDialog({
   const addSamples = (files: FileList | File[] | null) => {
     const list = [...(files ?? [])].filter((f) => f.type.startsWith('image/'))
     if (!list.length) return
-    setSamples((had) => [...had, ...list.map((file) => ({ file, url: URL.createObjectURL(file) }))])
+    setSamples((had) =>
+      [...had.map((s) => ({ ...s, odd: false })), ...list.map((file) => ({ file, url: URL.createObjectURL(file) }))].slice(
+        0,
+        MAX_SAMPLES,
+      ),
+    )
     setAdding(false)
     if (picker.current) picker.current.value = ''
   }
   const dropSample = (url: string) => {
-    setSamples((had) => had.filter((s) => s.url !== url))
+    setSamples((had) => had.filter((s) => s.url !== url).map((s) => ({ ...s, odd: false })))
     if (peek === url) setPeek('')
   }
 
   // A picture copied elsewhere goes in like a file: Ctrl+V in the window or the "Paste" button.
-  const canAdd = busy === ''
+  const canAdd = busy === '' && samplesAllowed && samples.length < MAX_SAMPLES
   useEffect(() => {
     if (!canAdd) return
     const onPaste = (e: ClipboardEvent) => {
@@ -603,13 +702,6 @@ export function ImageDialog({
           {/* The set as slots: what is there, what is missing, what is drawn on the next press. */}
           {asSet && (
             <div className="view-slots">
-              <input
-                ref={slotPicker}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                hidden
-                onChange={(e) => menuFor && putIn(e.target.files, menuFor)}
-              />
               {SET_ORDER.map((view) => {
                 const made = latest(bases, view)
                 const ticked = !made && views.includes(view)
@@ -633,9 +725,9 @@ export function ImageDialog({
                       {made && <img src={made.url} alt="" loading="lazy" />}
                       {drawing === view && <span className="view-slot-busy" aria-hidden />}
                     </button>
-                    {made ? (
+                    {made && (
                       <button
-                        className="btn ghost small icon danger slot-drop"
+                        className="btn ghost small icon gold slot-drop"
                         disabled={busy !== ''}
                         title={t('app.delete')}
                         aria-label={`${t('app.delete')}: ${t(`angle.${view}`)}`}
@@ -643,26 +735,15 @@ export function ImageDialog({
                       >
                         <TrashIcon />
                       </button>
-                    ) : (
-                      <button
-                        className="slot-plus"
-                        disabled={busy !== ''}
-                        title={t('gallery.insert')}
-                        aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
-                        onClick={() => setMenuFor(menuFor === view ? '' : view)}
-                      >
-                        <ThinPlus />
-                      </button>
                     )}
                     </div>
-                    {insertMenu(view)}
                     <label className="view-slot-label small">
                       {/* A filled view keeps the box's place, so the labels stay in line. */}
                       <input
                         type="checkbox"
                         className={made ? 'hidden-check' : ''}
                         checked={ticked}
-                        disabled={busy !== '' || !!made}
+                        disabled={busy !== '' || !!made || !!pending}
                         title={t('generate.slot.draw')}
                         onChange={() => toggleView(view)}
                       />
@@ -681,7 +762,7 @@ export function ImageDialog({
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 hidden
-                onChange={(e) => putIn(e.target.files, 'look')}
+                onChange={(e) => putIn(e.target.files)}
               />
               <div className="look-new-wrap">
                 <button
@@ -717,7 +798,7 @@ export function ImageDialog({
                     <img src={item.url} alt="" loading="lazy" />
                   </button>
                   <button
-                    className="btn ghost small icon danger slot-drop"
+                    className="btn ghost small icon gold slot-drop"
                     disabled={busy !== ''}
                     title={t('app.delete')}
                     aria-label={t('app.delete')}
@@ -748,9 +829,10 @@ export function ImageDialog({
                   role="radio"
                   aria-checked={mode === option}
                   className={mode === option ? 'active' : ''}
-                  disabled={busy !== ''}
+                  disabled={busy !== '' || !!pending}
                   onClick={() => {
                     setMode(option)
+                    setPending(null)
                     setMenuFor('')
                     setPeek('')
                     // A picture just made in the other mode is not this mode's picture.
@@ -792,7 +874,9 @@ export function ImageDialog({
                 </label>
               </div>
             </div>
-            {/* The user's own samples: shown small, drawn from or put in as they are. */}
+            {/* The user's own samples. For a set: the AI puts the fitting ones into slots and
+                draws the rest from them; once a view is there, the set is drawn from it. */}
+              {samplesAllowed && (
               <div className="stack field samples">
                 <input
                   ref={picker}
@@ -835,10 +919,10 @@ export function ImageDialog({
                 </div>
                 {samples.length > 0 && (
                   <>
-                    <p className="faint small">{t('gallery.samples.hint')}</p>
+                    <p className="faint small">{t(asSet ? 'gallery.samples.hint.set' : 'gallery.samples.hint')}</p>
                     <div className="sample-strip">
                       {samples.map((sample) => (
-                        <div key={sample.url} className={`sample ${peek === sample.url ? 'shown' : ''}`}>
+                        <div key={sample.url} className={`sample ${peek === sample.url ? 'shown' : ''} ${sample.odd ? 'odd' : ''}`}>
                           <button
                             className="sample-face"
                             title={t('generate.slot.show')}
@@ -861,6 +945,7 @@ export function ImageDialog({
                   </>
                 )}
               </div>
+              )}
             <div className="stack field">
               <div className="row">
                 <span className="small muted">{t('generate.prompt.label')}</span>
@@ -925,6 +1010,17 @@ export function ImageDialog({
             </select>
             {/* At the bottom of the column, in one row with the last row of slots. */}
             <div className="stack generate-row">
+            {pending ? (
+              <div className="row wrap face-check">
+                <button className="btn primary generate-big" disabled={busy !== '' || !prompt.trim()} onClick={goOn}>
+                  <SparklesIcon />
+                  {busy === 'image' ? t('generate.image.busy') : t('generate.face.go_on', { n: pending.views.length })}
+                </button>
+                <button className="btn ghost" disabled={busy !== '' || !prompt.trim()} onClick={redrawFace}>
+                  {t('generate.face.redraw')}
+                </button>
+              </div>
+            ) : (
             <div className="row wrap">
           <button
             className="btn primary generate-big"
@@ -932,7 +1028,9 @@ export function ImageDialog({
             onClick={draw}
           >
             <SparklesIcon />
-            {busy === 'upload'
+            {busy === 'sort'
+              ? t('gallery.samples.sorting')
+              : busy === 'upload'
               ? t('gallery.uploading')
               : busy === 'prompt' && autoPrompt
               ? t('generate.prompt.busy')
@@ -943,6 +1041,7 @@ export function ImageDialog({
                 : t('generate.image')}
           </button>
         </div>
+            )}
         {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
         {progress && <p className="muted small">{progress}</p>}
             </div>
