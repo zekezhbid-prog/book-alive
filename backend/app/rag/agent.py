@@ -59,6 +59,14 @@ needs more: read the chapters they come from.
 answer the question, answer at once; take a step only for what is still missing.
 - When the question is about someone tied to a character with a card, and the sources do \
 not name them yet, look at that card.
+- Answer about exactly the one the question names. Passages about someone else (an \
+ancestor, a namesake, a relative, an earlier holder of the title) are not the answer: \
+keep looking, and mention them only as an aside.
+- What happened to someone in the end (death, fate, where they went, how it ended) is told \
+where they appear last: read the last chapters with them in the table of contents and the \
+one after, not the first ones.
+- Start the answer with the direct answer in one sentence. When the book only implies it, \
+say what it shows (where they were last seen, what happened there, who speaks of it after).
 - Plan with the table of contents: it lists who and what appears in each chapter. Open \
 the chapters where the people, places or things of the question appear; when the question \
 is about how something began or developed, start from the earliest of them.
@@ -142,7 +150,12 @@ def contents(
         .distinct()
         .order_by(Entity.name)
     ).all()
-    for chapter_id, kind, name in rows:
+    # Main characters first: a crowded chapter shows only some names, and the alphabet
+    # must not hide the hero there (a name late in it was cut off in every busy chapter).
+    weight: dict[str, int] = {}
+    for _, _, name in rows:
+        weight[name] = weight.get(name, 0) + 1
+    for chapter_id, kind, name in sorted(rows, key=lambda r: (-weight[r[2]], r[2])):
         names.setdefault(chapter_id, {}).setdefault(kind, []).append(name)
     lines = []
     for number, chapter in enumerate(project.chapters, 1):
@@ -329,7 +342,14 @@ def card_text(project: Project, card: Entity, scope: list[str]) -> str:
         f for f in card.facts if f.chapter_id in numbers and (not scope or f.chapter_id in scope)
     ]
     facts.sort(key=lambda f: numbers[f.chapter_id])
-    for fact in facts[:CARD_FACTS]:
+    where = sorted({numbers[f.chapter_id] for f in facts})
+    if where:
+        lines.append(f"appears in chapters: {', '.join(map(str, where))}")
+    if len(facts) > CARD_FACTS:
+        # The whole book, not its first chapters: the end of a story matters as much.
+        step = len(facts) / CARD_FACTS
+        facts = [facts[int(i * step)] for i in range(CARD_FACTS - 1)] + [facts[-1]]
+    for fact in facts:
         n = numbers[fact.chapter_id]
         lines.append(f"- chapter {n} ({titles[fact.chapter_id] or 'untitled'}): {fact.text}")
     if not about and not facts:

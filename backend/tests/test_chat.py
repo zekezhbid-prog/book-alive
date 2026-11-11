@@ -600,3 +600,47 @@ def test_translated_query_is_the_same_on_a_repeat(monkeypatch):
     assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
     assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
     assert len(calls) == 1
+
+
+def test_a_crowded_chapter_lists_the_main_characters_first(session, project):
+    """A hero whose name comes late in the alphabet must not vanish from busy chapters."""
+    from app.rag import agent
+
+    first, second = project.chapters
+    hero = Entity(project_id=project.id, kind="character", name="Цмок", aliases=[])
+    for chapter in (first, second):
+        hero.facts.append(
+            EntityFact(chapter_id=chapter.id, chapter_hash="", category="mention", text="")
+        )
+    session.add(hero)
+    for n in range(agent.NAMES_PER_CHAPTER + 3):
+        extra = Entity(project_id=project.id, kind="character", name=f"А{n:02d}", aliases=[])
+        extra.facts.append(
+            EntityFact(chapter_id=second.id, chapter_hash="", category="mention", text="")
+        )
+        session.add(extra)
+    session.commit()
+    line = agent.contents(session, project).split("\n")[1]
+    assert "characters: Цмок, " in line
+
+
+def test_a_card_shows_where_the_story_of_someone_ends(session, project):
+    from app.rag import agent
+
+    first, second = project.chapters
+    hero = Entity(project_id=project.id, kind="character", name="Цмок", aliases=[])
+    for n in range(agent.CARD_FACTS + 10):
+        hero.facts.append(
+            EntityFact(chapter_id=first.id, chapter_hash="", category="profile", text=f"факт {n}")
+        )
+    hero.facts.append(
+        EntityFact(
+            chapter_id=second.id, chapter_hash="", category="profile", text="уходит в лабиринт"
+        )
+    )
+    session.add(hero)
+    session.commit()
+    text = agent.card_text(project, hero, [])
+    assert "appears in chapters: 1, 2" in text
+    assert "chapter 2 (Дорога): уходит в лабиринт" in text  # the last fact is never cut off
+    assert text.count("\n- chapter") == agent.CARD_FACTS
