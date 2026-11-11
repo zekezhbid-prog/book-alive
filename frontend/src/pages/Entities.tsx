@@ -14,6 +14,7 @@ import {
 } from '../api'
 import { AddCardDialog } from '../components/AddCardDialog'
 import CardGrid, { type Tile } from '../components/CardGrid'
+import FoldHead from '../components/FoldHead'
 import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
@@ -375,6 +376,9 @@ interface CardProps {
  *  Top to bottom: name, references, description, mentions by chapter. */
 function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
+  // Only the description starts open; the rest is a click away.
+  const [factsOpen, setFactsOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const merge = async (otherId: string) => {
     const other = others.find((e) => e.id === otherId)
     if (!other || !(await ask(t('entities.merge.confirm', { other: other.name, name: entity.name }))))
@@ -455,6 +459,7 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
         generated={entity.summary}
         placeholder={t(`description.${entity.kind}.placeholder`)}
         none={t('entities.profile.none')}
+        startOpen
         save={(text) => api.saveEntityDescription(entity.id, text)}
       />
       {/* What pictures and scenes are drawn from: age, build, face, clothes; a place's look. */}
@@ -469,22 +474,28 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
         save={(text) => api.saveEntityAppearance(entity.id, text)}
       />
       {entity.profile.length + entity.permanent.length > 0 && (
-        <details>
-          <summary className="muted">{t('entities.facts')}</summary>
-          <ul className="facts">
-            {[...entity.profile, ...entity.permanent].map((fact, i) => (
-              <li key={i}>
-                {fact.text} {fact.stale && stale}
-                {source(fact)}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <div className="stack">
+          <FoldHead title={t('entities.facts')} open={factsOpen} onToggle={() => setFactsOpen(!factsOpen)} />
+          {factsOpen && (
+            <ul className="facts">
+              {[...entity.profile, ...entity.permanent].map((fact, i) => (
+                <li key={i}>
+                  {fact.text} {fact.stale && stale}
+                  {source(fact)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       {gallery}
-      <h4>{t(`entities.timeline.${entity.kind}`)}</h4>
+      <FoldHead
+        title={t(`entities.timeline.${entity.kind}`)}
+        open={timelineOpen}
+        onToggle={() => setTimelineOpen(!timelineOpen)}
+      />
       {/* Chapters where the card only takes part go together in one line, so the list stays short. */}
-      {entity.timeline.some((entry) => entry.facts.length === 0) && (
+      {timelineOpen && entity.timeline.some((entry) => entry.facts.length === 0) && (
         <div className="timeline-entry">
           <b>{t('entities.present')}</b>
           <p className="present-list">
@@ -502,7 +513,8 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
           </p>
         </div>
       )}
-      {entity.timeline
+      {timelineOpen &&
+        entity.timeline
         .filter((entry) => entry.facts.length > 0)
         .map((entry) => (
           <div key={entry.chapter_id} className="timeline-entry">
@@ -699,14 +711,26 @@ interface EditableProps {
   generated: string
   placeholder: string
   none: string
+  /** Shown unfolded when the card opens. */
+  startOpen?: boolean
   save: (text: string) => Promise<unknown>
 }
 
 /** A text of the card the model writes at the end of a search (the general description, the
  *  appearance); the pencil lets the user write their own, which later searches never
  *  overwrite. Clearing the text brings the model's version back. */
-function EditableText({ title, editLabel, own: savedOwn, generated, placeholder, none, save: send }: EditableProps) {
+function EditableText({
+  title,
+  editLabel,
+  own: savedOwn,
+  generated,
+  placeholder,
+  none,
+  startOpen = false,
+  save: send,
+}: EditableProps) {
   const { t } = useI18n()
+  const [open, setOpen] = useState(startOpen)
   const [own, setOwn] = useState(savedOwn)
   const [draft, setDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -729,20 +753,22 @@ function EditableText({ title, editLabel, own: savedOwn, generated, placeholder,
   }
   return (
     <div className="stack">
-      <div className="row profile-head">
-        <h4 className="grow">{title}</h4>
+      <FoldHead title={title} open={open || draft !== null} onToggle={() => setOpen(!open)}>
         {draft === null && (
           <button
             className="btn primary nav-action"
             title={editLabel}
             aria-label={editLabel}
-            onClick={() => setDraft(shown)}
+            onClick={() => {
+              setOpen(true)
+              setDraft(shown)
+            }}
           >
             <PencilIcon />
           </button>
         )}
-      </div>
-      {draft !== null ? (
+      </FoldHead>
+      {!open && draft === null ? null : draft !== null ? (
         <>
           <textarea
             className="input prompt"

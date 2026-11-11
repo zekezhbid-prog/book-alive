@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ANGLES,
   api,
   IMAGE_SIZES,
   type Angle,
@@ -10,7 +9,8 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { CopyIcon, GearIcon, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
+import FoldHead from './FoldHead'
+import { CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 
 interface Props {
@@ -51,57 +51,58 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
     setOpen(true) // show what was just added
     if (picker.current) picker.current.value = ''
   }
-  const patch = (image: ImageInfo, change: Parameters<typeof api.updateImage>[1]) =>
-    api.updateImage(image.id, change).then(load, fail)
   const remove = async (image: ImageInfo) => {
     if (await ask(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(load, fail)
   }
   // A card's references start folded so the description is in view; the project's
   // general gallery is the whole point of its page and stays open.
   const [open, setOpen] = useState(!entityId)
-  // The picture window: empty for a new picture, or open on an existing one.
-  const [dialog, setDialog] = useState<ImageInfo | 'new' | null>(null)
-  const closeDialog = useCallback(() => setDialog(null), [])
+  // The references window: every base view and picture in context, drawn or put in there.
+  const [dialog, setDialog] = useState(false)
+  const closeDialog = useCallback(() => setDialog(false), [])
 
   return (
     <div className="stack">
-      <div className="row">
-        {entityId ? (
-          <button className="fold" aria-expanded={open} onClick={() => setOpen(!open)}>
-            <span className="fold-mark">{open ? '▾' : '▸'}</span>
-            <h4>{t('gallery.title')}</h4>
-            {images && <span className="faint small">{images.length}</span>}
+      {/* On a card everything happens in one window: drawing, putting in, viewing; its
+          button is the pencil, like the other sections of the card. */}
+      {entityId ? (
+        <FoldHead
+          title={t('gallery.title')}
+          open={open}
+          onToggle={() => setOpen(!open)}
+          note={images && <span className="faint small">{images.length}</span>}
+        >
+          <button
+            className="btn primary nav-action"
+            title={t('gallery.settings')}
+            aria-label={t('gallery.settings')}
+            onClick={() => setDialog(true)}
+          >
+            <PencilIcon />
           </button>
-        ) : (
+        </FoldHead>
+      ) : (
+        <div className="row">
           <h4>{t('gallery.general')}</h4>
-        )}
-        <span className="spacer" />
-        <input
-          ref={picker}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          multiple
-          hidden
-          onChange={(e) => upload(e.target.files)}
-        />
-        {/* On a card everything starts from one window: drawing and uploading alike. */}
-        {entityId ? (
-          <button className="btn small" onClick={() => setDialog('new')}>
-            <PlusIcon />
-            {t('gallery.add')}
-          </button>
-        ) : (
+          <span className="spacer" />
+          <input
+            ref={picker}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            hidden
+            onChange={(e) => upload(e.target.files)}
+          />
           <button className="btn small" disabled={busy} onClick={() => picker.current?.click()}>
             {busy ? t('gallery.uploading') : t('gallery.upload')}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       {entityId && dialog && (
         <ImageDialog
           projectId={projectId}
           entityId={entityId}
-          image={dialog === 'new' ? null : dialog}
           bases={(images ?? []).filter((i) => i.is_main && i.current_style)}
           looks={(images ?? []).filter((i) => !i.is_main && (i.look_label || i.chapter_from_id))}
           withAngles={kind === 'character'}
@@ -130,17 +131,6 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
               </a>
               <figcaption>
                 <div className="row">
-                  {entityId && (
-                    <button
-                      className={`btn ghost small icon ${image.is_main ? 'on' : ''}`}
-                      aria-pressed={image.is_main}
-                      title={t(image.is_main ? 'gallery.unmake_main' : 'gallery.make_main')}
-                      aria-label={t(image.is_main ? 'gallery.unmake_main' : 'gallery.make_main')}
-                      onClick={() => patch(image, { is_main: !image.is_main })}
-                    >
-                      <StarIcon on={image.is_main} />
-                    </button>
-                  )}
                   {image.origin === 'upload' && (
                     <span className="mark-icon" title={t('gallery.uploaded')}>
                       <UploadIcon />
@@ -152,16 +142,6 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
                     </span>
                   )}
                   <span className="spacer" />
-                  {entityId && (
-                    <button
-                      className="btn ghost small icon"
-                      title={t('gallery.settings')}
-                      aria-label={t('gallery.settings')}
-                      onClick={() => setDialog(image)}
-                    >
-                      <GearIcon />
-                    </button>
-                  )}
                   <button
                     className="btn ghost small icon danger"
                     title={t('app.delete')}
@@ -201,37 +181,9 @@ function ChapterSelect({ value, chapters, empty, onChange }: SelectProps) {
   )
 }
 
-function AngleSelect({
-  value,
-  empty,
-  onChange,
-}: {
-  value: Angle | ''
-  empty: string
-  onChange: (angle: Angle | '') => void
-}) {
-  const { t } = useI18n()
-  return (
-    <select
-      className="input small"
-      value={value}
-      onChange={(e) => onChange(e.target.value as Angle | '')}
-    >
-      <option value="">{empty}</option>
-      {ANGLES.map((angle) => (
-        <option key={angle} value={angle}>
-          {t(`angle.${angle}`)}
-        </option>
-      ))}
-    </select>
-  )
-}
-
 interface DialogProps {
   projectId: string
   entityId: string
-  /** The picture whose settings are open; without it, the window starts empty for a new one. */
-  image: ImageInfo | null
   /** The card's base pictures in the current style: pictures in context are drawn from them. */
   bases: ImageInfo[]
   /** The card's pictures in context made earlier: their settings can be taken again. */
@@ -239,12 +191,11 @@ interface DialogProps {
   withAngles: boolean
   chapters: ChapterBrief[]
   hasStyle: boolean
-  /** A picture was drawn, uploaded or its settings were saved: the gallery reloads. */
+  /** A picture was drawn, put in or deleted: the gallery reloads. */
   onChanged: () => void
   onClose: () => void
 }
 
-type Change = Parameters<typeof api.updateImage>[1]
 type Mode = 'base' | 'context'
 
 // A base set is drawn face first: that picture becomes the reference for the rest.
@@ -329,18 +280,15 @@ function latest(bases: ImageInfo[], view: Angle) {
 }
 
 /**
- * One window for a picture: adding a new one (drawn or uploaded) and changing an existing
- * one's settings. A base picture shows the face or figure; a character's base pictures can
- * be drawn as a whole set of views from one prompt. A picture in context is drawn from the
- * base ones. Drawing is two steps, each started by the user: the text model writes the
- * prompt, then the image model draws it. Every drawn or uploaded picture is stored at once;
- * the settings of an existing one are a draft until "Apply". A scene opens it too, for a
- * card in that scene.
+ * The card's references in one window. A base picture shows the face or figure; a
+ * character's base pictures are slots of views, drawn as a set from one prompt or put in
+ * one by one. A picture in context is drawn from the base ones. A filled slot or picture is
+ * only looked at or deleted: nothing is drawn or put in over it. Every drawn or put in
+ * picture is stored at once. A scene opens it too, for a card in that scene.
  */
 export function ImageDialog({
   projectId,
   entityId,
-  image,
   bases,
   looks = [],
   withAngles,
@@ -350,19 +298,15 @@ export function ImageDialog({
   onClose,
 }: DialogProps) {
   const { t } = useI18n()
-  const [current, setCurrent] = useState(image)
-  const [mode, setMode] = useState<Mode>(image && !image.is_main ? 'context' : 'base')
-  const [angle, setAngle] = useState<Angle | ''>(image?.angle ?? '')
-  // Views of a new base set: the missing ones, or all of them when none is missing.
-  const [views, setViews] = useState<Angle[]>(() => {
-    const missing = SET_ORDER.filter((view) => !bases.some((b) => b.angle === view))
-    return missing.length ? missing : SET_ORDER
-  })
-  const [look, setLook] = useState(image?.look_label ?? '')
-  const [chapter, setChapter] = useState(image ? image.chapter_from_id || image.chapter_to_id : '')
-  const [prompt, setPrompt] = useState(image?.prompt ?? '')
+  const [current, setCurrent] = useState<ImageInfo | null>(null)
+  const [mode, setMode] = useState<Mode>('base')
+  // Ticked views; only empty slots are drawn, so a filled one counts only once deleted.
+  const [views, setViews] = useState<Angle[]>(SET_ORDER)
+  const [look, setLook] = useState('')
+  const [chapter, setChapter] = useState('')
+  const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageSize | ''>('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'save'>('')
+  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete'>('')
   const [progress, setProgress] = useState('')
   const [autoPrompt, setAutoPrompt] = useState(readAuto)
   const chooseAuto = (on: boolean) => {
@@ -386,20 +330,22 @@ export function ImageDialog({
   const picker = useRef<HTMLInputElement>(null)
 
   const isMain = mode === 'base'
-  // A new character picture in base mode is a set of views drawn from one prompt.
-  const asSet = isMain && withAngles && !image
+  // A character's base pictures are a set of views drawn from one prompt.
+  const asSet = isMain && withAngles
+  // The views the next press draws: ticked and still empty.
+  const wanted = SET_ORDER.filter((view) => views.includes(view) && !latest(bases, view))
   // Pictures in context are drawn from base ones, so they wait for the first.
-  const contextLocked = !image && bases.length === 0 && !current?.is_main
+  const contextLocked = bases.length === 0 && !current?.is_main
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
   const firstView = asSet ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null) : null
   const shown = current ?? firstView ?? (!isMain ? pickedLook : null)
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
-    ? { angle: withAngles ? angle : ('' as const), look_label: '', chapter_from_id: '', chapter_to_id: '' }
+    ? { angle: '' as const, look_label: '', chapter_from_id: '', chapter_to_id: '' }
     : { angle: '' as const, look_label: look.trim(), chapter_from_id: chapter, chapter_to_id: chapter }
   // The server tells a look by its label or chapter: without them it would draw a base picture.
-  const ready = isMain ? !asSet || views.length > 0 : Boolean(look.trim() || chapter)
+  const ready = isMain ? !asSet || wanted.length > 0 : Boolean(look.trim() || chapter)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -412,8 +358,6 @@ export function ImageDialog({
     try {
       const written = await api.imagePrompt(entityId, { ...request, view_free: asSet, reference_ids })
       setPrompt(written.prompt)
-      // The view the service picked stays chosen, so the picture is drawn as written.
-      if (isMain && !asSet) setAngle(written.angle)
       return written
     } catch (e) {
       setError(errorText(t, e))
@@ -459,18 +403,16 @@ export function ImageDialog({
     }
     // Automatic prompt: written quietly right before drawing, nothing to check in between.
     let text = prompt
-    let chosen = angle
     if (autoPrompt) {
       setBusy('prompt')
       const written = await collect(reference_ids)
       if (!written) return setBusy('')
       text = written.prompt
-      if (isMain && !asSet) chosen = written.angle
     }
     setBusy('image')
     try {
       if (asSet) {
-        const order = SET_ORDER.filter((view) => views.includes(view))
+        const order = wanted
         for (const [n, view] of order.entries()) {
           setProgress(
             t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }),
@@ -488,18 +430,9 @@ export function ImageDialog({
           onChanged()
         }
         setProgress(t('generate.set.done', { n: order.length }))
-        // A drawn view is not drawn again by the next press unless ticked anew.
-        setViews([])
       } else {
-        const made = await api.generateImage(entityId, {
-          ...request,
-          ...(isMain && withAngles ? { angle: chosen } : {}),
-          prompt: text,
-          size,
-          reference_ids,
-        })
+        const made = await api.generateImage(entityId, { ...request, prompt: text, size, reference_ids })
         setCurrent(made)
-        setAngle(made.angle)
         onChanged()
       }
     } catch (e) {
@@ -534,10 +467,25 @@ export function ImageDialog({
           ? { ...request, is_main: false }
           : { is_main: true, angle: target, look_label: '' },
       )
-      // A filled view is not drawn by the next press.
-      if (target !== 'look') setViews((had) => had.filter((v) => v !== target))
       setPeek('')
       setCurrent(saved)
+      onChanged()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  // Deleting is the only way to change a filled slot: the empty one can be drawn or filled
+  // again, and a deleted view is ticked to be drawn.
+  const remove = async (target: ImageInfo) => {
+    if (!(await ask(t('gallery.delete.confirm')))) return
+    setBusy('delete')
+    setError('')
+    try {
+      await api.deleteImage(target.id)
+      if (target.angle) setViews((had) => (had.includes(target.angle as Angle) ? had : [...had, target.angle as Angle]))
+      if (current?.id === target.id) setCurrent(null)
+      if (picked === target.id) pickLook('')
       onChanged()
     } catch (e) {
       setError(errorText(t, e))
@@ -582,7 +530,7 @@ export function ImageDialog({
   }
 
   // A picture copied elsewhere goes in like a file: Ctrl+V in the window or the "Paste" button.
-  const canAdd = !image && busy === ''
+  const canAdd = busy === ''
   useEffect(() => {
     if (!canAdd) return
     const onPaste = (e: ClipboardEvent) => {
@@ -620,29 +568,6 @@ export function ImageDialog({
     setCurrent(null)
   }
 
-  const apply = async () => {
-    // A new picture is stored the moment it is drawn or uploaded.
-    if (!image || !current) return onClose()
-    const change: Change = {}
-    if (isMain !== current.is_main) change.is_main = isMain
-    if (isMain && request.angle !== current.angle) change.angle = request.angle
-    if (!isMain && request.look_label !== current.look_label) change.look_label = request.look_label
-    if (!isMain && (chapter !== current.chapter_from_id || chapter !== current.chapter_to_id)) {
-      change.chapter_from_id = chapter
-      change.chapter_to_id = chapter
-    }
-    if (!Object.keys(change).length) return onClose()
-    setBusy('save')
-    try {
-      await api.updateImage(current.id, change)
-      onChanged()
-      onClose()
-    } catch (e) {
-      setError(errorText(t, e))
-      setBusy('')
-    }
-  }
-
   const toggleView = (view: Angle) =>
     setViews((chosen) => (chosen.includes(view) ? chosen.filter((v) => v !== view) : [...chosen, view]))
 
@@ -650,7 +575,7 @@ export function ImageDialog({
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog generator image-dialog">
         <div className="row">
-          <h2>{t(image ? 'gallery.settings' : 'gallery.add.title')}</h2>
+          <h2>{t('gallery.settings')}</h2>
           <span className="spacer" />
           <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
             ✕
@@ -687,7 +612,7 @@ export function ImageDialog({
               />
               {SET_ORDER.map((view) => {
                 const made = latest(bases, view)
-                const ticked = views.includes(view)
+                const ticked = !made && views.includes(view)
                 return (
                   <div
                     key={view}
@@ -708,23 +633,37 @@ export function ImageDialog({
                       {made && <img src={made.url} alt="" loading="lazy" />}
                       {drawing === view && <span className="view-slot-busy" aria-hidden />}
                     </button>
-                    <button
-                      className="slot-plus"
-                      disabled={busy !== ''}
-                      title={t('gallery.insert')}
-                      aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
-                      onClick={() => setMenuFor(menuFor === view ? '' : view)}
-                    >
-                      <ThinPlus />
-                    </button>
+                    {made ? (
+                      <button
+                        className="btn ghost small icon danger slot-drop"
+                        disabled={busy !== ''}
+                        title={t('app.delete')}
+                        aria-label={`${t('app.delete')}: ${t(`angle.${view}`)}`}
+                        onClick={() => remove(made)}
+                      >
+                        <TrashIcon />
+                      </button>
+                    ) : (
+                      <button
+                        className="slot-plus"
+                        disabled={busy !== ''}
+                        title={t('gallery.insert')}
+                        aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
+                        onClick={() => setMenuFor(menuFor === view ? '' : view)}
+                      >
+                        <ThinPlus />
+                      </button>
+                    )}
                     </div>
                     {insertMenu(view)}
                     <label className="view-slot-label small">
+                      {/* A filled view keeps the box's place, so the labels stay in line. */}
                       <input
                         type="checkbox"
+                        className={made ? 'hidden-check' : ''}
                         checked={ticked}
-                        disabled={busy !== ''}
-                        title={t(made ? 'generate.slot.redraw' : 'generate.slot.draw')}
+                        disabled={busy !== '' || !!made}
+                        title={t('generate.slot.draw')}
                         onChange={() => toggleView(view)}
                       />
                       {t(`angle.${view}`)}
@@ -735,7 +674,7 @@ export function ImageDialog({
             </div>
           )}
           {/* In context: the new picture first, then every earlier one; a click takes its settings. */}
-          {!isMain && !image && (
+          {!isMain && (
             <div className="look-strip">
               <input
                 ref={slotPicker}
@@ -763,22 +702,39 @@ export function ImageDialog({
                 {insertMenu('look')}
               </div>
               {looks.map((item) => (
-                <button
-                  key={item.id}
-                  className={`look-tile ${picked === item.id ? 'shown' : ''}`}
-                  disabled={busy !== ''}
-                  title={[item.look_label, chapters.find((c) => c.id === item.chapter_from_id)?.title]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  onClick={() => {
-                    setPeek('')
-                    pickLook(item.id)
-                  }}
-                >
-                  <img src={item.url} alt="" loading="lazy" />
-                </button>
+                <div key={item.id} className="look-tile-wrap">
+                  <button
+                    className={`look-tile ${picked === item.id ? 'shown' : ''}`}
+                    disabled={busy !== ''}
+                    title={[item.look_label, chapters.find((c) => c.id === item.chapter_from_id)?.title]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    onClick={() => {
+                      setPeek('')
+                      pickLook(item.id)
+                    }}
+                  >
+                    <img src={item.url} alt="" loading="lazy" />
+                  </button>
+                  <button
+                    className="btn ghost small icon danger slot-drop"
+                    disabled={busy !== ''}
+                    title={t('app.delete')}
+                    aria-label={t('app.delete')}
+                    onClick={() => remove(item)}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               ))}
             </div>
+          )}
+          {/* What the picture in view was drawn from; a picture put in has no prompt. */}
+          {!peek && (shown?.prompt || pickedLook?.prompt) && (
+            <details key={(shown ?? pickedLook)!.id} className="shown-prompt">
+              <summary className="muted small">{t('gallery.prompt.show')}</summary>
+              <p className="small prompt-last">{(shown ?? pickedLook)!.prompt}</p>
+            </details>
           )}
           </div>
           <div className="stack">
@@ -798,7 +754,7 @@ export function ImageDialog({
                     setMenuFor('')
                     setPeek('')
                     // A picture just made in the other mode is not this mode's picture.
-                    if (!image) setCurrent(null)
+                    setCurrent(null)
                   }}
                 >
                   {t(`gallery.mode.${option}`)}
@@ -811,20 +767,7 @@ export function ImageDialog({
             <div className="mode-fields">
               <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
                 <p className="muted small">{t(asSet ? 'generate.hint.base_set' : 'generate.hint.main')}</p>
-                {asSet ? (
-                  <p className="muted small">{t('generate.views.hint')}</p>
-                ) : (
-                  withAngles && (
-                    <label className="stack field">
-                      <span className="small muted">{t('gallery.angle')}</span>
-                      <AngleSelect
-                        value={angle}
-                        empty={t(current ? 'gallery.angle.none' : 'generate.angle.auto')}
-                        onChange={setAngle}
-                      />
-                    </label>
-                  )
-                )}
+                {asSet && <p className="muted small">{t('generate.views.hint')}</p>}
               </div>
               <div className="stack" inert={isMain} style={{ visibility: isMain ? 'hidden' : 'visible' }}>
                 <p className="muted small">{t('generate.hint.look')}</p>
@@ -850,7 +793,6 @@ export function ImageDialog({
               </div>
             </div>
             {/* The user's own samples: shown small, drawn from or put in as they are. */}
-            {!image && (
               <div className="stack field samples">
                 <input
                   ref={picker}
@@ -919,7 +861,6 @@ export function ImageDialog({
                   </>
                 )}
               </div>
-            )}
             <div className="stack field">
               <div className="row">
                 <span className="small muted">{t('generate.prompt.label')}</span>
@@ -998,7 +939,7 @@ export function ImageDialog({
               : busy === 'image'
               ? t('generate.image.busy')
               : asSet
-                ? t('generate.set', { n: views.length })
+                ? t('generate.set', { n: wanted.length })
                 : t('generate.image')}
           </button>
         </div>
@@ -1008,18 +949,6 @@ export function ImageDialog({
           </div>
         </div>
         {error && <p className="error">{error}</p>}
-        {/* A new picture is stored as soon as it is made: the cross above closes the window. */}
-        {image && (
-          <div className="row">
-            <span className="spacer" />
-            <button className="btn ghost" onClick={onClose}>
-              {t('app.cancel')}
-            </button>
-            <button className="btn primary" disabled={busy !== ''} onClick={apply}>
-              {t('gallery.apply')}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )

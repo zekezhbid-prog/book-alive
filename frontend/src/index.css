@@ -291,7 +291,8 @@ details summary { cursor: pointer; margin-bottom: 8px; }
 .fold { display: inline-flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; cursor: pointer; color: inherit; }
 .fold h4 { margin: 0; }
 .fold:hover h4, .fold:hover .fold-mark { color: var(--accent); }
-.fold-mark { width: 1em; color: var(--muted); }
+.fold-mark { color: var(--muted); width: 16px; height: 16px; flex: none; transition: transform 0.15s; }
+.fold-mark.open { transform: rotate(90deg); }
 .btn.active { border-color: var(--accent); color: var(--accent); }
 
 /* The picture generator opens over the page and scrolls on its own when it grows. */
@@ -420,8 +421,12 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .slot-plus { position: absolute; inset: 0; margin: auto; z-index: 2; width: 52px; height: 52px; padding: 0; border: 0; background: transparent; color: var(--faint); cursor: pointer; transition: color 0.15s, filter 0.15s, transform 0.15s; }
 .slot-plus svg { width: 100%; height: 100%; display: block; }
 .slot-plus:hover, .view-slot-box:hover .slot-plus { color: var(--accent); filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.8)); transform: scale(1.06); }
-.view-slot.filled .slot-plus { inset: auto 4px auto auto; top: 4px; width: 28px; height: 28px; opacity: 0; color: var(--accent); }
-.view-slot.filled .view-slot-box:hover .slot-plus { opacity: 1; }
+/* A filled slot or picture: only a bin, shown under the pointer. */
+.slot-drop { position: absolute; top: 4px; right: 4px; z-index: 2; background: var(--panel); opacity: 0; transition: opacity 0.15s; }
+.view-slot-box:hover .slot-drop, .look-tile-wrap:hover .slot-drop, .slot-drop:focus-visible { opacity: 1; }
+.look-tile-wrap { position: relative; }
+.view-slot-label .hidden-check { visibility: hidden; }
+.shown-prompt { margin-top: 10px; }
 .look-new-icon { width: 30px; height: 30px; display: block; color: var(--faint); transition: color 0.15s, filter 0.15s; }
 .look-new-icon svg { width: 100%; height: 100%; display: block; }
 .look-new:hover .look-new-icon { color: var(--accent); filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.8)); }

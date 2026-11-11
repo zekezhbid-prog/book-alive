@@ -399,7 +399,6 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
         <ImageDialog
           projectId={projectId}
           entityId={adding.who.id}
-          image={null}
           bases={adding.bases}
           withAngles={adding.who.kind === 'character'}
           chapters={chapters}
