@@ -75,6 +75,15 @@ class Summaries(BaseModel):
     summaries: list[CardSummary] = Field(default_factory=list)
 
 
+class GeneralText(BaseModel):
+    number: int
+    text: str = ""
+
+
+class GeneralTexts(BaseModel):
+    texts: list[GeneralText] = Field(default_factory=list)
+
+
 # ---------- helpers ----------
 
 
@@ -637,6 +646,38 @@ def summarize_cards(session: Session, model: TextModel, project_id: str, kind: s
                 card.summary = item.text.strip()
             if item.appearance.strip():
                 card.appearance = item.appearance.strip()
+        session.commit()
+    keep_general(session, model, cards, kind)
+
+
+GENERAL_BATCH = 8
+
+
+def keep_general(session: Session, model: TextModel, cards: list[Entity], kind: str) -> None:
+    """A separate last pass over the written descriptions: whatever belongs to one chapter
+    or scene ("reminds her to eat") is taken out, only the general part stays. The pass may
+    only remove: an answer that is empty or grew noticeably keeps the text as it was."""
+    cards = [c for c in cards if c.summary.strip()]
+    for start in range(0, len(cards), GENERAL_BATCH):
+        batch = cards[start : start + GENERAL_BATCH]
+        listing = "\n\n".join(
+            f"[{n}] {c.name}\n{c.summary.strip()}" for n, c in enumerate(batch, 1)
+        )
+        try:
+            answer = model.invoke_json(
+                f"check_{kind}s",
+                [SystemMessage(prompts.general_system(kind)), HumanMessage(listing)],
+                GeneralTexts,
+            )
+        except BadModelOutput:
+            continue
+        for item in answer.texts:
+            if not 1 <= item.number <= len(batch):
+                continue
+            card = batch[item.number - 1]
+            text = item.text.strip()
+            if text and len(text) <= len(card.summary.strip()) * 1.1:
+                card.summary = text
         session.commit()
 
 

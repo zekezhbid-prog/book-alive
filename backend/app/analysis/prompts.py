@@ -136,8 +136,8 @@ by chapter: "about" facts tell who or what it is, "looks" facts how it looks (wi
 of the book), "in one chapter" facts how it looked at one moment.
 
 For every card write "text", one general description in the language of the facts: who or \
-what it is, its role and occupation, its ties to others, what it does in the story from \
-beginning to end, and the traits it shows throughout. Connected prose, not a list and not \
+what it is, its role and occupation, its ties to others, the main line of what it does in \
+the story from beginning to end (not single episodes), and the traits it shows throughout. Connected prose, not a list and not \
 quotes.
 - The length follows what the facts tell: two or three sentences for a minor one with few \
 facts; for a main one that appears in many chapters, a full paragraph of six to ten sentences \
@@ -162,6 +162,27 @@ Use only the given facts and the texts so far. Never invent anything.
 
 Reply with one JSON object and nothing else:
 {{"summaries": [{{"number": 1, "text": "", "appearance": ""}}]}}"""
+
+
+GENERAL_SYSTEM = """Below are numbered general descriptions of {noun} from one book. A general \
+description tells who or what it is, its role and occupation, its ties to others, the main \
+line of what it does across the story and its lasting traits.
+
+Check every description and remove what belongs to a single chapter or scene rather than to \
+the card as a whole: one particular thing done or said once ("he reminds her to eat", "she \
+opens the gate for them"), one moment's mood, place or clothing, a detail of one episode. \
+Such things are kept chapter by chapter elsewhere; here they do not belong. A habit or a \
+duty the description presents as lasting stays.
+- Only remove, and mend the grammar where a removal breaks a sentence. Never add anything, \
+never reword what stays, keep the language.
+- When nothing needs removing, return the description unchanged.
+
+Reply with one JSON object and nothing else, an entry for every description:
+{{"texts": [{{"number": 1, "text": ""}}]}}"""
+
+
+def general_system(kind: str) -> str:
+    return GENERAL_SYSTEM.format(noun=_noun(kind))
 
 
 def _noun(kind: str) -> str:

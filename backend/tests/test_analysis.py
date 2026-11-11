@@ -78,6 +78,12 @@ class FakeModel:
                     for n in numbers
                 ]
             )
+        if schema is analysis.GeneralTexts:
+            # The check returns every description unchanged.
+            found = re.findall(r"^\[(\d+)\] [^\n]*\n([^\n]*)", messages[-1].content, re.MULTILINE)
+            return analysis.GeneralTexts(
+                texts=[analysis.GeneralText(number=int(n), text=t) for n, t in found]
+            )
         if operation.startswith("find_") and self.bad_json_times:
             self.bad_json_times -= 1
             raise BadModelOutput("Expecting property name enclosed in double quotes")
@@ -141,6 +147,7 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
         "find_characters",
         "merge_characters",
         "summarize_characters",
+        "check_characters",
     ]
 
     people = cast(session, project)
@@ -173,7 +180,12 @@ def test_failed_run_resumes_without_paying_twice(session, project):
     again = run(session, project, model)
     assert again.status == "done"
     # The first chapter comes from the stored answer: only the second one is read.
-    assert model.calls == ["find_characters", "merge_characters", "summarize_characters"]
+    assert model.calls == [
+        "find_characters",
+        "merge_characters",
+        "summarize_characters",
+        "check_characters",
+    ]
 
 
 def test_rerun_is_idempotent(session, project):
@@ -183,7 +195,7 @@ def test_rerun_is_idempotent(session, project):
     model.calls.clear()
     run(session, project, model)
     assert {n: len(e.facts) for n, e in cast(session, project).items()} == before
-    assert model.calls == ["merge_characters", "summarize_characters"]
+    assert model.calls == ["merge_characters", "summarize_characters", "check_characters"]
 
 
 def test_estimate_skips_chapters_already_read(session, project):
@@ -608,3 +620,27 @@ def test_a_card_without_a_name_joins_the_named_one_it_matches(session, project):
         e for e in analysis._entities(session, project.id, "character") if e.name == "Люта"
     )
     assert "старик" in lyuta.aliases and named.id
+
+
+def test_general_check_takes_out_one_chapter_and_never_adds(session, project):
+    run(session, project, FakeModel())
+    people = cast(session, project)
+    people["Рыхташ"].summary = "Старый мельник, связной князя. Он напоминает ей поесть."
+    people["Люта"].summary = "Княжна."
+    session.commit()
+    seen = []
+
+    class Checker:
+        def invoke_json(self, operation, messages, schema):
+            seen.append(messages[-1].content)
+            return analysis.GeneralTexts(
+                texts=[
+                    analysis.GeneralText(number=1, text="Княжна, дочь князя, смелая и умная."),
+                    analysis.GeneralText(number=2, text="Старый мельник, связной князя."),
+                ]
+            )
+
+    analysis.keep_general(session, Checker(), [people["Люта"], people["Рыхташ"]], "character")
+    assert "[2] Рыхташ\nСтарый мельник, связной князя. Он напоминает ей поесть." in seen[0]
+    assert people["Рыхташ"].summary == "Старый мельник, связной князя."
+    assert people["Люта"].summary == "Княжна."  # the answer grew: it added, so it is ignored
