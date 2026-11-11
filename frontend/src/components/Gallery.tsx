@@ -10,7 +10,7 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { CopyIcon, GearIcon, GoldPlusSymbol, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
+import { CopyIcon, GearIcon, PlusIcon, SparklesIcon, StarIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 
 interface Props {
@@ -256,6 +256,15 @@ const SET_ORDER: Angle[] = [
   'full_side',
   'full_back',
 ]
+
+/** A large thin plus for empty places: faint at rest, glowing gold under the pointer. */
+function ThinPlus() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden>
+      <path d="M24 8v32M8 24h32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+    </svg>
+  )
+}
 
 /** A sample picked in the window; `id` once it is stored on the server. */
 interface Sample {
@@ -686,6 +695,7 @@ export function ImageDialog({
                       made && shown?.id === made.id ? 'shown' : ''
                     }`}
                   >
+                    <div className="view-slot-box">
                     <button
                       className="view-slot-face"
                       disabled={!made}
@@ -705,8 +715,9 @@ export function ImageDialog({
                       aria-label={`${t('gallery.insert')}: ${t(`angle.${view}`)}`}
                       onClick={() => setMenuFor(menuFor === view ? '' : view)}
                     >
-                      <GoldPlusSymbol />
+                      <ThinPlus />
                     </button>
+                    </div>
                     {insertMenu(view)}
                     <label className="view-slot-label small">
                       <input
@@ -745,7 +756,7 @@ export function ImageDialog({
                   }}
                 >
                   <span className="look-new-icon" aria-hidden>
-                    <GoldPlusSymbol />
+                    <ThinPlus />
                   </span>
                   <span className="small">{t('gallery.look.new')}</span>
                 </button>
@@ -971,10 +982,8 @@ export function ImageDialog({
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        {/* The main action across the whole window, in its bottom row. */}
-        <div className="stack generate-row">
+            {/* At the bottom of the column, in one row with the last row of slots. */}
+            <div className="stack generate-row">
             <div className="row wrap">
           <button
             className="btn primary generate-big"
@@ -995,6 +1004,8 @@ export function ImageDialog({
         </div>
         {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
         {progress && <p className="muted small">{progress}</p>}
+            </div>
+          </div>
         </div>
         {error && <p className="error">{error}</p>}
         {/* A new picture is stored as soon as it is made: the cross above closes the window. */}

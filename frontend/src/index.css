@@ -382,10 +382,9 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .image-dialog .picture-slot img { max-height: 340px; }
 .view-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .view-slot { display: flex; flex-direction: column; gap: 4px; }
-.view-slot-face { position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); background: var(--panel-2); cursor: default; }
-.view-slot.filled .view-slot-face { border-style: solid; cursor: pointer; }
-.view-slot.filled .view-slot-face:hover { border-color: var(--accent); }
-.view-slot.ticked .view-slot-face { border-color: var(--accent); }
+.view-slot-face { position: relative; width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden; border: 1px solid var(--line-2); transition: border-color 0.15s, box-shadow 0.15s; border-radius: var(--radius-sm); background: var(--panel-2); cursor: default; }
+.view-slot.filled .view-slot-face { cursor: pointer; }
+.view-slot-box:hover .view-slot-face { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line), 0 6px 20px rgba(250, 190, 40, 0.15); }
 .view-slot.shown .view-slot-face { box-shadow: 0 0 0 2px var(--accent); }
 .view-slot-face img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .view-slot-busy { position: absolute; inset: 0; margin: auto; width: 26px; height: 26px; border: 3px solid var(--accent-line); border-top-color: var(--accent); border-radius: 50%; animation: slot-spin 0.9s linear infinite; }
@@ -417,14 +416,15 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .look-tile.shown { box-shadow: 0 0 0 2px var(--accent); }
 .look-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .view-slot { position: relative; }
-.slot-plus { position: absolute; top: 4px; right: 4px; z-index: 2; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; cursor: pointer; transition: transform 0.15s, filter 0.15s; }
-.slot-plus svg { width: 100%; height: 100%; overflow: visible; }
-.slot-plus:hover { transform: scale(1.12); filter: brightness(1.15); }
-.view-slot:not(.filled) .slot-plus { top: calc(50% - 32px); left: calc(50% - 22px); right: auto; width: 44px; height: 44px; }
-.look-new-icon { width: 34px; height: 34px; display: block; transition: transform 0.15s; }
-.look-new-icon svg { width: 100%; height: 100%; overflow: visible; }
-.look-new:hover .look-new-icon { transform: scale(1.1); }
-.generate-row { gap: 6px; }
+.view-slot-box { position: relative; }
+.slot-plus { position: absolute; inset: 0; margin: auto; z-index: 2; width: 52px; height: 52px; padding: 0; border: 0; background: transparent; color: var(--faint); cursor: pointer; transition: color 0.15s, filter 0.15s, transform 0.15s; }
+.slot-plus svg { width: 100%; height: 100%; display: block; }
+.slot-plus:hover, .view-slot-box:hover .slot-plus { color: var(--accent); filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.8)); transform: scale(1.06); }
+.view-slot.filled .slot-plus { inset: auto 4px auto auto; top: 4px; width: 28px; height: 28px; opacity: 0; color: var(--accent); }
+.view-slot.filled .view-slot-box:hover .slot-plus { opacity: 1; }
+.look-new-icon { width: 30px; height: 30px; display: block; color: var(--faint); transition: color 0.15s, filter 0.15s; }
+.look-new-icon svg { width: 100%; height: 100%; display: block; }
+.look-new:hover .look-new-icon { color: var(--accent); filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.8)); }
 .insert-menu { top: 36px; right: 0; }
 .look-new-wrap { position: relative; }
 .look-new-wrap .insert-menu { left: 0; right: auto; top: 78px; }
@@ -611,3 +611,7 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
   .card-head .entity-name { order: 0; flex: 1 1 calc(100% - 80px); min-width: 0; }
   .card-head .card-close { order: 1; }
 }
+/* The image window: the right column reaches down so "Generate" sits level with the last
+   row of slots. */
+.image-dialog .dialog-body { align-items: stretch; }
+.generate-row { gap: 6px; margin-top: auto; }
