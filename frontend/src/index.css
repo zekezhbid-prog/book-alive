@@ -226,8 +226,15 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 /* ---------- pictures ---------- */
 .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 button.mode-option { background: transparent; text-align: left; }
-.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
-.shot { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); transition: border-color 0.2s; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.shot { position: relative; margin: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); transition: border-color 0.2s; }
+/* The caption lies over the picture: the tile is exactly the picture, every tile one size.
+   Marks stay in view at the bottom, the bin shows up in the corner on hover. */
+.shot figcaption.over { position: absolute; inset: 0; padding: 6px; pointer-events: none; }
+.shot figcaption.over .row { height: 100%; align-items: flex-end; }
+.shot figcaption.over .mark-icon, .shot figcaption.over .badge { pointer-events: auto; background: var(--panel); border-radius: 6px; padding: 2px 4px; }
+.shot figcaption.over .slot-drop { pointer-events: auto; }
+.shot:hover .slot-drop { opacity: 1; }
 .shot:hover { border-color: var(--accent-line); }
 .shot img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--panel-2); }
 .shot.other-style img { opacity: 0.45; }

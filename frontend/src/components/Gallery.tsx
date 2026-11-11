@@ -129,7 +129,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
               <a href={image.url} target="_blank" rel="noreferrer">
                 <img src={image.url} alt="" loading="lazy" />
               </a>
-              <figcaption>
+              <figcaption className="over">
                 <div className="row">
                   {image.origin === 'upload' && (
                     <span className="mark-icon" title={t('gallery.uploaded')}>
@@ -143,7 +143,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle 
                   )}
                   <span className="spacer" />
                   <button
-                    className="btn ghost small icon gold"
+                    className="btn ghost small icon gold slot-drop"
                     title={t('app.delete')}
                     aria-label={t('app.delete')}
                     onClick={() => remove(image)}
