@@ -182,9 +182,25 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             )}
             {finished && run && (
               <div className="notice row run-done">
-                <span className="grow">
-                  ✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}
-                </span>
+                <div className="grow stack">
+                  <span>✅ {t('run.done', { total: run.total, cards: list?.length ?? 0 })}</span>
+                  {/* What the reconciliation did, so a merge is never invisible. */}
+                  <span className="muted">
+                    {t('run.report', { merged: run.merged.length, adopted: run.adopted.length })}
+                  </span>
+                  {run.merged.length + run.adopted.length > 0 && (
+                    <details>
+                      <summary className="muted">{t('run.report.list')}</summary>
+                      <ul className="facts">
+                        {[...run.adopted, ...run.merged].map(([from, into], i) => (
+                          <li key={i}>
+                            {from} → <b>{into}</b>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
                 <button className="btn ghost small" aria-label={t('app.close')} onClick={() => setFinished(false)}>
                   ✕
                 </button>

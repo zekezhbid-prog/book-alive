@@ -131,37 +131,47 @@ def adopt_system(kind: str) -> str:
 
 
 SUMMARY_SYSTEM = """Below are numbered cards of {noun} from one book. Each lists the chapters where \
-it appears, the texts written for it so far (if any) and facts taken from the text, chapter \
-by chapter: "about" facts tell who or what it is, "looks" facts how it looks (with the words \
-of the book), "in one chapter" facts how it looked at one moment.
+it appears, the description written for it so far (if any) and facts taken from the text, \
+chapter by chapter: "about" facts tell who or what it is, "looks" facts how it looks.
 
 For every card write "text", one general description in the language of the facts: who or \
 what it is, its role and occupation, its ties to others, the main line of what it does in \
-the story from beginning to end (not single episodes), and the traits it shows throughout. Connected prose, not a list and not \
-quotes.
-- The length follows what the facts tell: two or three sentences for a minor one with few \
-facts; for a main one that appears in many chapters, a full paragraph of six to ten sentences \
-that covers the whole book, not just its first chapters.
-- A text written so far is the base: keep what the facts support, add what the new facts \
-tell, correct or drop what the facts do not support.
+the story from beginning to end (not single episodes), and the traits it shows throughout. \
+Connected prose, not a list and not quotes.
+- Use all the facts given. For a minor one with few facts, three to five sentences when the \
+facts allow; for a main one that appears in many chapters, a full paragraph of six to ten \
+sentences that covers the whole book, not just its first chapters. Never pad beyond the facts.
+- A description written so far is the base: keep what the facts support, add what the new \
+facts tell, correct or drop what the facts do not support.
 - The description is of the card as a whole, not of a moment: leave out moods, feelings \
 and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
 a lasting trait.
-
-Also write "appearance": how it looks, for an illustrator who will draw it, 2 to 5 \
-sentences in the language of the facts: {appearance}. Looks only: no role, plot or \
-character traits.
-- A lasting feature only when the book states it as one. An action, a gesture or a moment \
-(squinting, limping once, a flushed face) is not a feature of the body; never turn it into \
-one. Check the words of the book given with each looks fact.
-- Details from a single chapter ("in one chapter") belong only when they repeat or nothing \
-lasting says otherwise; the same coat in several chapters is the usual clothing.
-- When the facts say nothing about looks, write one short sentence saying the book does not \
-describe them.
-Use only the given facts and the texts so far. Never invent anything.
+Use only the given facts. Never invent anything.
 
 Reply with one JSON object and nothing else:
-{{"summaries": [{{"number": 1, "text": "", "appearance": ""}}]}}"""
+{{"summaries": [{{"number": 1, "text": ""}}]}}"""
+
+
+LOOKS_SYSTEM = """Below is one of the {noun} of a book: its name, the chapters where it appears \
+and every looks detail found in the text, each with its chapter and the words of the book.
+
+Write "appearance": how it looks, for an illustrator who will draw it, in the language of \
+the details: {appearance}.
+- Keep every concrete detail: colours, materials, cut and ornament of clothes (buttons, \
+embroidery, belts), hair and beard, marks, size and shape, what it is made of. Precision \
+matters more than brevity: as long as the details need, usually three to eight sentences.
+- Check each detail against the words of the book: if they show it belongs to someone or \
+something else, or to a moment (a gesture, an action, a flushed face, squinting once), \
+leave it out.
+- When details contradict (grey hair and red hair), keep the one the book repeats, or the \
+one it states plainly, never both and never a mix.
+- Clothes, objects and marks seen in one chapter belong too. When they differ between \
+chapters, describe what repeats as the usual look and name the rest with where it is worn \
+("in the chapter X he wears ...").
+Looks only: no role, plot or character traits. Use only the details below; never invent.
+
+Reply with one JSON object and nothing else:
+{{"appearance": ""}}"""
 
 
 GENERAL_SYSTEM = """Below are numbered general descriptions of {noun} from one book. A general \
@@ -198,7 +208,11 @@ _APPEARANCE = {
 
 
 def summary_system(kind: str) -> str:
-    return SUMMARY_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind])
+    return SUMMARY_SYSTEM.format(noun=_noun(kind))
+
+
+def looks_system(kind: str) -> str:
+    return LOOKS_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind])
 
 
 def extract_system(kind: str) -> str:

@@ -136,6 +136,9 @@ export interface Run {
   done: number
   error: string
   created_at: string
+  /** What the reconciliation did: [name, merged into] and [unnamed card, joined to]. */
+  merged: [string, string][]
+  adopted: [string, string][]
 }
 
 export interface EntityBrief {

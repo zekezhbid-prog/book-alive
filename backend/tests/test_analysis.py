@@ -72,12 +72,12 @@ class FakeModel:
             numbers = re.findall(r"^\[(\d+)\]", messages[-1].content, re.MULTILINE)
             return analysis.Summaries(
                 summaries=[
-                    analysis.CardSummary(
-                        number=int(n), text=f"Связный рассказ {n}.", appearance=f"Облик {n}."
-                    )
+                    analysis.CardSummary(number=int(n), text=f"Связный рассказ {n}.")
                     for n in numbers
                 ]
             )
+        if schema is analysis.Looks:
+            return analysis.Looks(appearance="Облик: " + messages[-1].content.split("\n")[0])
         if schema is analysis.GeneralTexts:
             # The check returns every description unchanged.
             found = re.findall(r"^\[(\d+)\] [^\n]*\n([^\n]*)", messages[-1].content, re.MULTILINE)
@@ -148,10 +148,12 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
         "merge_characters",
         "summarize_characters",
         "check_characters",
+        "looks_characters",  # one per card that has looks: only Рыхташ
     ]
 
     people = cast(session, project)
     assert set(people) == {"Рыхташ", "Люта"}  # "Дед" was merged into "Рыхташ"
+    assert record.report == {"merged": [["Дед", "Рыхташ"]], "adopted": []}  # shown at the end
     rykhtash = people["Рыхташ"]
     # "старик" is a common noun, not a name: it is not kept as an alias.
     assert set(rykhtash.aliases) == {"Мельник", "Дед"}
@@ -185,6 +187,7 @@ def test_failed_run_resumes_without_paying_twice(session, project):
         "merge_characters",
         "summarize_characters",
         "check_characters",
+        "looks_characters",
     ]
 
 
@@ -195,7 +198,12 @@ def test_rerun_is_idempotent(session, project):
     model.calls.clear()
     run(session, project, model)
     assert {n: len(e.facts) for n, e in cast(session, project).items()} == before
-    assert model.calls == ["merge_characters", "summarize_characters", "check_characters"]
+    assert model.calls == [
+        "merge_characters",
+        "summarize_characters",
+        "check_characters",
+        "looks_characters",
+    ]
 
 
 def test_estimate_skips_chapters_already_read(session, project):
@@ -561,17 +569,20 @@ def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
 
     class Watching(FakeModel):
         def invoke_json(self, operation, messages, schema):
-            if schema is analysis.Summaries:
-                seen.append(messages[-1].content)
+            seen.append((schema, messages[-1].content))
             return super().invoke_json(operation, messages, schema)
 
     analysis.summarize_cards(session, Watching(), project.id, "character")
-    listing = next(text for text in seen if "Рыхташ" in text)
+    listing = next(
+        text for schema, text in seen if schema is analysis.Summaries and "Рыхташ" in text
+    )
     assert "description so far: Старый мельник, связной князя." in listing
-    assert card.appearance.startswith("Облик")  # written together with the description
-    # One chapter's state is not a lasting fact: it comes marked, for the appearance only.
-    assert "- in one chapter: Сегодня злой и в мокром плаще" in listing
-    assert "\n- Сегодня злой" not in listing
+    # One chapter's state is not a lasting fact: not in the description, only in the looks.
+    assert "Сегодня злой" not in listing
+    looks = next(text for schema, text in seen if schema is analysis.Looks and "Рыхташ" in text)
+    assert "] Сегодня злой и в мокром плаще (this chapter)" in looks
+    assert "Люта" not in looks  # one card per request: nothing crosses over
+    assert card.appearance.startswith("Облик: Рыхташ")
 
 
 def test_summary_facts_come_from_every_chapter_in_turn():

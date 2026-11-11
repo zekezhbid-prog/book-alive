@@ -44,6 +44,9 @@ class RunOut(BaseModel):
     done: int
     error: str
     created_at: datetime
+    # What the reconciliation did: [name, merged into] and [unnamed card, joined to].
+    merged: list[list[str]] = []
+    adopted: list[list[str]] = []
 
 
 class EntityBrief(BaseModel):
@@ -149,6 +152,8 @@ def _run_out(run: AnalysisRun) -> RunOut:
         done=len(run.done_chapter_ids),
         error=run.error,
         created_at=run.created_at,
+        merged=(run.report or {}).get("merged", []),
+        adopted=(run.report or {}).get("adopted", []),
     )
 
 

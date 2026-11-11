@@ -68,6 +68,9 @@ class Groups(BaseModel):
 class CardSummary(BaseModel):
     number: int
     text: str = ""
+
+
+class Looks(BaseModel):
     appearance: str = ""
 
 
@@ -429,6 +432,7 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
         Groups,
     )
     merged: set[int] = set()
+    report: list[list[str]] = []
     for group in answer.groups:
         members = [n for n in dict.fromkeys(group) if 1 <= n <= len(entities) and n not in merged]
         if len(members) < 2:
@@ -440,9 +444,12 @@ def reconcile(state: State, config: RunnableConfig) -> dict:
             (entities[n - 1] for n in members), key=lambda e: (e.uncertain, -len(e.facts))
         )
         for other in others:
+            report.append([other.name, main.name])
             absorb(session, main, other)
     session.commit()
-    adopt_uncertain(session, model, run.project_id, run.kind)
+    adopted = adopt_uncertain(session, model, run.project_id, run.kind)
+    run.report = {"merged": report, "adopted": adopted}
+    session.commit()
     return {}
 
 
@@ -460,16 +467,19 @@ ADOPT_CANDIDATES = 5
 LETTERS = "ABCDEFGHIJ"
 
 
-def adopt_uncertain(session: Session, model: TextModel, project_id: str, kind: str) -> None:
+def adopt_uncertain(
+    session: Session, model: TextModel, project_id: str, kind: str
+) -> list[list[str]]:
     """After the whole cast is merged: each card without a proper name ("the old man", "the
     mentor") is weighed against the named ones most likely to be it - those who appear in
     its chapters or with the same people - by sex, age, looks, role and acquaintances. A
-    batch whose answer cannot be read changes nothing."""
+    batch whose answer cannot be read changes nothing. Returns [unnamed, named] pairs joined."""
     cards = [e for e in _entities(session, project_id, kind) if not e.standalone]
     unnamed = [e for e in cards if e.uncertain and e.facts]
     named = [e for e in cards if not e.uncertain and e.facts]
+    joined: list[list[str]] = []
     if not unnamed or not named:
-        return
+        return joined
     chapters = {
         c.id: c for c in session.scalars(select(Chapter).where(Chapter.project_id == project_id))
     }
@@ -537,13 +547,15 @@ def adopt_uncertain(session: Session, model: TextModel, project_id: str, kind: s
             if not 0 <= index < len(found) or session.get(Entity, found[index].id) is None:
                 continue
             done.add(match.number)
+            joined.append([entity.name, found[index].name])
             absorb(session, found[index], entity)
         session.commit()
+    return joined
 
 
 SUMMARY_BATCH = 4
 SUMMARY_FACTS = 60
-SUMMARY_MOMENTS = 20
+LOOKS_FACTS = 50
 
 
 def summarize(state: State, config: RunnableConfig) -> dict:
@@ -572,8 +584,6 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         lines.append(f"chapters ({len(chapters)}): " + ", ".join(titles[c] for c in chapters[:12]))
     if entity.summary.strip():
         lines.append(f"description so far: {entity.summary.strip()}")
-    if entity.appearance.strip():
-        lines.append(f"appearance so far: {entity.appearance.strip()}")
     # Facts are taken chapter by chapter in turn, so a main character's description covers
     # the whole book and not only the chapters read first. Looks come with their quote: the
     # model can tell a lasting trait from a moment ("looked with one eye" is not one-eyed).
@@ -583,11 +593,63 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
     seen: set[str] = set()
     for fact in _spread(lasting or moments, positions, SUMMARY_FACTS, seen):
         lines.append(_fact_line(fact, "looks" if fact.category != FACT_PROFILE else "about"))
-    # Looks of one moment (clothes, wounds) for the appearance: what repeats is the usual look.
-    if lasting:
-        for fact in _spread(moments, positions, SUMMARY_MOMENTS, seen):
-            lines.append(_fact_line(fact, "in one chapter"))
     return "\n".join(lines)
+
+
+def _looks_text(session: Session, entity: Entity) -> str | None:
+    """Every looks detail of one card, chapter by chapter in turn, each with its chapter and
+    quote. None when the book gives no looks at all: there is nothing to ask about."""
+    chapters = {
+        c.id: c
+        for c in session.scalars(select(Chapter).where(Chapter.project_id == entity.project_id))
+    }
+    positions = {cid: c.position for cid, c in chapters.items()}
+    looks = [
+        f for f in entity.facts if f.text.strip() and f.category in (FACT_PERMANENT, FACT_STATE)
+    ]
+    if not looks:
+        return None
+    also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
+    lines = [f"{entity.name}{also}"]
+    where = sorted(
+        {f.chapter_id for f in entity.facts if f.chapter_id in chapters}, key=positions.get
+    )
+    lines.append(f"chapters ({len(where)}): " + ", ".join(_title(chapters[c]) for c in where[:20]))
+    for fact in _spread(looks, positions, LOOKS_FACTS, set()):
+        chapter = chapters.get(fact.chapter_id)
+        quote = " ".join(fact.quote.split())
+        line = f"- [{_title(chapter) if chapter else '?'}] {fact.text.strip()}"
+        if fact.category == FACT_STATE:
+            line += " (this chapter)"
+        if quote:
+            line += f" (text: «{quote[:200]}»)"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _title(chapter: Chapter) -> str:
+    return chapter.title or f"#{chapter.position + 1}"
+
+
+def describe_looks(session: Session, model: TextModel, cards: list[Entity], kind: str) -> None:
+    """The appearance is written card by card, apart from the description: with all its looks
+    details and nothing of another card in the same request, so no detail crosses over. An
+    answer that cannot be read keeps the old text."""
+    for card in cards:
+        listing = _looks_text(session, card)
+        if listing is None:
+            continue
+        try:
+            answer = model.invoke_json(
+                f"looks_{kind}s",
+                [SystemMessage(prompts.looks_system(kind)), HumanMessage(listing)],
+                Looks,
+            )
+        except BadModelOutput:
+            continue
+        if answer.appearance.strip():
+            card.appearance = answer.appearance.strip()
+            session.commit()
 
 
 def _spread(facts: list, positions: dict[str, int], limit: int, seen: set[str]) -> list:
@@ -644,10 +706,9 @@ def summarize_cards(session: Session, model: TextModel, project_id: str, kind: s
             card = batch[item.number - 1]
             if item.text.strip():
                 card.summary = item.text.strip()
-            if item.appearance.strip():
-                card.appearance = item.appearance.strip()
         session.commit()
     keep_general(session, model, cards, kind)
+    describe_looks(session, model, cards, kind)
 
 
 GENERAL_BATCH = 8

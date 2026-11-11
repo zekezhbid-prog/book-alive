@@ -249,6 +249,9 @@ class AnalysisRun(Base):
     done_chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     cancel_requested: Mapped[bool] = mapped_column(default=False)
     error: Mapped[str] = mapped_column(Text, default="")
+    # What the reconciliation did, shown when the run ends: {"merged": [[name, into]],
+    # "adopted": [[unnamed, into]]}.
+    report: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 
