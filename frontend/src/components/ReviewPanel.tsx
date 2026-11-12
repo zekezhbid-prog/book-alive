@@ -5,6 +5,7 @@ import { api, type Project, type Remark, type ReviewCheck, type ReviewChecks, ty
 import { errorText, useI18n, type MessageKey } from '../i18n'
 import { savesSettled } from '../saveQueue'
 import BetaReader from './BetaReader'
+import ChapterStats from './ChapterStats'
 import SelectAll from './SelectAll'
 
 interface Props {
@@ -189,6 +190,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
           </ul>
         </>
       )}
+      <ChapterStats project={project} busy={running !== null || fixing} />
       <BetaReader project={project} chapterId={chapterId} busy={running !== null || fixing} />
       {choosing && offer && (
         <ReviewDialog

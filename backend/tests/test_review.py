@@ -377,3 +377,57 @@ def test_beta_review_is_kept_with_the_chapter(client, session, book, monkeypatch
     assert [r["outdated"] for r in listed] == [True]
     assert client.delete(f"/api/projects/{book.id}/beta/{data['id']}").status_code == 204
     assert client.get(f"/api/projects/{book.id}/beta").json() == []
+
+
+# ---------------------------------------------------------------- numbers by chapter
+
+from app.review import stats
+
+
+def test_sentences_end_on_marks_with_closing_quotes():
+    found = stats.sentences("Он ушёл. «Куда?» — спросила она… И всё!")
+    assert found == ["Он ушёл.", "«Куда?» — спросила она…", "И всё!"]
+
+
+def test_dialogue_counts_the_lines_but_not_the_authors_words():
+    line = "— Иду домой, — сказал Пётр. — Жди меня."
+    assert stats.dialogue_words(line, "ru") == 4  # «Иду домой» + «Жди меня»
+    assert stats.dialogue_words("Он прочёл «Войну и мир» за ночь.", "ru") == 0
+    assert stats.dialogue_words("Она сказала: «Я сюда больше не приду».", "ru") == 5
+    assert stats.dialogue_words('"I will not come back here," she said.', "en") == 6
+
+
+def test_chapter_numbers_skip_service_words():
+    text = (
+        "Люта шла по дороге и думала о доме. Дорога была длинной.\n\n"
+        "— Люта, иди сюда, — позвал отец. — Дорога ждёт.\n\n"
+        "И она пошла по дороге, потому что дорога вела домой, и Люта это знала давно."
+    )
+    chapter, _ = stats.chapter_stats("c1", "Дорога", text, "ru")
+    assert chapter.paragraphs == 3
+    assert chapter.sentences == 5
+    assert chapter.longest[0].paragraph == 2
+    top = {w.word: w.count for w in chapter.top_words}
+    assert top["люта"] == 3
+    assert "что" not in top and "она" not in top
+    assert 0 < chapter.dialogue < 0.3
+
+
+def test_stats_api_gives_every_chapter_and_the_book(client, session, book):
+    answer = client.get(f"/api/projects/{book.id}/review/stats")
+    assert answer.status_code == 200
+    data = answer.json()
+    assert [c["title"] for c in data["chapters"]] == ["Дорога", "Дом"]
+    assert data["words"] == sum(c["words"] for c in data["chapters"])
+    assert data["language"] == "ru"
+    assert data["chapters"][0]["longest"][0]["paragraph"] == 1
+
+
+def test_stats_of_an_empty_chapter_are_zero():
+    chapter, _ = stats.chapter_stats("c", "", "", "ru")
+    assert (chapter.words, chapter.sentences, chapter.avg_sentence, chapter.dialogue) == (
+        0,
+        0,
+        0.0,
+        0.0,
+    )

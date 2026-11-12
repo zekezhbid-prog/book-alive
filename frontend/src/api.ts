@@ -29,6 +29,37 @@ export interface ReviewCheck {
 }
 
 /** A beta reader's review of one chapter, kept with it. */
+/** Numbers by chapter, counted from the text without a model. */
+export interface WordCount {
+  word: string
+  count: number
+}
+
+export interface ChapterNumbers {
+  chapter_id: string
+  title: string
+  chars: number
+  words: number
+  sentences: number
+  paragraphs: number
+  /** Words per sentence. */
+  avg_sentence: number
+  /** Share of the words spoken by characters, 0..1. */
+  dialogue: number
+  longest: { paragraph: number; quote: string; words: number }[]
+  top_words: WordCount[]
+}
+
+export interface BookNumbers {
+  language: string
+  chapters: ChapterNumbers[]
+  words: number
+  chars: number
+  avg_sentence: number
+  dialogue: number
+  top_words: WordCount[]
+}
+
 export interface BetaReview {
   id: string
   chapter_id: string
@@ -579,6 +610,7 @@ export const api = {
       chapter_id: chapterId,
       checks,
     }),
+  reviewStats: (projectId: string) => request<BookNumbers>('GET', `/projects/${projectId}/review/stats`),
   betaReviews: (projectId: string) => request<BetaReview[]>('GET', `/projects/${projectId}/beta`),
   betaReview: (projectId: string, chapterId: string, choice: { asks: string[]; reader: string; tone: string }) =>
     request<BetaReview>('POST', `/projects/${projectId}/beta`, { chapter_id: chapterId, ...choice }),

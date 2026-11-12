@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
 from app.models import MODE_WRITER, BetaReview, Project, text_hash
-from app.review import beta, checks, continuity, service, typography
+from app.review import beta, checks, continuity, service, stats, typography
 from app.services import versions
 
 router = APIRouter(prefix="/api", tags=["review"])
@@ -145,6 +145,13 @@ def fix(project_id: str, body: FixRequest, session: SessionDep) -> FixOut:
         chapter.content_hash = text_hash(chapter.text)
     session.commit()
     return FixOut(changed=[c.id for c in changed], version=saved)
+
+
+@router.get("/projects/{project_id}/review/stats")
+def chapter_numbers(project_id: str, session: SessionDep) -> stats.BookStats:
+    """Numbers by chapter, from the text alone: free, instant, nothing is stored."""
+    project = _writer_project(session, project_id)
+    return stats.book_stats([(c.id, c.title, c.text) for c in project.chapters], _language(project))
 
 
 # ---------------------------------------------------------------- beta reader
