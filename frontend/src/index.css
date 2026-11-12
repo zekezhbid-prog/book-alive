@@ -710,5 +710,8 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .workspace > .side { position: relative; }
 .side-close { position: absolute; top: 12px; right: 12px; z-index: 2; }
 /* Checks that ask the AI carry the gold AI stars on the right; free ones carry nothing. */
-.badge-btn { display: flex; align-items: center; gap: 8px; text-align: left; }
+.badge-btn { display: flex; justify-content: center; text-align: center; padding-inline: 40px; }
+.badge-btn > .grow { flex: 0 1 auto; }
+.badge-btn:hover:not(:disabled) { color: var(--accent); text-shadow: 0 0 10px rgba(250, 204, 21, 0.45); }
+.badge-btn > .ai-mark { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
 .ai-mark { flex: none; width: 20px; height: 20px; filter: drop-shadow(0 0 4px rgba(246, 185, 59, 0.45)); }
