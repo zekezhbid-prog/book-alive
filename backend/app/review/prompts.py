@@ -9,37 +9,52 @@ character (at most 150 characters).
 wording, or empty when the fix is obvious.
 - Report only real problems. If there are none, reply {"remarks": []}. At most 30 remarks."""
 
-GRAMMAR = (
-    """You are a proofreader. You get paragraphs of a book chapter, each marked [n]. Find \
-spelling mistakes, grammar mistakes, wrong word forms and agreement, missing or extra \
-punctuation, typos and doubled words.
+
+def _list(lines: list[str]) -> str:
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def grammar(instructions: list[str], categories: list[str]) -> str:
+    """The proofreader's prompt, looking only for the ticked items."""
+    return (
+        """You are a proofreader. You get paragraphs of a book chapter, each marked [n]. Look \
+only for these problems:
+"""
+        + _list(instructions)
+        + """
 Do not touch style, word choice or the author's deliberate manner of speech: dialect, \
-slang and archaic words in dialogue and narration are not mistakes.
-"category" is one of: spelling, grammar, punctuation, typo.
+slang and archaic words in dialogue and narration are not mistakes. Report nothing outside \
+the list above.
+"category" is one of: """
+        + ", ".join(categories)
+        + ".\n\n"
+        + _FORMAT
+    )
 
+
+def editorial(instructions: list[str], categories: list[str]) -> str:
+    """The line editor's prompt, looking only for the ticked items."""
+    return (
+        """You are a publishing-house editor reading a manuscript line by line. You get \
+paragraphs of a book chapter, each marked [n]. Mark only these problems:
 """
-    + _FORMAT
-)
+        + _list(instructions)
+        + """
+Do not fix plain spelling or punctuation (another pass does that), do not comment on the \
+plot, and respect the author's deliberate manner: mark what an editor would really ask to \
+change. Report nothing outside the list above.
+"category" is one of: """
+        + ", ".join(categories)
+        + ".\n\n"
+        + _FORMAT
+    )
 
-EDITORIAL = (
-    """You are a publishing-house editor reading a manuscript line by line. You get paragraphs \
-of a book chapter, each marked [n]. Find what an editor marks by hand: repeated words and \
-roots close together, clichés and stock phrases, filler words, overlong or tangled \
-sentences, wrong dialogue punctuation, inconsistent spelling of the same name or term, \
-tense jumps, unclear pronoun references, tautology, anachronisms.
-Do not fix plain spelling (another pass does that) and do not comment on the plot.
-"category" is one of: repetition, cliche, long_sentence, dialogue, consistency, tense, \
-clarity, other.
 
-"""
-    + _FORMAT
-)
-
-CONTRADICTIONS = """You are a continuity editor. You get cards of characters and locations \
+_CONTRADICTIONS = """You are a continuity editor. You get cards of characters and locations \
 from one book. Each card lists facts about it taken from different chapters, one per line as \
 [number] (chapter) fact.
-Find facts about the SAME card that cannot both be true: a different eye or hair colour, \
-age, height, species, layout of a place, a scar that appears or disappears, and so on.
+Find facts about the SAME card that cannot both be true. Look for:
+{items}
 Not contradictions: a change that the chapters explain by events (new clothes, an injury, \
 daylight turning to night, a place destroyed). Facts about different cards never conflict.
 
@@ -49,3 +64,7 @@ Reply with one JSON object and nothing else:
 - "problem" and "suggestion" are in the language of the facts. "suggestion": which wording \
 to harmonise on, or empty.
 If there are none, reply {"contradictions": []}."""
+
+
+def contradictions(instructions: list[str]) -> str:
+    return _CONTRADICTIONS.replace("{items}", _list(instructions))

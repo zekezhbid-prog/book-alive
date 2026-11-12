@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
-from app.models import Chapter, Entity, EntityFact, Project
-from app.review import prompts
+from app.models import KIND_CHARACTER, Chapter, Entity, EntityFact, Project
+from app.review import checks, prompts, typography
+from app.review.checks import LANG_RU, Check
 
 KIND_GRAMMAR = "grammar"
 KIND_EDITORIAL = "editorial"
@@ -36,6 +37,8 @@ class Remark(BaseModel):
     problem: str
     suggestion: str = ""
     places: list[Place]
+    # Set for typesetting remarks: "Fix all" corrects them without a model.
+    fixable: bool = False
 
 
 class _RawRemark(BaseModel):
@@ -74,11 +77,73 @@ def windows(paragraphs: list[str], limit: int = WINDOW_CHARS) -> list[list[int]]
     return [*pieces, current] if current else pieces
 
 
-def check_text(model: TextModel, chapter: Chapter, kind: str) -> list[Remark]:
-    """Grammar or editorial remarks for one chapter, with verified quotes."""
-    paragraphs = chapter.text.split("\n\n") if chapter.text else []
-    system = prompts.GRAMMAR if kind == KIND_GRAMMAR else prompts.EDITORIAL
+def _place_at(chapter: Chapter, paragraph: int, quote: str) -> Place:
+    return Place(
+        chapter_id=chapter.id, chapter_title=chapter.title, paragraph=paragraph, quote=quote
+    )
+
+
+def _code_remarks(
+    chapter: Chapter, paragraphs: list[str], items: list[Check], language: str, yo: dict[str, str]
+) -> list[Remark]:
+    """Remarks of the items computed here, without a model. Their quotes are taken from the
+    text itself, so they need no checking."""
+    ids = {c.id for c in items}
     remarks: list[Remark] = []
+    if "typography_ru" in ids:
+        for f in typography.typography_findings(paragraphs):
+            remarks.append(
+                Remark(
+                    category="typography",
+                    problem=f.problem,
+                    suggestion=f.suggestion,
+                    places=[_place_at(chapter, f.paragraph, f.quote)],
+                    fixable=True,
+                )
+            )
+    if "yo_ru" in ids:
+        for target, found in typography.yo_findings(paragraphs, yo):
+            remarks.append(
+                Remark(
+                    category="yo",
+                    problem=found[0].problem,
+                    suggestion=target,
+                    places=[_place_at(chapter, f.paragraph, f.quote) for f in found[:5]],
+                )
+            )
+    if "rhythm" in ids:
+        for f in typography.rhythm_findings(paragraphs, language):
+            remarks.append(
+                Remark(
+                    category="rhythm",
+                    problem=f.problem,
+                    places=[_place_at(chapter, f.paragraph, f.quote)],
+                )
+            )
+    return remarks
+
+
+def check_text(
+    model: TextModel | None,
+    chapter: Chapter,
+    kind: str,
+    items: list[Check] | None = None,
+    language: str = LANG_RU,
+    yo: dict[str, str] | None = None,
+) -> list[Remark]:
+    """Remarks of one section for one chapter: the code items first, then what the model
+    finds, with verified quotes. `items` defaults to the section's default ticks."""
+    if items is None:
+        items = checks.chosen(kind, language, None)
+    paragraphs = chapter.text.split("\n\n") if chapter.text else []
+    remarks = _code_remarks(chapter, paragraphs, items, language, yo or {})
+    asked = [c for c in items if c.engine == checks.AI]
+    if not asked or model is None:
+        return remarks[:MAX_REMARKS]
+    build = prompts.grammar if kind == KIND_GRAMMAR else prompts.editorial
+    system = build(
+        [c.instruction for c in asked], [*dict.fromkeys(c.category for c in asked), "other"]
+    )
     for piece in windows(paragraphs):
         body = "\n\n".join(f"[{i}] {paragraphs[i]}" for i in piece if paragraphs[i].strip())
         if not body:
@@ -99,22 +164,23 @@ def check_text(model: TextModel, chapter: Chapter, kind: str) -> list[Remark]:
                     category=raw.category,
                     problem=raw.problem,
                     suggestion=raw.suggestion,
-                    places=[
-                        Place(
-                            chapter_id=chapter.id,
-                            chapter_title=chapter.title,
-                            paragraph=index,
-                            quote=raw.quote.strip(),
-                        )
-                    ],
+                    places=[_place_at(chapter, index, raw.quote.strip())],
                 )
             )
     return remarks[:MAX_REMARKS]
 
 
-def check_contradictions(session: Session, model: TextModel, project: Project) -> list[Remark]:
+def check_contradictions(
+    session: Session, model: TextModel, project: Project, items: list[Check] | None = None
+) -> list[Remark]:
     """Contradictions between what different chapters say about the same card. Works on the
-    stored facts, whose quotes were verified when they were found."""
+    stored facts, whose quotes were verified when they were found. `looks` covers the
+    characters, `places` the locations and objects."""
+    if items is None:
+        items = checks.chosen(KIND_CONTRADICTIONS, LANG_RU, None)
+    ids = {c.id for c in items}
+    if not ids:
+        return []
     titles = {c.id: c.title for c in project.chapters}
     order = {c.id: c.position for c in project.chapters}
     entities = session.scalars(select(Entity).where(Entity.project_id == project.id)).all()
@@ -122,6 +188,8 @@ def check_contradictions(session: Session, model: TextModel, project: Project) -
     blocks: list[tuple[str, dict[int, EntityFact]]] = []
     counter = 0
     for entity in sorted(entities, key=lambda e: e.name):
+        if ("looks" if entity.kind == KIND_CHARACTER else "places") not in ids:
+            continue
         facts = sorted(
             (f for f in entity.facts if f.chapter_id in titles),
             key=lambda f: order[f.chapter_id],
@@ -147,11 +215,12 @@ def check_contradictions(session: Session, model: TextModel, project: Project) -
     if text:
         batches.append((text, bag))
 
+    system = prompts.contradictions([c.instruction for c in items])
     remarks: list[Remark] = []
     for text, bag in batches:
         answer = model.invoke_json(
             f"review_{KIND_CONTRADICTIONS}",
-            [SystemMessage(prompts.CONTRADICTIONS), HumanMessage(text)],
+            [SystemMessage(system), HumanMessage(text)],
             _ContradictionAnswer,
         )
         for raw in answer.contradictions:

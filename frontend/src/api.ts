@@ -14,6 +14,22 @@ export interface Remark {
   problem: string
   suggestion: string
   places: RemarkPlace[]
+  /** A typesetting remark: "Fix all" corrects it without a model. */
+  fixable: boolean
+}
+
+/** One tick of a check dialog. `code` items run without a model and cost nothing. */
+export interface ReviewCheck {
+  id: string
+  kind: ReviewKind
+  engine: 'ai' | 'code'
+  default: boolean
+}
+
+/** The book's language as found from its text, and the ticks offered for it. */
+export interface ReviewChecks {
+  language: 'ru' | 'be' | 'en' | 'other'
+  checks: ReviewCheck[]
 }
 
 export interface ChapterBrief {
@@ -541,10 +557,17 @@ export const api = {
   rollback: (projectId: string, versionId: string) =>
     request<Project>('POST', `/projects/${projectId}/versions/${versionId}/rollback`),
 
-  review: (projectId: string, kind: ReviewKind, chapterId: string) =>
+  reviewChecks: (projectId: string) => request<ReviewChecks>('GET', `/projects/${projectId}/review/checks`),
+  review: (projectId: string, kind: ReviewKind, chapterId: string, checks: string[]) =>
     request<{ kind: ReviewKind; remarks: Remark[] }>('POST', `/projects/${projectId}/review`, {
       kind,
       chapter_id: chapterId,
+      checks,
+    }),
+  /** Typesetting fixed in the chosen chapters; unsaved work is saved as a version first. */
+  fixTypography: (projectId: string, chapterIds: string[]) =>
+    request<{ changed: string[]; version: number | null }>('POST', `/projects/${projectId}/review/fix`, {
+      chapter_ids: chapterIds,
     }),
 
   /** `fresh`: read the chapters again even when they were read before with the same text. */

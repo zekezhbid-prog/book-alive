@@ -90,6 +90,15 @@ export default function Book() {
     setError('')
     await reloadProject()
     if (goTo) open(goTo)
+    else if (activeId) {
+      // The editor takes its text once, when it mounts: it must remount with the new text,
+      // not with the copy this page held before the change.
+      try {
+        setChapter(await api.chapter(activeId))
+      } catch {
+        /* the effect below fetches it again and reports the error */
+      }
+    }
     setEpoch((n) => n + 1)
   }
   const addChapter = async () => {
@@ -163,7 +172,7 @@ export default function Book() {
             {side === 'versions' ? (
               <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
             ) : (
-              <ReviewPanel project={project} chapterId={activeId} />
+              <ReviewPanel project={project} chapterId={activeId} onChanged={() => afterStructureChange()} />
             )}
           </aside>
         )}
