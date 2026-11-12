@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type BetaReview, type Project } from '../api'
 import { ask } from '../dialogs'
 import { errorText, useI18n, type MessageKey } from '../i18n'
-import { TrashIcon } from './icons'
+import { AiMark, TrashIcon } from './icons'
 import SelectAll from './SelectAll'
 
 const ASKS = ['liked', 'boring', 'disbelief', 'unclear', 'expect']
@@ -101,7 +101,7 @@ export default function BetaReader({ project, chapterId, busy }: Props) {
     <div className="stack">
       <button className="btn badge-btn" disabled={busy || progress !== ''} onClick={() => setChoosing(true)}>
         <span className="grow">{t('beta.title')}</span>
-        <span className="ai-badge">{t('review.engine.ai')}</span>
+        <AiMark title={t('review.engine.ai')} />
       </button>
       {progress && <p className="muted">{progress}</p>}
       {error && <p className="error">{error}</p>}

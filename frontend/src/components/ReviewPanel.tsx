@@ -7,6 +7,7 @@ import { savesSettled } from '../saveQueue'
 import BetaReader from './BetaReader'
 import ChapterStats from './ChapterStats'
 import SelectAll from './SelectAll'
+import { AiMark } from './icons'
 
 interface Props {
   project: Project
@@ -142,7 +143,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
         >
           <span className="grow">{t(`review.${kind}` as MessageKey)}</span>
           {offer?.checks.some((c) => c.kind === kind && c.engine === 'ai') && (
-            <span className="ai-badge">{t('review.engine.ai')}</span>
+            <AiMark title={t('review.engine.ai')} />
           )}
         </button>
       ))}
@@ -272,7 +273,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
                 {t(`review.check.${item.id}` as MessageKey)}
                 {example(item.id) && <span className="faint small"> ({example(item.id)})</span>}
               </span>
-              {item.engine === 'ai' && <span className="ai-badge">{t('review.engine.ai')}</span>}
+              {item.engine === 'ai' && <AiMark title={t('review.engine.ai')} />}
             </label>
           ))}
         </div>

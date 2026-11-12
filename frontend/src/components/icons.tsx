@@ -1,5 +1,5 @@
 // Small inline icons; they take the button's text colour.
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 
 const stroke = {
   width: 16,
@@ -332,6 +332,27 @@ export function ArrowDownIcon() {
   return (
     <svg {...stroke}>
       <path d="M12 5v14M19 12l-7 7-7-7" />
+    </svg>
+  )
+}
+
+/** The mark of a check that asks the AI: the same gold stars as the AI action tiles, small. */
+export function AiMark({ title }: { title?: string }) {
+  const id = useId().replace(/:/g, '')
+  return (
+    <svg viewBox="0 0 100 100" className="ai-mark" role={title ? 'img' : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
+      {title && <title>{title}</title>}
+      <defs>
+        <linearGradient id={`${id}-ai`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff3c4" />
+          <stop offset="0.35" stopColor="#ffd45e" />
+          <stop offset="0.65" stopColor="#e9a21c" />
+          <stop offset="1" stopColor="#ffd77a" />
+        </linearGradient>
+      </defs>
+      {STARS.map((d) => (
+        <path key={d} d={d} fill={`url(#${id}-ai)`} />
+      ))}
     </svg>
   )
 }
