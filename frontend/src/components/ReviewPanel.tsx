@@ -205,9 +205,9 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
   const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)
   const chosen = items.filter((c) => ticks.has(c.id))
   const usesModel = chosen.some((c) => c.engine === 'ai')
-  // What the short editorial name means, with an example: shown on hover.
-  const hint = (id: string) => {
-    const key = `review.check.${id}.hint` as MessageKey
+  // A short example after the editorial name, in brackets.
+  const example = (id: string) => {
+    const key = `review.check.${id}.ex` as MessageKey
     const text = t(key)
     return text === key ? undefined : text
   }
@@ -243,9 +243,12 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
         </div>
         <div className="chapter-picker">
           {items.map((item) => (
-            <label key={item.id} className="row" title={hint(item.id)}>
+            <label key={item.id} className="row">
               <input type="checkbox" checked={ticks.has(item.id)} onChange={() => toggleTick(item.id)} />
-              <span className="grow">{t(`review.check.${item.id}` as MessageKey)}</span>
+              <span className="grow">
+                {t(`review.check.${item.id}` as MessageKey)}
+                {example(item.id) && <span className="faint small"> ({example(item.id)})</span>}
+              </span>
               {item.engine === 'code' && <span className="faint small">{t('review.engine.code')}</span>}
             </label>
           ))}
