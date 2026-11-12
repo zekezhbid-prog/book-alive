@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type Project, type Remark, type ReviewCheck, type ReviewChecks, type ReviewKind } from '../api'
 import { errorText, useI18n, type MessageKey } from '../i18n'
 import { savesSettled } from '../saveQueue'
+import SelectAll from './SelectAll'
 
 interface Props {
   project: Project
@@ -204,6 +205,12 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
   const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)
   const chosen = items.filter((c) => ticks.has(c.id))
   const usesModel = chosen.some((c) => c.engine === 'ai')
+  // What the short editorial name means, with an example: shown on hover.
+  const hint = (id: string) => {
+    const key = `review.check.${id}.hint` as MessageKey
+    const text = t(key)
+    return text === key ? undefined : text
+  }
   const tick = (next: Set<string>) => {
     setTicks(next)
     saveTicks(project.id, kind, next)
@@ -226,12 +233,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
         <div className="row">
           <h4>{t('review.rules')}</h4>
           <span className="spacer" />
-          <button className="btn ghost small" onClick={() => tick(new Set(items.map((c) => c.id)))}>
-            {t('review.ticks.all')}
-          </button>
-          <button className="btn ghost small" onClick={() => tick(new Set())}>
-            {t('review.ticks.none')}
-          </button>
+          <SelectAll ids={items.map((c) => c.id)} selected={ticks} onChange={tick} />
           <button
             className="btn ghost small"
             onClick={() => tick(new Set(items.filter((c) => c.default).map((c) => c.id)))}
@@ -241,7 +243,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
         </div>
         <div className="chapter-picker">
           {items.map((item) => (
-            <label key={item.id} className="row">
+            <label key={item.id} className="row" title={hint(item.id)}>
               <input type="checkbox" checked={ticks.has(item.id)} onChange={() => toggleTick(item.id)} />
               <span className="grow">{t(`review.check.${item.id}` as MessageKey)}</span>
               {item.engine === 'code' && <span className="faint small">{t('review.engine.code')}</span>}
@@ -259,15 +261,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
             <div className="row">
               <h4>{t('run.title')}</h4>
               <span className="spacer" />
-              <button
-                className="btn ghost small"
-                onClick={() => setSelected(new Set(project.chapters.map((c) => c.id)))}
-              >
-                {t('run.all')}
-              </button>
-              <button className="btn ghost small" onClick={() => setSelected(new Set())}>
-                {t('run.none')}
-              </button>
+              <SelectAll ids={project.chapters.map((c) => c.id)} selected={selected} onChange={setSelected} />
             </div>
             <div className="chapter-picker">
               {project.chapters.map((chapter) => (

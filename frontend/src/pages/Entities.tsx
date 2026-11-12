@@ -23,6 +23,7 @@ import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, RefreshIcon, TrashIcon 
 import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
+import SelectAll from '../components/SelectAll'
 
 const POLL_MS = 2000
 
@@ -634,15 +635,11 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
         <div className="row">
           <h4>{t('run.title')}</h4>
           <span className="spacer" />
-          <button
-            className="btn ghost small"
-            onClick={() => setSelected(new Set(project.chapters.map((c) => c.id)))}
-          >
-            {t('run.all')}
-          </button>
-          <button className="btn ghost small" onClick={() => setSelected(new Set())}>
-            {t('run.none')}
-          </button>
+          <SelectAll
+            ids={project.chapters.filter((c) => !locked(c.id)).map((c) => c.id)}
+            selected={selected}
+            onChange={setSelected}
+          />
         </div>
         <div className="chapter-picker">
           {project.chapters.map((chapter) => (
