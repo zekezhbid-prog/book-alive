@@ -2,6 +2,7 @@
 without touching any other card."""
 
 import re
+from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
@@ -37,6 +38,19 @@ def _stems(name: str) -> list[str]:
     return [w[:-2] if len(w) > 5 else w[:-1] if len(w) > 3 else w for w in words]
 
 
+def name_matcher(entity: Entity) -> Callable[[str], bool]:
+    """Tells whether a text names the card by any of its proper names (in any case form).
+    A card known only by a common word ("the old man") never matches."""
+    names = [n for n in {entity.name, *entity.aliases, *entity.pinned_names} if n[:1].isupper()]
+    stems = [s for s in (_stems(n) for n in names) if s]
+
+    def names_it(text: str) -> bool:
+        low = text.casefold()
+        return any(all(stem in low for stem in name) for name in stems)
+
+    return names_it
+
+
 def card_chapters(session: Session, entity: Entity) -> list[Chapter]:
     """Chapters where the card already has facts, and those that name it: the rest of the
     book is not worth paying for. A card known only by a common word ("the old man") is
@@ -45,13 +59,7 @@ def card_chapters(session: Session, entity: Entity) -> list[Chapter]:
         select(Chapter).where(Chapter.project_id == entity.project_id).order_by(Chapter.position)
     ).all()
     had = {f.chapter_id for f in entity.facts}
-    names = [n for n in {entity.name, *entity.aliases, *entity.pinned_names} if n[:1].isupper()]
-    stems = [s for s in (_stems(n) for n in names) if s]
-
-    def names_it(text: str) -> bool:
-        low = text.casefold()
-        return any(all(stem in low for stem in name) for name in stems)
-
+    names_it = name_matcher(entity)
     return [c for c in chapters if c.text.strip() and (c.id in had or names_it(c.text))]
 
 

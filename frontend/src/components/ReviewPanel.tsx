@@ -60,6 +60,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
   const [fixing, setFixing] = useState(false)
   const [fixed, setFixed] = useState('')
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState('')
 
   useEffect(() => {
     api.reviewChecks(project.id).then(setOffer, (e) => setError(errorText(t, e)))
@@ -73,8 +74,22 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
     try {
       // The server checks one chapter at a time; contradictions look at the whole book.
       const found: Remark[] = []
-      for (const id of kind === 'contradictions' ? [''] : chapterIds) {
-        found.push(...(await api.review(project.id, kind, id, ticks)).remarks)
+      if (kind === 'contradictions') {
+        // Text items first take notes from every chapter, one request each (unchanged
+        // chapters answer at once from what was read before), then the book is compared.
+        if (offer?.checks.some((c) => c.reads_text && ticks.includes(c.id))) {
+          const all = project.chapters.map((c) => c.id)
+          for (const [n, id] of all.entries()) {
+            setProgress(t('review.reading', { done: n, n: all.length }))
+            await api.review(project.id, kind, id, ticks)
+          }
+        }
+        setProgress(t('review.comparing'))
+        found.push(...(await api.review(project.id, kind, '', ticks)).remarks)
+      } else {
+        for (const id of chapterIds) {
+          found.push(...(await api.review(project.id, kind, id, ticks)).remarks)
+        }
       }
       setRemarks(found)
       setChecked(chapterIds)
@@ -82,6 +97,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
     } catch (e) {
       setError(errorText(t, e))
     }
+    setProgress('')
     setRunning(null)
   }
   const fixAll = async () => {
@@ -125,7 +141,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
           {t(`review.${kind}` as MessageKey)}
         </button>
       ))}
-      {running && <p className="muted">{t('review.running')}</p>}
+      {running && <p className="muted">{progress || t('review.running')}</p>}
       {error && <p className="error">{error}</p>}
       {fixed && <p className="notice">{fixed}</p>}
       {done && !running && (
@@ -258,7 +274,12 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
           <p className="notice">{t(`review.lang.${offer.language}` as MessageKey)}</p>
         )}
         {wholeBook ? (
-          <p className="notice">{t('review.contradictions.hint')}</p>
+          <>
+            <p className="notice">{t('review.contradictions.hint')}</p>
+            {chosen.some((c) => c.reads_text) && (
+              <p className="muted small">{t('review.reads', { n: project.chapters.length })}</p>
+            )}
+          </>
         ) : (
           <>
             <div className="row">

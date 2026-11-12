@@ -1,7 +1,8 @@
 """Checks of the manuscript for the writer: language, editorial polish, contradictions.
 
-Nothing here changes the book or is stored: the result is a list of remarks the author
-reads and decides on. Every quote shown is verified against the text it came from; a remark
+Nothing here changes the book: the result is a list of remarks the author reads and decides
+on. Only the notes the whole-book contradictions take from each chapter are kept, so an
+unchanged chapter is not read twice (see `continuity`). Every quote shown is verified against the text it came from; a remark
 whose quote cannot be found is dropped, never displayed."""
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,8 +13,9 @@ from sqlalchemy.orm import Session
 from app.analysis.entities import locate_quote
 from app.llm.calls import TextModel
 from app.models import KIND_CHARACTER, Chapter, Entity, EntityFact, Project
-from app.review import checks, prompts, typography
+from app.review import checks, continuity, prompts, typography
 from app.review.checks import LANG_RU, Check
+from app.review.remarks import Place, Remark
 
 KIND_GRAMMAR = "grammar"
 KIND_EDITORIAL = "editorial"
@@ -23,22 +25,6 @@ KINDS = (KIND_GRAMMAR, KIND_EDITORIAL, KIND_CONTRADICTIONS)
 WINDOW_CHARS = 6000  # text sent in one call; remarks come back more precise on short pieces
 FACTS_CHARS = 20_000  # facts of several cards sent in one contradictions call
 MAX_REMARKS = 200
-
-
-class Place(BaseModel):
-    chapter_id: str
-    chapter_title: str
-    paragraph: int | None = None
-    quote: str
-
-
-class Remark(BaseModel):
-    category: str
-    problem: str
-    suggestion: str = ""
-    places: list[Place]
-    # Set for typesetting remarks: "Fix all" corrects them without a model.
-    fixable: bool = False
 
 
 class _RawRemark(BaseModel):
@@ -171,13 +157,38 @@ def check_text(
 
 
 def check_contradictions(
-    session: Session, model: TextModel, project: Project, items: list[Check] | None = None
+    session: Session,
+    model: TextModel | None,
+    project: Project,
+    items: list[Check] | None = None,
+    language: str = LANG_RU,
+) -> list[Remark]:
+    """Contradictions across the whole book: the facts of the cards (looks, places), the
+    names (name_variants), the notes taken from the chapters (timeline, age, knowledge,
+    revived) and, without a model, characters who vanish (missing)."""
+    if items is None:
+        items = checks.chosen(KIND_CONTRADICTIONS, language, None)
+    ids = {c.id for c in items}
+    remarks: list[Remark] = []
+    if "missing" in ids:
+        remarks.extend(continuity.check_missing(session, project, language))
+    if model is not None:
+        if "name_variants" in ids:
+            remarks.extend(
+                continuity.check_names(session, model, project, checks.BY_ID["name_variants"])
+            )
+        remarks.extend(_card_contradictions(session, model, project, items))
+        remarks.extend(continuity.check_notes(session, model, project, items))
+    return remarks[:MAX_REMARKS]
+
+
+def _card_contradictions(
+    session: Session, model: TextModel, project: Project, items: list[Check]
 ) -> list[Remark]:
     """Contradictions between what different chapters say about the same card. Works on the
     stored facts, whose quotes were verified when they were found. `looks` covers the
     characters, `places` the locations and objects."""
-    if items is None:
-        items = checks.chosen(KIND_CONTRADICTIONS, LANG_RU, None)
+    items = [c for c in items if c.id in ("looks", "places")]
     ids = {c.id for c in items}
     if not ids:
         return []
@@ -235,7 +246,7 @@ def check_contradictions(
                     places=[_place(titles, f) for f in facts],
                 )
             )
-    return remarks[:MAX_REMARKS]
+    return remarks
 
 
 def _place(titles: dict[str, str], fact: EntityFact) -> Place:

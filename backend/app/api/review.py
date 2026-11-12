@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
 from app.models import MODE_WRITER, Project, text_hash
-from app.review import checks, service, typography
+from app.review import checks, continuity, service, typography
 from app.services import versions
 
 router = APIRouter(prefix="/api", tags=["review"])
@@ -21,6 +21,8 @@ class CheckOut(BaseModel):
     kind: str
     engine: str
     default: bool
+    # Needs every chapter read for notes first (one request per chapter, see `review`).
+    reads_text: bool = False
 
 
 class ChecksOut(BaseModel):
@@ -30,7 +32,9 @@ class ChecksOut(BaseModel):
 
 class ReviewRequest(BaseModel):
     kind: Kind
-    # Required for grammar and editorial; contradictions look at the whole book.
+    # Required for grammar and editorial. For contradictions: empty compares the whole book;
+    # a chapter only takes its notes for the text items (nothing is returned), so the client
+    # can show progress and no single request runs for minutes.
     chapter_id: str = ""
     # The ticked items; missing means the section's defaults.
     checks: list[str] | None = None
@@ -71,7 +75,9 @@ def list_checks(project_id: str, session: SessionDep) -> ChecksOut:
     return ChecksOut(
         language=language,
         checks=[
-            CheckOut(id=c.id, kind=c.kind, engine=c.engine, default=c.default)
+            CheckOut(
+                id=c.id, kind=c.kind, engine=c.engine, default=c.default, reads_text=c.reads_text
+            )
             for c in checks.offered(language)
         ],
     )
@@ -85,10 +91,13 @@ def review(project_id: str, body: ReviewRequest, session: SessionDep) -> ReviewO
     language = _language(project)
     items = checks.chosen(body.kind, language, body.checks)
     chapter = None
-    if body.kind != service.KIND_CONTRADICTIONS:
+    if body.kind != service.KIND_CONTRADICTIONS or body.chapter_id:
         chapter = next((c for c in project.chapters if c.id == body.chapter_id), None)
         if chapter is None:
             raise HTTPException(404, "chapter_not_found")
+    notes_only = body.kind == service.KIND_CONTRADICTIONS and chapter is not None
+    if notes_only and not any(c.reads_text for c in items):
+        return ReviewOut(kind=body.kind, remarks=[])
     model = None
     if any(c.engine == checks.AI for c in items):
         try:
@@ -99,8 +108,11 @@ def review(project_id: str, body: ReviewRequest, session: SessionDep) -> ReviewO
     if any(c.id == "yo_ru" for c in items):
         yo = typography.yo_words([c.text for c in project.chapters])
     try:
-        if chapter is None:
-            remarks = service.check_contradictions(session, model, project, items) if model else []
+        if notes_only:
+            continuity.read_notes(session, model, project, chapter)
+            remarks = []
+        elif chapter is None:
+            remarks = service.check_contradictions(session, model, project, items, language)
         else:
             remarks = service.check_text(model, chapter, body.kind, items, language, yo)
     except BadModelOutput as exc:

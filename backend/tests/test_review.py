@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
-from app.models import Chapter, Entity, EntityFact, Project, text_hash
-from app.review import checks, prompts, service, typography
+from app.models import Chapter, ChapterExtraction, Entity, EntityFact, Project, text_hash
+from app.review import checks, continuity, prompts, service, typography
 
 FIRST = "Люта шла по дороге.\n\nУ неё были голубые глаза и красный платок."
 SECOND = "Люта вошла в дом.\n\nЕё карие глаза блестели."
@@ -118,7 +118,6 @@ def test_review_api_needs_a_configured_model(client, book):
 # ---------- ticks, languages, checks without a model ----------
 
 
-
 def test_language_is_found_from_the_letters():
     assert checks.detect_language("Люта шла по дороге и щурилась. " * 5) == "ru"
     assert checks.detect_language("Люта ішла па дарозе і ўсміхалася. " * 5) == "be"
@@ -207,3 +206,125 @@ def test_fix_saves_a_version_of_unsaved_work_first(client, session, book):
     saved = versions.latest_version(session, book.id)
     assert saved.label == "typography"
     assert saved.entries[0].revision.text == 'Она сказала: "да"...'
+
+
+# ---- whole-book contradictions beyond the card facts ----
+
+
+def _items(*ids):
+    return [checks.BY_ID[i] for i in ids]
+
+
+def test_new_contradiction_items_are_offered():
+    ids = {c.id for c in checks.offered("ru") if c.kind == "contradictions"}
+    assert {"name_variants", "timeline", "age", "knowledge", "missing", "revived"} <= ids
+    assert checks.BY_ID["missing"].engine == checks.CODE
+    assert {c.id for c in checks.CHECKS if c.reads_text} == {
+        "timeline",
+        "age",
+        "knowledge",
+        "revived",
+    }
+
+
+def test_chapter_notes_are_read_once_and_quotes_verified(session, book):
+    chapter = book.chapters[0]
+    model = FakeModel(
+        {
+            "notes": [
+                {"paragraph": 0, "quote": "шла по дороге", "type": "time", "note": "утро"},
+                {"paragraph": 1, "quote": "нет такого", "type": "time", "note": "выдумка"},
+            ]
+        }
+    )
+    assert continuity.read_notes(session, model, book, chapter) is True
+    assert continuity.read_notes(session, model, book, chapter) is False  # same text: cached
+    assert model.operations == ["review_notes"]
+    notes = continuity.stored_notes(session, book)[chapter.id]
+    assert [n.note for n in notes] == ["утро"]
+    # Changed text: the old notes no longer count.
+    chapter.text += "\n\nНаступила ночь."
+    chapter.content_hash = text_hash(chapter.text)
+    session.commit()
+    assert chapter.id not in continuity.stored_notes(session, book)
+
+
+def test_timeline_compares_notes_of_both_chapters(session, book):
+    for chapter, quote, note in [
+        (book.chapters[0], "шла по дороге", "через два дня"),
+        (book.chapters[1], "вошла в дом", "прошла неделя"),
+    ]:
+        session.add(
+            ChapterExtraction(
+                project_id=book.id,
+                chapter_id=chapter.id,
+                kind=continuity.NOTES_KIND,
+                chapter_hash=chapter.content_hash,
+                payload={
+                    "version": prompts.NOTES_VERSION,
+                    "notes": [{"paragraph": 0, "quote": quote, "type": "time", "note": note}],
+                },
+            )
+        )
+    session.commit()
+    model = FakeModel(
+        {"contradictions": [{"check": "timeline", "facts": [1, 2], "problem": "не сходится"}]}
+    )
+    remarks = service.check_contradictions(session, model, book, _items("timeline"))
+    assert len(remarks) == 1
+    assert remarks[0].category == "timeline"
+    assert [p.quote for p in remarks[0].places] == ["шла по дороге", "вошла в дом"]
+    assert model.operations == ["review_continuity"]
+
+
+def test_name_variants_need_both_spellings_in_the_text(session, book):
+    book.chapters[1].text = "Лютa вошла в дом.\n\nЛюте было весело. Люта Гельга."
+    session.add(Entity(project_id=book.id, kind="character", name="Люта", aliases=["Лютта"]))
+    session.commit()
+    model = FakeModel(
+        {
+            "variants": [
+                {"names": ["Люта", "Лютта"], "problem": "два написания"},  # Лютта not in text
+            ]
+        }
+    )
+    assert service.check_contradictions(session, model, book, _items("name_variants")) == []
+    book.chapters[0].text = "Лютта шла по дороге."
+    session.commit()
+    remarks = service.check_contradictions(session, model, book, _items("name_variants"))
+    assert [p.chapter_title for p in remarks[0].places] == ["Дом", "Дорога"]
+
+
+def test_missing_character_found_without_a_model(session):
+    project = Project(title="Длинная", mode="writer")
+    for n in range(12):
+        text = "Мирон пришёл." if n < 4 else "Пусто."
+        project.chapters.append(
+            Chapter(position=n, title=f"Глава {n + 1}", text=text, content_hash=text_hash(text))
+        )
+    session.add(project)
+    session.commit()
+    session.add(Entity(project_id=project.id, kind="character", name="Мирон"))
+    session.commit()
+    remarks = service.check_contradictions(session, None, project, _items("missing"))
+    assert len(remarks) == 1
+    assert "Глава 4" in remarks[0].problem and "8" in remarks[0].problem
+    assert remarks[0].places[0].chapter_title == "Глава 4"
+
+
+def test_review_api_reads_notes_chapter_by_chapter(client, session, book, monkeypatch):
+    calls = []
+    monkeypatch.setattr(continuity, "read_notes", lambda s, m, p, c: calls.append(c.id) or True)
+    monkeypatch.setattr("app.api.review.TextModel", lambda *a, **k: object())
+    answer = client.post(
+        f"/api/projects/{book.id}/review",
+        json={"kind": "contradictions", "chapter_id": book.chapters[0].id, "checks": ["timeline"]},
+    )
+    assert answer.status_code == 200 and answer.json()["remarks"] == []
+    assert calls == [book.chapters[0].id]
+    # A chapter with only card items ticked needs no reading at all.
+    answer = client.post(
+        f"/api/projects/{book.id}/review",
+        json={"kind": "contradictions", "chapter_id": book.chapters[0].id, "checks": ["looks"]},
+    )
+    assert answer.status_code == 200 and calls == [book.chapters[0].id]

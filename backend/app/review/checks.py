@@ -28,6 +28,9 @@ class Check:
     # model puts on such remarks.
     instruction: str = ""
     category: str = ""
+    # Contradictions that need the chapters themselves, not only the facts of the cards:
+    # every chapter is read once for short notes (time, who learns what, deaths, losses).
+    reads_text: bool = False
 
 
 RU = (LANG_RU,)
@@ -205,7 +208,7 @@ CHECKS: tuple[Check, ...] = (
         category="anachronism",
     ),
     Check("rhythm", "editorial", CODE, False, category="rhythm"),
-    # ---- Contradictions (whole book, on the facts of the cards) ----
+    # ---- Contradictions (whole book: the facts of the cards, notes of the chapters) ----
     Check(
         "looks",
         "contradictions",
@@ -222,6 +225,72 @@ CHECKS: tuple[Check, ...] = (
         AI,
         True,
         instruction="a place or object: different layout, size, colour, material, location",
+    ),
+    Check(
+        "name_variants",
+        "contradictions",
+        AI,
+        True,
+        instruction=(
+            "one character or place named in spellings that differ for no reason "
+            "(Катерина and Екатерина, Хельга and Гельга, Грейвуд and Грэйвуд). A short or "
+            "pet form (Аня for Анна, Саша for Александр), a title or a nickname is normal "
+            "and is never reported"
+        ),
+        category="name_variants",
+    ),
+    Check(
+        "timeline",
+        "contradictions",
+        AI,
+        True,
+        instruction=(
+            "timeline: the time that passed does not add up (two days later it is said a week "
+            "has gone), day and night or the season jump with no time passing, a date or a "
+            "weekday that cannot be, events happening in an impossible order"
+        ),
+        category="timeline",
+        reads_text=True,
+    ),
+    Check(
+        "age",
+        "contradictions",
+        AI,
+        False,
+        instruction=(
+            "age through time: a character's age does not match the time that passed (14 at "
+            "the start, a year later still 14 or already 17), or a character older or younger "
+            "than a relative it must be older or younger than"
+        ),
+        category="age",
+        reads_text=True,
+    ),
+    Check(
+        "knowledge",
+        "contradictions",
+        AI,
+        False,
+        instruction=(
+            "who knows what: a character knows, names or acts on something before the chapter "
+            "where it learns it, or something it was never told and never saw"
+        ),
+        category="knowledge",
+        reads_text=True,
+    ),
+    Check("missing", "contradictions", CODE, False, category="missing"),
+    Check(
+        "revived",
+        "contradictions",
+        AI,
+        False,
+        instruction=(
+            "a character that died (or left for good) acts or speaks again later with no "
+            "explanation, or an object that was lost, broken, given away or destroyed is in "
+            "someone's hands again. A memory, a dream, a flashback, a ghost, a told story or "
+            "an object found or mended again is normal"
+        ),
+        category="revived",
+        reads_text=True,
     ),
 )
 

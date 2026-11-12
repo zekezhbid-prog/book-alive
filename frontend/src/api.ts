@@ -24,6 +24,8 @@ export interface ReviewCheck {
   kind: ReviewKind
   engine: 'ai' | 'code'
   default: boolean
+  /** Contradictions that first read every chapter for notes (one request per chapter). */
+  reads_text: boolean
 }
 
 /** The book's language as found from its text, and the ticks offered for it. */
