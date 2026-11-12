@@ -638,3 +638,10 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .dialog.face-check img { display: block; max-width: 100%; max-height: 64vh; border-radius: var(--radius); border: 1px solid var(--accent-line); }
 .face-check-buttons { gap: 10px; justify-content: center; }
 .select-all { cursor: pointer; gap: 8px; }
+.history li .beta-text { white-space: pre-wrap; line-height: 1.5; }
+/* Check dialogs with many ticks: the dialog scrolls instead of running off the screen. */
+.dialog.scroll { max-height: calc(100vh - 40px); overflow-y: auto; }
+.dialog.scroll .chapter-picker.short { max-height: 26vh; }
+.dialog.scroll > * { flex-shrink: 0; }
+.beta-text p { margin: 0 0 8px; }
+.beta-text b { display: block; color: var(--accent, inherit); }

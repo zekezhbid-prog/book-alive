@@ -328,3 +328,52 @@ def test_review_api_reads_notes_chapter_by_chapter(client, session, book, monkey
         json={"kind": "contradictions", "chapter_id": book.chapters[0].id, "checks": ["looks"]},
     )
     assert answer.status_code == 200 and calls == [book.chapters[0].id]
+
+
+# ---- beta reader ----
+
+
+class FakeTextModel:
+    def __init__(self, reply):
+        self.reply = reply
+        self.messages = []
+
+    def invoke(self, operation, messages):
+        self.messages.append(messages)
+        return self.reply
+
+
+def test_beta_review_is_kept_with_the_chapter(client, session, book, monkeypatch):
+    session.add(
+        Entity(project_id=book.id, kind="character", name="Люта", summary="Княжна. Смелая.")
+    )
+    session.commit()
+    fake = FakeTextModel("## Что понравилось\n**Платок** запомнился.")
+    monkeypatch.setattr("app.api.review.TextModel", lambda *a, **k: fake)
+    chapter = book.chapters[1]
+    answer = client.post(
+        f"/api/projects/{book.id}/beta",
+        json={
+            "chapter_id": chapter.id,
+            "reader": "critic",
+            "tone": "honest",
+            "asks": ["liked", "x"],
+        },
+    )
+    assert answer.status_code == 200
+    data = answer.json()
+    assert data["text"] == "Что понравилось\nПлаток запомнился."  # Markdown stripped
+    assert data["asks"] == ["liked"] and data["reader"] == "critic" and not data["outdated"]
+    system, human = fake.messages[0]
+    assert "critic" in system.content and "what you liked" in system.content
+    assert "boring" not in system.content
+    assert "chapter 2 of 2" in human.content and "Люта: Княжна" in human.content
+    assert "Дорога" in human.content  # the title of the chapter before
+
+    chapter.text += "\n\nНовое."
+    chapter.content_hash = text_hash(chapter.text)
+    session.commit()
+    listed = client.get(f"/api/projects/{book.id}/beta").json()
+    assert [r["outdated"] for r in listed] == [True]
+    assert client.delete(f"/api/projects/{book.id}/beta/{data['id']}").status_code == 204
+    assert client.get(f"/api/projects/{book.id}/beta").json() == []

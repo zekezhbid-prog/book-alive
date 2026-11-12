@@ -393,3 +393,24 @@ class Scene(Base):
     # The pictures the model chose for that prompt, in order; empty until it is built.
     reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class BetaReview(Base):
+    """A beta reader's response to one chapter: a living review, not a list of mistakes.
+    Kept with the chapter so the author can come back to it; the chapter's hash tells
+    whether the text changed since."""
+
+    __tablename__ = "beta_reviews"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # Not a foreign key, like EntityFact: a chapter rolled back from a version keeps its id.
+    chapter_id: Mapped[str] = mapped_column(String(32), index=True)
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    reader: Mapped[str] = mapped_column(String(20))  # fan | casual | critic
+    tone: Mapped[str] = mapped_column(String(20))  # soft | honest
+    asks: Mapped[list[str]] = mapped_column(JSON, default=list)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=now)

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type Project, type Remark, type ReviewCheck, type ReviewChecks, type ReviewKind } from '../api'
 import { errorText, useI18n, type MessageKey } from '../i18n'
 import { savesSettled } from '../saveQueue'
+import BetaReader from './BetaReader'
 import SelectAll from './SelectAll'
 
 interface Props {
@@ -188,6 +189,7 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
           </ul>
         </>
       )}
+      <BetaReader project={project} chapterId={chapterId} busy={running !== null || fixing} />
       {choosing && offer && (
         <ReviewDialog
           project={project}
@@ -244,7 +246,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
   // The side column blurs its background, which would trap a fixed overlay inside it.
   return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog stack">
+      <div className="dialog stack scroll">
         <h2>{t(`review.${kind}` as MessageKey)}</h2>
         <div className="row">
           <h4>{t('review.rules')}</h4>

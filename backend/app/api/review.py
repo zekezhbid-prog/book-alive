@@ -1,12 +1,14 @@
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
-from app.models import MODE_WRITER, Project, text_hash
-from app.review import checks, continuity, service, typography
+from app.models import MODE_WRITER, BetaReview, Project, text_hash
+from app.review import beta, checks, continuity, service, typography
 from app.services import versions
 
 router = APIRouter(prefix="/api", tags=["review"])
@@ -143,3 +145,82 @@ def fix(project_id: str, body: FixRequest, session: SessionDep) -> FixOut:
         chapter.content_hash = text_hash(chapter.text)
     session.commit()
     return FixOut(changed=[c.id for c in changed], version=saved)
+
+
+# ---------------------------------------------------------------- beta reader
+
+
+class BetaRequest(BaseModel):
+    chapter_id: str
+    reader: str = "casual"
+    tone: str = "soft"
+    asks: list[str] | None = None
+
+
+class BetaOut(BaseModel):
+    id: str
+    chapter_id: str
+    reader: str
+    tone: str
+    asks: list[str]
+    text: str
+    created_at: datetime
+    # The chapter text changed after the review was written.
+    outdated: bool = False
+
+
+def _beta_out(review: BetaReview, chapters: dict[str, str]) -> BetaOut:
+    return BetaOut(
+        id=review.id,
+        chapter_id=review.chapter_id,
+        reader=review.reader,
+        tone=review.tone,
+        asks=review.asks,
+        text=review.text,
+        created_at=review.created_at,
+        outdated=chapters.get(review.chapter_id, review.chapter_hash) != review.chapter_hash,
+    )
+
+
+@router.post("/projects/{project_id}/beta")
+def beta_review(project_id: str, body: BetaRequest, session: SessionDep) -> BetaOut:
+    """A beta reader's review of one chapter, kept with the chapter."""
+    project = _writer_project(session, project_id)
+    chapter = next((c for c in project.chapters if c.id == body.chapter_id), None)
+    if chapter is None:
+        raise HTTPException(404, "chapter_not_found")
+    if not chapter.text.strip():
+        raise HTTPException(409, "chapter_empty")
+    try:
+        model = TextModel(session, project.id, "chat")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        review = beta.review_chapter(
+            session, model, project, chapter, body.reader, body.tone, body.asks or beta.DEFAULT_ASKS
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return _beta_out(review, {chapter.id: chapter.content_hash})
+
+
+@router.get("/projects/{project_id}/beta")
+def beta_reviews(project_id: str, session: SessionDep) -> list[BetaOut]:
+    """Every kept review of the book, newest first."""
+    project = _writer_project(session, project_id)
+    hashes = {c.id: c.content_hash for c in project.chapters}
+    rows = session.scalars(
+        select(BetaReview)
+        .where(BetaReview.project_id == project.id)
+        .order_by(BetaReview.created_at.desc())
+    ).all()
+    return [_beta_out(r, hashes) for r in rows if r.chapter_id in hashes]
+
+
+@router.delete("/projects/{project_id}/beta/{review_id}", status_code=204)
+def delete_beta_review(project_id: str, review_id: str, session: SessionDep) -> None:
+    review = session.get(BetaReview, review_id)
+    if review is None or review.project_id != project_id:
+        raise HTTPException(404, "review_not_found")
+    session.delete(review)
+    session.commit()

@@ -28,6 +28,19 @@ export interface ReviewCheck {
   reads_text: boolean
 }
 
+/** A beta reader's review of one chapter, kept with it. */
+export interface BetaReview {
+  id: string
+  chapter_id: string
+  reader: string
+  tone: string
+  asks: string[]
+  text: string
+  created_at: string
+  /** The chapter text changed after the review was written. */
+  outdated: boolean
+}
+
 /** The book's language as found from its text, and the ticks offered for it. */
 export interface ReviewChecks {
   language: 'ru' | 'be' | 'en' | 'other'
@@ -566,6 +579,10 @@ export const api = {
       chapter_id: chapterId,
       checks,
     }),
+  betaReviews: (projectId: string) => request<BetaReview[]>('GET', `/projects/${projectId}/beta`),
+  betaReview: (projectId: string, chapterId: string, choice: { asks: string[]; reader: string; tone: string }) =>
+    request<BetaReview>('POST', `/projects/${projectId}/beta`, { chapter_id: chapterId, ...choice }),
+  deleteBetaReview: (projectId: string, id: string) => request<void>('DELETE', `/projects/${projectId}/beta/${id}`),
   /** Typesetting fixed in the chosen chapters; unsaved work is saved as a version first. */
   fixTypography: (projectId: string, chapterIds: string[]) =>
     request<{ changed: string[]; version: number | null }>('POST', `/projects/${projectId}/review/fix`, {
