@@ -1,6 +1,6 @@
 import type { ChapterBrief } from '../api'
 import { useI18n } from '../i18n'
-import { useChatOpen } from '../view'
+import { useChatOpen, useSide } from '../view'
 import ChatPanel from './ChatPanel'
 import { ChatIcon } from './icons'
 
@@ -17,9 +17,15 @@ interface Props {
 export default function ChatDock({ projectId, chapters, chapterId, canSuggest }: Props) {
   const { t } = useI18n()
   const [open, setOpen] = useChatOpen()
+  const [, setSide] = useSide(projectId)
   if (!open)
     return (
-      <button className="btn primary chat-fab" onClick={() => setOpen(true)} aria-label={t('chat.title')}>
+      <button className="btn primary chat-fab" onClick={() => {
+          // One panel on the right at a time: the chat takes the place of the checklist or versions.
+          setSide('chat')
+          setOpen(true)
+        }}
+        aria-label={t('chat.title')}>
         <ChatIcon /> <span className="chat-fab-label">{t('chat.title')}</span>
       </button>
     )

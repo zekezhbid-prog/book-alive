@@ -43,9 +43,8 @@ export default function ChapterStats({ project, busy }: Props) {
   const [open, setOpen] = useState(false)
   return (
     <div className="stack">
-      <button className="btn" disabled={busy} onClick={() => setOpen(true)}>
-        {t('stats.title')}
-        <span className="faint small"> · {t('review.engine.code')}</span>
+      <button className="btn badge-btn" disabled={busy} onClick={() => setOpen(true)}>
+        <span className="grow">{t('stats.title')}</span>
       </button>
       {open && <StatsDialog project={project} onClose={() => setOpen(false)} />}
     </div>

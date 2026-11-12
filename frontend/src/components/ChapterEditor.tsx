@@ -1,23 +1,27 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { api, type Chapter, type Project } from '../api'
+import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { api, type Chapter } from '../api'
 import { useI18n } from '../i18n'
 import { enqueueSave, savesSettled } from '../saveQueue'
-import { ask } from '../dialogs'
-import { TrashIcon } from './icons'
 
 interface Props {
-  project: Project
   chapter: Chapter
   onSaved: (saved: Chapter) => void
-  onStructureChange: (goTo?: string) => void
   onError: (error: unknown) => void
+  /** Filled in while the editor is open, so the chapter list can save the draft before it
+   * moves chapters, and forget it when the open chapter is deleted. */
+  control?: RefObject<EditorControl | null>
+}
+
+export interface EditorControl {
+  flush: () => Promise<void>
+  discard: () => Promise<void>
 }
 
 const AUTOSAVE_MS = 800
 const TITLE_MAX = 300
 
 /** Plain-text chapter editor. The draft saves itself; versions are committed separately. */
-export default function ChapterEditor({ project, chapter, onSaved, onStructureChange, onError }: Props) {
+export default function ChapterEditor({ chapter, onSaved, onError, control }: Props) {
   const { t } = useI18n()
   const [title, setTitle] = useState(chapter.title)
   const [text, setText] = useState(chapter.text)
@@ -83,22 +87,21 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
     wrapSelection(mark)
   }
 
-  const ids = project.chapters.map((c) => c.id)
-  const index = ids.indexOf(chapter.id)
-  const move = async (delta: number) => {
-    const next = [...ids]
-    next.splice(index, 1)
-    next.splice(index + delta, 0, chapter.id)
-    await flush()
-    await api.reorder(project.id, next).then(() => onStructureChange(chapter.id), onError)
-  }
-  const remove = async () => {
-    const name = title || t('book.untitled')
-    if (!(await ask(t('chapter.delete.confirm', { title: name })))) return
-    saved.current = { ...latest.current } // the chapter is going away: nothing left to save
-    await savesSettled()
-    await api.deleteChapter(chapter.id).then(() => onStructureChange(), onError)
-  }
+  useEffect(() => {
+    if (!control) return
+    control.current = {
+      flush: async () => {
+        await flush()
+      },
+      discard: async () => {
+        saved.current = { ...latest.current } // the chapter is going away: nothing left to save
+        await savesSettled()
+      },
+    }
+    return () => {
+      control.current = null
+    }
+  })
 
   return (
     <article className="chapter editor">
@@ -108,21 +111,6 @@ export default function ChapterEditor({ project, chapter, onSaved, onStructureCh
           {t('app.chars', { n: text.length.toLocaleString() })} ·{' '}
           <span className={status === 'unsaved' ? 'error' : ''}>{t(`app.${status}`)}</span>
         </span>
-        <span className="spacer" />
-        <button className="btn ghost small" disabled={index <= 0} onClick={() => move(-1)}>
-          ↑ {t('chapter.up')}
-        </button>
-        <button className="btn ghost small" disabled={index >= ids.length - 1} onClick={() => move(1)}>
-          ↓ {t('chapter.down')}
-        </button>
-        <button
-          className="btn ghost small icon danger"
-          title={t('chapter.delete')}
-          aria-label={t('chapter.delete')}
-          onClick={remove}
-        >
-          <TrashIcon />
-        </button>
       </div>
       <input
         className="chapter-title"

@@ -99,8 +99,9 @@ export default function BetaReader({ project, chapterId, busy }: Props) {
 
   return (
     <div className="stack">
-      <button className="btn" disabled={busy || progress !== ''} onClick={() => setChoosing(true)}>
-        {t('beta.title')}
+      <button className="btn badge-btn" disabled={busy || progress !== ''} onClick={() => setChoosing(true)}>
+        <span className="grow">{t('beta.title')}</span>
+        <span className="ai-badge">{t('review.engine.ai')}</span>
       </button>
       {progress && <p className="muted">{progress}</p>}
       {error && <p className="error">{error}</p>}

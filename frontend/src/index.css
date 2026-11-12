@@ -686,3 +686,30 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
   .stats-table .wide-only { display: none; }
   .stats-table th, .stats-table td { padding: 8px 6px; }
 }
+
+/* Up, down and the bin beside a chapter in the list: shown when the pointer is over it. */
+.chapter-row { position: relative; }
+.chapter-row-actions { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--panel-2); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+.chapter-row:hover .chapter-row-actions, .chapter-row:has(:focus-visible) .chapter-row-actions { opacity: 1; pointer-events: auto; }
+.row-action { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s, background 0.15s; }
+.row-action:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.row-action:disabled { opacity: 0.3; cursor: default; }
+.row-action.gold:hover { color: #ffe07a; filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.6)); }
+/* No hover on a touch screen: the open chapter keeps its buttons in view. */
+@media (hover: none) {
+  .chapter-row:has(.chapter-link.active) .chapter-row-actions { opacity: 1; pointer-events: auto; }
+  .row-action { width: 40px; height: 40px; }
+}
+
+/* The tabs of the top bar: an icon and a word; the checklist and versions follow them. */
+.tab { gap: 7px; }
+.tab svg { width: 17px; height: 17px; flex: none; }
+button.tab { background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font: inherit; font-family: var(--book); font-weight: 600; }
+.tool-tab { position: relative; }
+.tool-tab .dot { margin-left: 0; }
+/* The cross of the checklist and versions, where the chat keeps its own. */
+.workspace > .side { position: relative; }
+.side-close { position: absolute; top: 12px; right: 12px; z-index: 2; }
+/* Checks that ask the AI carry a small mark on the right; free ones carry nothing. */
+.badge-btn { display: flex; align-items: center; gap: 8px; text-align: left; }
+.ai-badge { flex: none; padding: 1px 7px; border: 1px solid var(--accent-line); border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.5; }

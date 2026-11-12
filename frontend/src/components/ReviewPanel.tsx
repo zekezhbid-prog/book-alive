@@ -136,11 +136,14 @@ export default function ReviewPanel({ project, chapterId, onChanged }: Props) {
       {KINDS.map((kind) => (
         <button
           key={kind}
-          className="btn"
+          className="btn badge-btn"
           disabled={running !== null || fixing || offer === null}
           onClick={() => setChoosing(kind)}
         >
-          {t(`review.${kind}` as MessageKey)}
+          <span className="grow">{t(`review.${kind}` as MessageKey)}</span>
+          {offer?.checks.some((c) => c.kind === kind && c.engine === 'ai') && (
+            <span className="ai-badge">{t('review.engine.ai')}</span>
+          )}
         </button>
       ))}
       {running && <p className="muted">{progress || t('review.running')}</p>}
@@ -269,7 +272,7 @@ function ReviewDialog({ project, kind, offer, initial, onClose, onStart }: Dialo
                 {t(`review.check.${item.id}` as MessageKey)}
                 {example(item.id) && <span className="faint small"> ({example(item.id)})</span>}
               </span>
-              {item.engine === 'code' && <span className="faint small">{t('review.engine.code')}</span>}
+              {item.engine === 'ai' && <span className="ai-badge">{t('review.engine.ai')}</span>}
             </label>
           ))}
         </div>

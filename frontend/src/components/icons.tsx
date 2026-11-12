@@ -271,3 +271,67 @@ export function GoldSparklesSymbol() {
     </GoldSymbol>
   )
 }
+
+export function BookIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />
+      <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
+    </svg>
+  )
+}
+
+export function UsersIcon() {
+  return (
+    <svg {...stroke}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8" />
+    </svg>
+  )
+}
+
+export function PinIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </svg>
+  )
+}
+
+export function FilmIcon() {
+  return (
+    <svg {...stroke}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4M3 12h18" />
+    </svg>
+  )
+}
+
+export function PaletteIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z" />
+      <circle cx="7.5" cy="11" r="1" />
+      <circle cx="10" cy="7" r="1" />
+      <circle cx="15" cy="7" r="1" />
+    </svg>
+  )
+}
+
+export function ArrowUpIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
+  )
+}
+
+export function ArrowDownIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M12 5v14M19 12l-7 7-7-7" />
+    </svg>
+  )
+}

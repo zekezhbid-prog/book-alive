@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, peek, type Chapter, type EntityBrief, type Project } from '../api'
-import ChapterEditor from '../components/ChapterEditor'
+import ChapterEditor, { type EditorControl } from '../components/ChapterEditor'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
 import ReviewPanel from '../components/ReviewPanel'
 import ProjectNav from '../components/ProjectNav'
-import { ImageIcon, PenIcon } from '../components/icons'
+import { CloseIcon, ImageIcon, PenIcon } from '../components/icons'
 import VersionsPanel from '../components/VersionsPanel'
+import { ask } from '../dialogs'
 import { errorText, useI18n } from '../i18n'
 import { savesSettled } from '../saveQueue'
-import { saveView, useSide, useView, type View } from '../view'
+import { saveView, useChatOpen, useSide, useView, type View } from '../view'
 
 export default function Book() {
   const { t } = useI18n()
@@ -29,7 +30,14 @@ export default function Book() {
   const [error, setError] = useState('')
   const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const view = useView({ id: projectId, mode: project?.mode ?? 'writer' })
-  const [side] = useSide(projectId)
+  const [side, setSide] = useSide(projectId)
+  const [, setChatOpen] = useChatOpen()
+  // The cross of the checklist or versions: the book chat comes back in their place.
+  const closeSide = () => {
+    setSide('chat')
+    setChatOpen(true)
+  }
+  const editor = useRef<EditorControl | null>(null)
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])
   const reloadProject = useCallback(
@@ -101,6 +109,33 @@ export default function Book() {
     }
     setEpoch((n) => n + 1)
   }
+  // Up, down and the bin beside each chapter in the list; the open chapter stays open.
+  const moveChapter = async (id: string, delta: number) => {
+    const ids = project.chapters.map((c) => c.id)
+    const index = ids.indexOf(id)
+    if (index < 0 || index + delta < 0 || index + delta >= ids.length) return
+    ids.splice(index, 1)
+    ids.splice(index + delta, 0, id)
+    try {
+      await editor.current?.flush()
+      await api.reorder(project.id, ids)
+      await afterStructureChange(activeId)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const deleteChapter = async (id: string) => {
+    const name = project.chapters.find((c) => c.id === id)?.title || t('book.untitled')
+    if (!(await ask(t('chapter.delete.confirm', { title: name })))) return
+    try {
+      if (id === activeId) await editor.current?.discard()
+      else await editor.current?.flush()
+      await api.deleteChapter(id)
+      await afterStructureChange(id === activeId ? undefined : activeId)
+    } catch (e) {
+      fail(e)
+    }
+  }
   const addChapter = async () => {
     try {
       const created = await api.createChapter(projectId, '', activeId)
@@ -132,7 +167,13 @@ export default function Book() {
       </ProjectHeader>
       {/* The writer's checks and versions open beside the text; the chat floats over all pages. */}
       <div className={`workspace ${sidePanel ? 'with-side' : ''}`}>
-        <ProjectNav project={project} activeChapter={activeId} onAddChapter={writing ? addChapter : undefined} />
+        <ProjectNav
+          project={project}
+          activeChapter={activeId}
+          onAddChapter={writing ? addChapter : undefined}
+          onMoveChapter={writing ? moveChapter : undefined}
+          onDeleteChapter={writing ? deleteChapter : undefined}
+        />
 
         <section className="reading">
           {error && <p className="error">{error}</p>}
@@ -143,14 +184,13 @@ export default function Book() {
           {shown && writing && (
             <ChapterEditor
               key={`${shown.id}:${epoch}`}
-              project={project}
               chapter={shown}
+              control={editor}
               // Keeps this page's copy current, so a later remount starts from the saved text.
               onSaved={(saved) => {
                 setChapter(saved)
                 reloadProject()
               }}
-              onStructureChange={afterStructureChange}
               onError={fail}
             />
           )}
@@ -169,6 +209,14 @@ export default function Book() {
 
         {sidePanel && (
           <aside className="side">
+            <button
+              className="btn ghost small icon side-close"
+              onClick={closeSide}
+              title={t('app.close')}
+              aria-label={t('app.close')}
+            >
+              <CloseIcon />
+            </button>
             {side === 'versions' ? (
               <VersionsPanel project={project} onChanged={() => afterStructureChange()} onError={fail} />
             ) : (

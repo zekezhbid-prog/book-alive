@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, peek, type EntityBrief, type EntityKind, type Project, type SceneBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { BoldPlusIcon, PlusIcon, SparklesIcon } from './icons'
+import { ArrowDownIcon, ArrowUpIcon, BoldPlusIcon, PlusIcon, SparklesIcon, TrashIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
 
 type Section = 'chapters' | 'characters' | 'locations' | 'scenes'
@@ -19,13 +19,16 @@ interface Props {
   scenes?: SceneBrief[] | null
   /** Only while writing: adds a chapter after the open one. */
   onAddChapter?: () => void
+  /** Only while writing: up, down and the bin, shown when the pointer is over a chapter. */
+  onMoveChapter?: (id: string, delta: number) => void
+  onDeleteChapter?: (id: string) => void
 }
 
 /**
  * The list of the open part of the book (chapters, characters, locations or scenes) in a
  * column on the left. The parts themselves are the tabs of the top bar.
  */
-export default function ProjectNav({ project, activeChapter, onAddChapter, ...given }: Props) {
+export default function ProjectNav({ project, activeChapter, onAddChapter, onMoveChapter, onDeleteChapter, ...given }: Props) {
   const { t } = useI18n()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -101,18 +104,49 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, ...gi
     chapters: (
       <>
         {project.chapters.map((item, index) => (
-          <button
-            key={item.id}
-            className={`chapter-link ${current === 'chapters' && item.id === activeChapter ? 'active' : ''}`}
-            onClick={() => navigate(`${base}/chapters/${item.id}`)}
-          >
-            {/* A title like "Глава 3" or "III" already carries its number. */}
-            {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
-            <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
-            {project.changes?.edited.includes(item.id) || project.changes?.added.includes(item.id) ? (
-              <span className="dot" title={t('versions.dirty')} />
-            ) : null}
-          </button>
+          <div key={item.id} className="chapter-row">
+            <button
+              className={`chapter-link ${current === 'chapters' && item.id === activeChapter ? 'active' : ''}`}
+              onClick={() => navigate(`${base}/chapters/${item.id}`)}
+            >
+              {/* A title like "Глава 3" or "III" already carries its number. */}
+              {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
+              <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
+              {project.changes?.edited.includes(item.id) || project.changes?.added.includes(item.id) ? (
+                <span className="dot" title={t('versions.dirty')} />
+              ) : null}
+            </button>
+            {onMoveChapter && onDeleteChapter && (
+              <span className="chapter-row-actions">
+                <button
+                  className="row-action"
+                  title={t('chapter.up')}
+                  aria-label={t('chapter.up')}
+                  disabled={index === 0}
+                  onClick={() => onMoveChapter(item.id, -1)}
+                >
+                  <ArrowUpIcon />
+                </button>
+                <button
+                  className="row-action"
+                  title={t('chapter.down')}
+                  aria-label={t('chapter.down')}
+                  disabled={index === project.chapters.length - 1}
+                  onClick={() => onMoveChapter(item.id, 1)}
+                >
+                  <ArrowDownIcon />
+                </button>
+                <button
+                  className="row-action gold"
+                  title={t('chapter.delete')}
+                  aria-label={t('chapter.delete')}
+                  onClick={() => onDeleteChapter(item.id)}
+                >
+                  <TrashIcon />
+                </button>
+              </span>
+            )}
+          </div>
         ))}
         {onAddChapter && (
           <button className="nav-add" onClick={onAddChapter}>

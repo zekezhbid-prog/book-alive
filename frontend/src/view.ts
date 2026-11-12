@@ -44,7 +44,14 @@ export function useSide(projectId: string): [Side, (side: Side) => void] {
   const key = `side:${projectId}`
   const value = useSyncExternalStore(subscribe, () => read(key))
   const side: Side = value === 'review' || value === 'versions' ? value : 'chat'
-  return [side, (next) => write(key, next)]
+  return [
+    side,
+    (next) => {
+      // One panel on the right at a time: the checklist or versions fold the chat away.
+      if (next !== 'chat') write('chat:open', '0')
+      write(key, next)
+    },
+  ]
 }
 
 /** Whether the book chat is unfolded on the right. One choice for every page of every book:
