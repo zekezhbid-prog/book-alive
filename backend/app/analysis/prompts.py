@@ -345,3 +345,100 @@ def extract_system(kind: str) -> str:
 
 def reconcile_system(kind: str) -> str:
     return RECONCILE_SYSTEM.format(noun=_noun(kind))
+
+
+# ---------- deep search (app.analysis.deep) ----------
+
+INDEX_SYSTEM = """You read one chapter of a book, given as numbered paragraphs, and list \
+every character mentioned in it and the numbers of the paragraphs where each one is \
+mentioned or acts (also through a pronoun or a word like "the old man" when it is clear \
+who that is). Characters are living, animate beings only: people, animals, spirits, \
+creatures that think, speak or act on their own.
+
+Write each character under the name the chapter uses for them, exactly as written in the \
+text (same language, same spelling). A different name or a nickname in the same chapter for \
+the same character is a separate entry: do not decide who is who, that is done later. A \
+character the chapter never names gets its describing words ("the old man", "the guards") \
+and "named": false.
+
+Do not describe anyone, do not explain. Reply with JSON only:
+{"mentions": [{"name": "...", "named": true, "paragraphs": [0, 3, 4]}]}"""
+
+CAST_SYSTEM = """Below is the cast of a whole book: every name found in it, the chapters \
+where it occurs and a few paragraphs where it first (and last) appears. Work out who is who.
+
+- The same being under several names, nicknames or forms (someone who turns into an animal, \
+a star, a boy, someone who takes another's look) is ONE being: list all those names as its \
+sources and its forms.
+- Two different beings under one name (a namesake, a newborn named after someone, a part \
+that split off and lives on its own, twins) are TWO beings: give each its own name and the \
+chapter numbers where the shared name means that one.
+- A name that is only a lie, a cover or a mistake inside the story (a stranger is passed \
+off as "my niece Mary" to get past the guards) is a false name: it is not the being's name. \
+Put it in false_names with whom it was said about.
+- A word used as a form of address or about age ("grandad", "son", "old woman") is not a \
+name and not a kinship.
+- A name that is a group or a role ("the guards") stays a being of its own unless the text \
+shows it is one known character.
+- Keep every decision of the user listed at the end.
+
+Use the main name the book uses most. Leave out names you have nothing to say about: they \
+stay cards of their own.
+
+Reply with JSON only:
+{"beings": [{"name": "...", "sources": [{"name": "...", "chapters": []}], "forms": ["..."]}],
+ "false_names": [{"name": "...", "belongs_to": "...", "reason": "..."}]}
+"chapters": [] means everywhere in the book."""
+
+DOSSIER_SYSTEM = (
+    """Below is every passage of a book about ONE character, in story order, \
+chapter by chapter, with numbered paragraphs. Write down what the book says about this \
+character as facts, each with a quote copied word for word from one paragraph and the \
+chapter number it is in.
+
+Categories:
+- "permanent": """
+    + _SUBJECT["character"]["permanent"]
+    + """
+- "state": """
+    + _SUBJECT["character"]["state"]
+    + """ (true in one chapter)
+- "profile": """
+    + _SUBJECT["character"]["profile"]
+    + """; also kinship and other ties, and \
+what happens to them in the story
+
+"""
+    + _FACT_RULES
+    + """- You see the whole story: use it. A claim made once and contradicted by \
+everything else (a lie, a cover story, a mistake of another character, a joke) is not a fact; \
+if you keep it at all, mark it "doubtful": true.
+- Kinship only when the text says it plainly. "Grandad", "son", "granny" used as an address \
+or a nickname is about age, not kinship. Tell kin by blood from someone who raised them, a \
+foundling, an adopted child, and from someone who only took a relative's look: write which \
+it is ("raised him as her own, not his mother").
+- Age: give it in "age" with the reasoning. Count it when the text gives the pieces ("he \
+was one year old then", "thirteen years later"; "as old as X" with X's age listed below). \
+Only when nothing allows a count, estimate it and say it is an estimate.
+- Write every description of the body, size, hair and face the passages give; never write \
+that something is not described when a passage describes it.
+- A way of speaking the text shows (drawn-out hissing, whistling "ss", a growl) is a \
+"permanent" fact; tell apart characters who speak alike.
+- Several forms of one being: say for each look which form it is.
+- Write the facts in the language of the book.
+
+Reply with JSON only:
+{"aliases": ["other real names of the character"], "age": "...",
+ "facts": [{"category": "permanent", "text": "...", "quote": "...", "chapter": 3, \
+"doubtful": false}]}"""
+)
+
+CHECK_SYSTEM = """Below are numbered facts written about ONE character, each with its quote \
+and the paragraph the quote is from. Read each paragraph and decide whether the quote really \
+speaks about this character. A detail of someone else in the same paragraph (another \
+person's beard, a listener, a speaker describing a third person) is wrong. Words one \
+character says about another that the story does not confirm (a lie, an insult, a guess) \
+are wrong as facts. When the quote does speak about this character, the fact is right.
+
+Reply with JSON only: {"wrong": [numbers of the wrong facts]} - an empty list when all are \
+right."""

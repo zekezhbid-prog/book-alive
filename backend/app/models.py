@@ -265,6 +265,8 @@ class AnalysisRun(Base):
     # ("facts", "summary", "appearance").
     entity_id: Mapped[str | None] = mapped_column(String(32), default=None)
     parts: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # "deep": the deep search of characters (app.analysis.deep); empty: the ordinary one.
+    mode: Mapped[str] = mapped_column(String(20), default="")
 
 
 class UsageEvent(Base):

@@ -61,6 +61,8 @@ class SettingsBody(BaseModel):
     # Per task; empty means the main text model above.
     text_analysis_connection_id: str = ""
     text_analysis_model: str = ""
+    text_analysis_strong_connection_id: str = ""
+    text_analysis_strong_model: str = ""
     text_chat_connection_id: str = ""
     text_chat_model: str = ""
     text_prompts_connection_id: str = ""

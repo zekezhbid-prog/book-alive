@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
 from app.analysis import card as card_rebuild
+from app.analysis import deep, prompts, runner
 from app.analysis import entities as analysis
-from app.analysis import prompts, runner
 from app.db import SessionDep
 from app.images import angles
 from app.images.styles import style_key
@@ -40,6 +40,8 @@ class RunRequest(BaseModel):
     chapter_ids: list[str] = []
     # Start from scratch: earlier answers and cards are forgotten (see start_fresh).
     fresh: bool = False
+    # "deep": the deep search of characters over the whole book (app.analysis.deep).
+    mode: str = ""
 
 
 class RebuildRequest(BaseModel):
@@ -68,6 +70,7 @@ class RunOut(BaseModel):
     entity_id: str | None = None
     entity_name: str = ""
     parts: list[str] = []
+    mode: str = ""
 
 
 class EntityBrief(BaseModel):
@@ -195,6 +198,7 @@ def _run_out(run: AnalysisRun) -> RunOut:
         entity_id=run.entity_id,
         entity_name=(target.name if (target := _card_of(run)) else ""),
         parts=list(run.parts or []),
+        mode=run.mode or "",
     )
 
 
@@ -239,10 +243,14 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
         TextModel(session, project.id, "analysis")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
+    kind = _kind(body.kind)
+    mode = deep.MODE_DEEP if body.mode == deep.MODE_DEEP and kind == KIND_CHARACTER else ""
+    if mode:
+        chapters = list(project.chapters)  # who is who needs the whole book
     if body.fresh:
-        analysis.start_fresh(session, project.id, chapters, _kind(body.kind))
+        analysis.start_fresh(session, project.id, chapters, kind)
     run = AnalysisRun(
-        project_id=project.id, kind=_kind(body.kind), chapter_ids=[c.id for c in chapters]
+        project_id=project.id, kind=kind, chapter_ids=[c.id for c in chapters], mode=mode
     )
     session.add(run)
     session.commit()

@@ -6,6 +6,7 @@ import time
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.analysis import deep
 from app.analysis.card import rebuild_card
 from app.analysis.entities import GRAPH
 from app.db import get_engine
@@ -28,11 +29,17 @@ MAX_RESTARTS = 4
 RESTART_PAUSE = 5  # seconds, times the number of the restart
 
 
-def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
+def execute(
+    session: Session, run: AnalysisRun, model: TextModel, strong: TextModel | None = None
+) -> None:
     """Run to completion in the caller's thread. Chapters finished before a failure
-    stay finished; starting again continues from there."""
+    stay finished; starting again continues from there. `strong`: the stronger model
+    of the deep search; the ordinary model when none is chosen."""
     if run.entity_id:
         rebuild(session, run, model)
+        return
+    if run.mode == deep.MODE_DEEP:
+        execute_deep(session, run, model, strong or model)
         return
     project = session.get(Project, run.project_id)
     forget_deleted_chapters(session, project, run.kind)
@@ -56,6 +63,29 @@ def execute(session: Session, run: AnalysisRun, model: TextModel) -> None:
                     "recursion_limit": 2 * len(pending) + 12,
                 },
             )
+        except Exception as exc:  # noqa: BLE001 - the run must always end in a recorded state
+            session.rollback()
+            session.refresh(run)
+            restarts += 1
+            if run.cancel_requested or restarts > MAX_RESTARTS:
+                run.status = RUN_FAILED
+                run.error = str(exc)[:500]
+                break
+            time.sleep(RESTART_PAUSE * restarts)
+            continue
+        session.refresh(run)
+        run.status = RUN_CANCELLED if run.cancel_requested else RUN_DONE
+        break
+    run.finished_at = now()
+    session.commit()
+
+
+def execute_deep(session: Session, run: AnalysisRun, light: TextModel, strong: TextModel) -> None:
+    """The deep search; chapters already indexed are kept, so a restart is cheap."""
+    restarts = 0
+    while True:
+        try:
+            deep.execute(session, run, light, strong)
         except Exception as exc:  # noqa: BLE001 - the run must always end in a recorded state
             session.rollback()
             session.refresh(run)
@@ -112,7 +142,11 @@ def _work(run_id: str) -> None:
             run.finished_at = now()
             session.commit()
             return
-        execute(session, run, model)
+        strong = None
+        if run.mode == deep.MODE_DEEP:
+            strong = TextModel(session, run.project_id, "analysis_strong")
+            strong.action_id = model.action_id  # one line on the usage page
+        execute(session, run, model, strong)
 
 
 def start(run_id: str) -> None:
