@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import threading
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import release_connection
-from app.llm import prefs, registry
+from app.llm import parallel, prefs, registry
 from app.models import Connection, UsageEvent, new_id
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ class TextModel:
         if connection is None or not model_name:
             raise ModelNotConfigured("text_model_not_configured")
         self.session = session
+        # Calls may come from the threads of app.llm.parallel: only this one owns the session.
+        self.home = threading.current_thread()
         self.engine = session.get_bind()
         self.project_id = project_id
         self.connection_name = connection.name
@@ -63,17 +66,11 @@ class TextModel:
         return registry.chat_model(self.connection, self.model_name, **extra)
 
     def invoke(self, operation: str, messages: list[BaseMessage]) -> str:
-        release_connection(self.session)  # nothing held while the model answers
-        try:
-            answer: AIMessage = self.llm.invoke(messages)
-        except Exception as exc:
-            if self.temperature is None or "temperature" not in str(exc).lower():
-                raise
-            # The model refuses a temperature of its own choosing: use its default.
-            log.info("%s does not take temperature %s", self.model_name, self.temperature)
-            self.temperature = None
-            self.llm = self._build()
-            answer = self.llm.invoke(messages)
+        here = threading.current_thread()
+        if getattr(self, "home", here) is here:
+            release_connection(self.session)  # nothing held while the model answers
+        with parallel.slots:
+            answer = self._ask(messages)
         usage = answer.usage_metadata or {}
         # Its own session: tokens are spent whatever happens to the caller's transaction.
         with Session(self.engine) as journal:
@@ -90,6 +87,18 @@ class TextModel:
             )
             journal.commit()
         return answer.content if isinstance(answer.content, str) else str(answer.content)
+
+    def _ask(self, messages: list[BaseMessage]) -> AIMessage:
+        try:
+            return self.llm.invoke(messages)
+        except Exception as exc:
+            if self.temperature is None or "temperature" not in str(exc).lower():
+                raise
+            # The model refuses a temperature of its own choosing: use its default.
+            log.info("%s does not take temperature %s", self.model_name, self.temperature)
+            self.temperature = None
+            self.llm = self._build()
+            return self.llm.invoke(messages)
 
     def invoke_json[T: BaseModel](
         self, operation: str, messages: list[BaseMessage], schema: type[T]

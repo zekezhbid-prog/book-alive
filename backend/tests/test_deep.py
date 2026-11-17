@@ -32,7 +32,11 @@ CAST = {
     "beings": [
         {
             "name": "Рыхташ",
-            "sources": [{"name": "Рыхташ"}, {"name": "старик"}, {"name": "Дед"}],
+            "sources": [
+                {"name": "Рыхташ"},
+                {"name": "старик", "chapters": [1]},
+                {"name": "Дед", "chapters": [2]},
+            ],
         },
         {"name": "Люта", "sources": [{"name": "Люта"}]},
     ],
@@ -248,3 +252,90 @@ def test_dossier_is_in_story_order_with_neighbours():
     assert deep.dossier(book, plan) == "=== Chapter 1 «Один» ===\n[1] б\n\n[2] в\n\n[3] г"
     # Too long with the neighbours: only the paragraph itself.
     assert deep.dossier(book, plan, limit=30) == "=== Chapter 1 «Один» ===\n[2] в"
+
+
+def plans_of(mentions, cast):
+    return {p.name: p for p in deep.plan_cards(deep.gather(mentions), cast)}
+
+
+def test_word_given_for_the_whole_book_means_the_being_only_where_it_is_named():
+    plans = plans_of(
+        [
+            [
+                deep.Mention(name="Уцей", paragraphs=[0]),
+                deep.Mention(name="стары", named=False, paragraphs=[1]),
+            ],
+            [deep.Mention(name="стары", named=False, paragraphs=[3])],
+            [deep.Mention(name="стары", named=False, paragraphs=[5, 6])],
+        ],
+        deep.Cast(
+            beings=[
+                deep.Being(
+                    name="Уцей", sources=[deep.Source(name="Уцей"), deep.Source(name="стары")]
+                )
+            ]
+        ),
+    )
+    assert plans["Уцей"].places == {0: {0, 1}}
+    # Nobody was found for "стары" elsewhere: in chapter 3 he is more than a passing word,
+    # so a card in question of that chapter only; in chapter 2 he is mentioned once.
+    assert set(plans) == {"Уцей", "стары (гл. 3)"}
+    assert plans["стары (гл. 3)"].places == {2: {5, 6}}
+    assert not plans["стары (гл. 3)"].named
+
+
+def test_name_given_in_some_chapters_is_no_card_of_its_own_there():
+    plans = plans_of(
+        [
+            [
+                deep.Mention(name="Цмок", paragraphs=[0]),
+                deep.Mention(name="Уладар", paragraphs=[1]),
+            ],
+            [
+                deep.Mention(name="Цмок", paragraphs=[2]),
+                deep.Mention(name="Уладар", paragraphs=[4]),
+            ],
+        ],
+        deep.Cast(
+            beings=[
+                deep.Being(
+                    name="Цмок",
+                    sources=[deep.Source(name="Цмок"), deep.Source(name="Уладар", chapters=[1, 2])],
+                )
+            ]
+        ),
+    )
+    assert set(plans) == {"Цмок"}
+
+
+def test_crowds_headings_and_lone_words_get_no_card():
+    plans = plans_of(
+        [
+            [
+                deep.Mention(name="людзі", named=False, paragraphs=[0]),
+                deep.Mention(name="ПАСЛАНЦЫ", paragraphs=[0]),
+                deep.Mention(name="маці", named=False, paragraphs=[1]),
+                deep.Mention(name="Аўтар Кнігі", paragraphs=[0]),
+            ],
+            [deep.Mention(name="людзі", named=False, paragraphs=[2])],
+        ],
+        deep.Cast(not_characters=["людзі", "Аўтар Кнігі"]),
+    )
+    assert plans == {}
+
+
+def test_main_and_other_cards_are_written_side_by_side(session, project, monkeypatch):
+    import threading
+
+    seen: set[str] = set()
+    light = DeepModel("light")
+    original = light.invoke_json
+
+    def spy(operation, messages, schema):
+        seen.add(threading.current_thread().name)
+        return original(operation, messages, schema)
+
+    monkeypatch.setattr(light, "invoke_json", spy)
+    record = run_deep(session, project, light, DeepModel("strong"))
+    assert record.status == "done", record.error
+    assert any(name.startswith("model") for name in seen)

@@ -157,8 +157,8 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
     assert record.report == {"merged": [["Дед", "Рыхташ"]], "adopted": []}  # shown at the end
     assert record.finished_at is not None  # how long it took is shown too
     assert (
-        record.stage == "looks" and record.stage_done == record.stage_total - 1
-    )  # last step shown
+        record.stage == "looks" and record.stage_done == record.stage_total
+    )  # last step shown, finished
     rykhtash = people["Рыхташ"]
     # "старик" is a common noun, not a name: it is not kept as an alias.
     assert set(rykhtash.aliases) == {"Мельник", "Дед"}

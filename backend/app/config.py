@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     # Seconds a request may wait for a free connection before it fails.
     db_pool_timeout: int = 10
+    # Model requests sent at once by the whole app (a run sends its independent calls
+    # together). Bounded by the provider's rate limits and the pool above.
+    llm_parallel: int = 4
     # The model provider. With a key here the "Hubris" connection is created (and its key
     # kept current) on every start, so the key never has to be typed into the interface.
     hubris_api_key: str = ""

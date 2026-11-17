@@ -21,6 +21,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.analysis import prompts
+from app.llm import parallel
 from app.llm.calls import BadModelOutput, TextModel, estimate_tokens
 from app.models import (
     FACT_PERMANENT,
@@ -692,23 +693,26 @@ def describe_looks(
 ) -> None:
     """The appearance is written card by card, apart from the description: with all its looks
     details and nothing of another card in the same request, so no detail crosses over. An
-    answer that cannot be read keeps the old text."""
-    for index, card in enumerate(cards):
-        show_stage(session, run, "looks", index, len(cards))
-        listing = _looks_text(session, card)
-        if listing is None:
-            continue
+    answer that cannot be read keeps the old text. The cards are asked about side by side."""
+    jobs = [(card, _looks_text(session, card)) for card in cards]
+    jobs = [(card, listing) for card, listing in jobs if listing is not None]
+    show_stage(session, run, "looks", 0, len(jobs))
+    session.commit()  # the model calls go out in other threads: nothing may stay open
+    system = prompts.looks_system(kind)
+
+    def ask(job: tuple[Entity, str]) -> Looks | None:
         try:
-            answer = model.invoke_json(
-                f"looks_{kind}s",
-                [SystemMessage(prompts.looks_system(kind)), HumanMessage(listing)],
-                Looks,
+            return model.invoke_json(
+                f"looks_{kind}s", [SystemMessage(system), HumanMessage(job[1])], Looks
             )
         except BadModelOutput:
-            continue
-        if answer.appearance.strip():
+            return None
+
+    for done, ((card, _), answer) in enumerate(parallel.each(jobs, ask), 1):
+        if answer is not None and answer.appearance.strip():
             card.appearance = answer.appearance.strip()
-            session.commit()
+        show_stage(session, run, "looks", done, len(jobs))
+        session.commit()
 
 
 def _spread(facts: list, positions: dict[str, int], limit: int, seen: set[str]) -> list:

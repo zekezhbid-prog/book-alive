@@ -378,17 +378,25 @@ off as "my niece Mary" to get past the guards) is a false name: it is not the be
 Put it in false_names with whom it was said about.
 - A word used as a form of address or about age ("grandad", "son", "old woman") is not a \
 name and not a kinship.
-- A name that is a group or a role ("the guards") stays a being of its own unless the text \
-shows it is one known character.
+- A common word for a person ("the old man", "the girl", "mother", "the prince"; marked \
+"not a proper name") may mean different people in different chapters. Give it to a being \
+as a source ONLY with the chapter numbers where it means that being, never for the whole \
+book. Where it fits nobody, leave it out.
+- A form of a name in another grammatical case ("Uladara", "Uteiku") is a source of that \
+being.
+- Crowds and roles of ordinary people ("people", "traders", "guards", "servants"), the \
+book's title, headings and the author's name are not characters: put them in \
+not_characters. A kind of creature the story is about (mermaids, goblins) stays a being.
 - Keep every decision of the user listed at the end.
 
-Use the main name the book uses most. Leave out names you have nothing to say about: they \
-stay cards of their own.
+Use the main name the book uses most. Every proper name in the list must end up somewhere: \
+a being's source, a false name or not_characters.
 
 Reply with JSON only:
 {"beings": [{"name": "...", "sources": [{"name": "...", "chapters": []}], "forms": ["..."]}],
- "false_names": [{"name": "...", "belongs_to": "...", "reason": "..."}]}
-"chapters": [] means everywhere in the book."""
+ "false_names": [{"name": "...", "belongs_to": "...", "reason": "..."}],
+ "not_characters": ["..."]}
+"chapters": [] means everywhere in the book (for proper names only)."""
 
 DOSSIER_SYSTEM = (
     """Below is every passage of a book about ONE character, in story order, \

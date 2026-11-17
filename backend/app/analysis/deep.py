@@ -32,6 +32,7 @@ from app.analysis.entities import (
     show_stage,
     write_summaries,
 )
+from app.llm import parallel
 from app.llm.calls import BadModelOutput, TextModel
 from app.models import (
     FACT_PERMANENT,
@@ -51,6 +52,9 @@ INDEX_VERSION = 1
 # and no more than this many of them (the strong model costs several times more).
 MAIN_MIN_CHAPTERS = 5
 MAIN_LIMIT = 8
+# A word for a person nobody was found for gets a card of its own in a chapter only when
+# that chapter speaks of it in this many paragraphs.
+UNNAMED_MIN_PARAGRAPHS = 2
 DOSSIER_CHARS = 120_000
 SAMPLE_CHARS = 350
 CATEGORIES = {FACT_PERMANENT, FACT_STATE, FACT_PROFILE}
@@ -90,6 +94,8 @@ class FalseName(BaseModel):
 class Cast(BaseModel):
     beings: list[Being] = []
     false_names: list[FalseName] = []
+    # Crowds, roles, headings, the author: no card, and no being's paragraphs either.
+    not_characters: list[str] = []
 
 
 class DeepFact(BaseModel):
@@ -117,9 +123,12 @@ class Wrong(BaseModel):
 class Book:
     chapters: list[Chapter]
     paragraphs: list[list[str]] = field(default_factory=list)
+    titles: list[str] = field(default_factory=list)
 
     def __post_init__(self):
+        # Plain copies: the model calls run in other threads and must not touch the ORM.
         self.paragraphs = [c.text.split("\n\n") for c in self.chapters]
+        self.titles = [c.title for c in self.chapters]
 
 
 def numbered_parts(paragraphs: list[str], limit: int = CHUNK_CHARS) -> list[str]:
@@ -146,10 +155,8 @@ def numbered_parts(paragraphs: list[str], limit: int = CHUNK_CHARS) -> list[str]
 INDEX_KIND = "character_index"
 
 
-def index_chapter(
-    session: Session, model: TextModel, run: AnalysisRun, chapter: Chapter
-) -> list[Mention]:
-    """The mentions of one chapter, read once and kept with the chapter's hash."""
+def stored_index(session: Session, chapter: Chapter) -> list[Mention] | None:
+    """The mentions read before from this very text, or None."""
     stored = session.scalars(
         select(ChapterExtraction).where(
             ChapterExtraction.chapter_id == chapter.id, ChapterExtraction.kind == INDEX_KIND
@@ -161,19 +168,29 @@ def index_chapter(
         and stored.payload.get("version") == INDEX_VERSION
     ):
         return ChapterMentions.model_validate(stored.payload).mentions
-    paragraphs = chapter.text.split("\n\n")
+    return None
+
+
+def read_chapter(model: TextModel, title: str, paragraphs: list[str]) -> list[Mention]:
+    """Who is mentioned in which paragraphs: the model only, safe in another thread."""
     found: list[Mention] = []
     for part in numbered_parts(paragraphs):
         answer = model.invoke_json(
             "index_characters",
             [
                 SystemMessage(prompts.INDEX_SYSTEM),
-                HumanMessage(f'Chapter "{chapter.title}":\n\n{part}'),
+                HumanMessage(f'Chapter "{title}":\n\n{part}'),
             ],
             ChapterMentions,
         )
         found.extend(answer.mentions)
-    mentions = clean_mentions(found, len(paragraphs))
+    return clean_mentions(found, len(paragraphs))
+
+
+def keep_index(
+    session: Session, project_id: str, chapter: Chapter, mentions: list[Mention]
+) -> None:
+    """Kept with the chapter's hash: the same text is never read again."""
     session.execute(
         delete(ChapterExtraction).where(
             ChapterExtraction.chapter_id == chapter.id, ChapterExtraction.kind == INDEX_KIND
@@ -181,7 +198,7 @@ def index_chapter(
     )
     session.add(
         ChapterExtraction(
-            project_id=run.project_id,
+            project_id=project_id,
             chapter_id=chapter.id,
             kind=INDEX_KIND,
             chapter_hash=chapter.content_hash,
@@ -192,7 +209,6 @@ def index_chapter(
         )
     )
     session.commit()
-    return mentions
 
 
 def clean_mentions(found: list[Mention], count: int) -> list[Mention]:
@@ -293,7 +309,9 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
     """Cards from the model's cast; a name it left out is a card of its own. A false name
     is no card and no alias, but its paragraphs go to the being it was said about."""
     false = {norm(f.name): f for f in cast.false_names}
-    used: set[str] = set()
+    used: set[str] = {norm(n) for n in cast.not_characters}
+    # Chapters where a name was given to some being: elsewhere it may still be someone else.
+    claimed: dict[str, set[int]] = {}
     plans: list[Plan] = []
     for being in cast.beings:
         if not being.name.strip() or any(norm(p.name) == norm(being.name) for p in plans):
@@ -301,16 +319,22 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
         places: dict[int, set[int]] = {}
         aliases: list[str] = []
         named = False
-        for source in being.sources:
-            entry = names.get(norm(source.name))
-            if entry is None:
-                continue
+        sources = [(s, names.get(norm(s.name))) for s in being.sources]
+        sources = [(s, entry) for s, entry in sources if entry is not None]
+        # Where the being is called by a name: a word ("the old man") the model gave to it
+        # for the whole book still means it only there, as the same word may be anyone else.
+        own = {c for s, entry in sources if entry.named for c in entry.places}
+        for source, entry in sources:
             wanted = {c - 1 for c in source.chapters}
+            if not wanted and not entry.named and own:
+                wanted = own
             for chapter, paragraphs in entry.places.items():
                 if wanted and chapter not in wanted:
                     continue
                 places.setdefault(chapter, set()).update(paragraphs)
-            if not wanted:
+            if wanted:
+                claimed.setdefault(norm(source.name), set()).update(wanted)
+            else:
                 used.add(norm(source.name))
             named = named or entry.named
             # Only real names become other names: "the old man" is no name.
@@ -333,14 +357,24 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
             for chapter, paragraphs in entry.places.items():
                 owner.places.setdefault(chapter, set()).update(paragraphs)
     for key, entry in names.items():
-        if key in used or key in by_name:
+        if key in used or key in by_name or entry.name.isupper():  # a heading in capitals
             continue
-        # "a bird" seen in one chapter: nothing worth a card.
-        if not entry.named and len(entry.places) < 2:
+        rest = {c: set(p) for c, p in entry.places.items() if c not in claimed.get(key, ())}
+        if entry.named:
+            if rest:
+                plan = Plan(entry.name, [], rest, True)
+                plans.append(plan)
+                by_name[key] = plan
             continue
-        plan = Plan(entry.name, [], {c: set(p) for c, p in entry.places.items()}, entry.named)
-        plans.append(plan)
-        by_name[key] = plan
+        # A word nobody was found for may be someone else in every chapter ("the warriors"
+        # of one battle and of another): a card in question (`uncertain`) per chapter, and
+        # only where the chapter speaks of it more than in passing.
+        for chapter, paragraphs in sorted(rest.items()):
+            if len(paragraphs) >= UNNAMED_MIN_PARAGRAPHS:
+                name = f"{entry.name} (гл. {chapter + 1})"
+                plan = Plan(name, [], {chapter: paragraphs}, False)
+                plans.append(plan)
+                by_name[norm(name)] = plan
     return plans
 
 
@@ -372,7 +406,7 @@ def dossier(book: Book, plan: Plan, limit: int = DOSSIER_CHARS) -> str:
                 }
             )
             lines = [f"[{j}] {paragraphs[j]}" for j in wanted]
-            title = book.chapters[chapter].title or f"#{chapter + 1}"
+            title = book.titles[chapter] or f"#{chapter + 1}"
             blocks.append(
                 (chapter, f"=== Chapter {chapter + 1} «{title}» ===\n" + "\n\n".join(lines))
             )
@@ -410,10 +444,20 @@ def write_card(model: TextModel, book: Book, plan: Plan, known_ages: dict[str, s
         return CardDraft()
 
 
-def store_card(book: Book, entity: Entity, plan: Plan, draft: CardDraft) -> None:
+@dataclass
+class Kept:
+    """A fact of a draft whose quote was found: its chapter index and paragraph."""
+
+    chapter: int
+    paragraph: int
+    category: str
+    text: str
+    quote: str
+
+
+def keep_facts(book: Book, draft: CardDraft) -> list[Kept]:
     """Facts with a quote that is in the chapter it names; doubtful ones are left out."""
-    for chapter in sorted(plan.places):
-        entity.facts.append(_fact(book, chapter, FACT_MENTION))
+    kept: list[Kept] = []
     seen: set[str] = set()
     for item in draft.facts:
         chapter = item.chapter - 1
@@ -430,8 +474,16 @@ def store_card(book: Book, entity: Entity, plan: Plan, draft: CardDraft) -> None
         if key in seen:
             continue
         seen.add(key)
+        kept.append(Kept(chapter, paragraph, item.category, item.text.strip(), item.quote.strip()))
+    return kept
+
+
+def store_card(book: Book, entity: Entity, plan: Plan, kept: list[Kept]) -> None:
+    for chapter in sorted(plan.places):
+        entity.facts.append(_fact(book, chapter, FACT_MENTION))
+    for item in kept:
         entity.facts.append(
-            _fact(book, chapter, item.category, item.text.strip(), item.quote.strip(), paragraph)
+            _fact(book, item.chapter, item.category, item.text, item.quote, item.paragraph)
         )
 
 
@@ -452,20 +504,15 @@ def _fact(
 # ---------- step D: does each quote speak of this character ----------
 
 
-def check_card(model: TextModel, book: Book, entity: Entity) -> None:
-    facts = [f for f in entity.facts if f.text.strip()]
+def check_facts(model: TextModel, book: Book, plan: Plan, facts: list[Kept]) -> list[Kept]:
+    """The facts whose quote the model finds to be about this character."""
     if not facts:
-        return
-    positions = {c.id: i for i, c in enumerate(book.chapters)}
+        return facts
     lines = [
-        f"Character: {entity.name}"
-        + (f" (also: {', '.join(entity.aliases)})" if entity.aliases else "")
+        f"Character: {plan.name}" + (f" (also: {', '.join(plan.aliases)})" if plan.aliases else "")
     ]
     for number, fact in enumerate(facts, 1):
-        chapter = positions.get(fact.chapter_id)
-        context = ""
-        if chapter is not None and fact.paragraph is not None:
-            context = " ".join(book.paragraphs[chapter][fact.paragraph].split())[:600]
+        context = " ".join(book.paragraphs[fact.chapter][fact.paragraph].split())[:600]
         lines.append(f"[{number}] {fact.text}\n    quote: «{fact.quote}»\n    paragraph: {context}")
     try:
         answer = model.invoke_json(
@@ -474,10 +521,9 @@ def check_card(model: TextModel, book: Book, entity: Entity) -> None:
             Wrong,
         )
     except BadModelOutput:
-        return
-    for number in set(answer.wrong):
-        if 1 <= number <= len(facts):
-            entity.facts.remove(facts[number - 1])
+        return facts
+    wrong = set(answer.wrong)
+    return [f for number, f in enumerate(facts, 1) if number not in wrong]
 
 
 # ---------- the whole run ----------
@@ -490,15 +536,24 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
     """Steps A-D and the descriptions. Chapters indexed before a failure are kept."""
     project = session.get(Project, run.project_id)
     book = Book(sorted(project.chapters, key=lambda c: c.position))
-    index: list[list[Mention]] = []
-    for number, chapter in enumerate(book.chapters):
+    index: list[list[Mention] | None] = [stored_index(session, c) for c in book.chapters]
+    for number, mentions in enumerate(index):
+        if mentions is not None:
+            _done(run, book.chapters[number])
+    session.commit()  # the chapters are read in other threads: nothing may stay open
+    pending = [n for n, mentions in enumerate(index) if mentions is None]
+    reading = parallel.each(
+        pending, lambda n: read_chapter(light, book.titles[n], book.paragraphs[n])
+    )
+    for number, mentions in reading:
+        keep_index(session, run.project_id, book.chapters[number], mentions)
+        index[number] = mentions
+        _done(run, book.chapters[number])
+        session.commit()
         if _cancelled(session, run):
+            reading.close()
             return
-        index.append(index_chapter(session, light, run, chapter))
-        if chapter.id not in run.done_chapter_ids:
-            run.done_chapter_ids = [*run.done_chapter_ids, chapter.id]
-            session.commit()
-    names = gather(index)
+    names = gather([m or [] for m in index])
     existing = list(
         session.scalars(
             select(Entity).where(Entity.project_id == project.id, Entity.kind == run.kind)
@@ -520,20 +575,29 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
     # Main characters first: their ages help to work out the others' ("as old as Uts").
     order = sorted(plans, key=lambda p: (norm(p.name) not in main, -p.chapter_count))
     known_ages: dict[str, str] = {}
-    for number, plan in enumerate(order):
-        if _cancelled(session, run):
-            return
-        show_stage(session, run, "cards", number, len(order))
-        model = strong if norm(plan.name) in main else light
-        draft = write_card(model, book, plan, known_ages)
-        if draft.age.strip() and AGE_FACT.search(draft.age):
-            known_ages[plan.name] = draft.age.strip()
-        entity = entities[norm(plan.name)]
-        store_card(book, entity, plan, draft)
-        session.flush()
-        show_stage(session, run, "check", number, len(order))
-        check_card(light, book, entity)
-        session.commit()
+    done = 0
+    show_stage(session, run, "cards", 0, len(order))
+    for group in (
+        [p for p in order if norm(p.name) in main],
+        [p for p in order if norm(p.name) not in main],
+    ):
+        ages = dict(known_ages)
+
+        def card(plan: Plan, ages: dict[str, str] = ages) -> tuple[CardDraft, list[Kept]]:
+            model = strong if norm(plan.name) in main else light
+            draft = write_card(model, book, plan, ages)
+            return draft, check_facts(light, book, plan, keep_facts(book, draft))
+
+        writing = parallel.each(group, card)
+        for plan, (draft, kept) in writing:
+            if draft.age.strip() and AGE_FACT.search(draft.age):
+                known_ages[plan.name] = draft.age.strip()
+            store_card(book, entities[norm(plan.name)], plan, kept)
+            done += 1
+            show_stage(session, run, "cards", done, len(order))  # commits
+            if _cancelled(session, run):
+                writing.close()
+                return
     cards = [
         entities[norm(p.name)]
         for p in order
@@ -579,6 +643,11 @@ def _bind(
             session.delete(entity)
     session.flush()
     return bound
+
+
+def _done(run: AnalysisRun, chapter: Chapter) -> None:
+    if chapter.id not in run.done_chapter_ids:
+        run.done_chapter_ids = [*run.done_chapter_ids, chapter.id]
 
 
 def _cancelled(session: Session, run: AnalysisRun) -> bool:
