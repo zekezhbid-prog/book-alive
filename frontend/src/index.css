@@ -153,14 +153,16 @@ ul { margin: 6px 0 0; padding-left: 18px; }
    text run wider instead of leaving an empty band on the right. */
 .chapter { margin: 0; }
 .chapter-tools { display: flex; align-items: center; gap: 4px; min-height: 34px; }
-.chapter-title { width: 100%; background: transparent; border: 0; border-bottom: 1px solid transparent; outline: none; font: 800 34px/1.15 var(--serif); letter-spacing: -0.5px; padding: 8px 0; margin-bottom: 24px; }
+.chapter-title { width: 100%; background: transparent; border: 0; border-bottom: 1px solid transparent; outline: none; font: 800 34px/1.35 var(--serif); letter-spacing: -0.5px; padding: 8px 0; margin-bottom: 24px; }
 .chapter-title:hover, .chapter-title:focus { border-bottom-color: var(--line-2); }
-.chapter p { position: relative; font: 18px/1.7 var(--serif); margin-bottom: 1em; }
+/* A paragraph gap of one blank line, as in the writer's textarea: the text does not jump
+   when the writer and the illustrator views are switched. */
+.chapter p { position: relative; font: 18px/1.7 var(--serif); margin-bottom: 1.7em; }
 .chapter p.highlighted { background: var(--accent-soft); box-shadow: 0 0 0 8px var(--accent-soft); border-radius: 4px; }
 .split { position: absolute; left: -38px; top: 2px; width: 28px; height: 28px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel-2); cursor: pointer; opacity: 0; font-size: 13px; }
 .chapter p:hover .split, .split:focus { opacity: 1; }
 .split:hover { border-color: var(--accent); color: var(--accent); }
-.chapter-text { display: block; width: 100%; min-height: 60vh; field-sizing: content; resize: none; background: transparent; border: 0; outline: none; font: 18px/1.7 var(--serif); }
+.chapter-text { display: block; width: 100%; min-height: 60vh; field-sizing: content; resize: none; background: transparent; border: 0; outline: none; padding: 0; font: 18px/1.7 var(--serif); }
 
 /* ---------- tabs, cards, usage ---------- */
 .tabs { display: flex; gap: 4px; height: var(--topbar); }
