@@ -97,6 +97,13 @@ export default function App() {
             element={<Entities key="location" kind="location" />}
           />
         ))}
+        {['items', 'items/:entityId'].map((path) => (
+          <Route
+            key={path}
+            path={`/projects/:projectId/${path}`}
+            element={<Entities key="item" kind="item" />}
+          />
+        ))}
         <Route path="/projects/:projectId/scenes" element={<Scenes />} />
         <Route path="/projects/:projectId/scenes/:sceneId" element={<Scenes />} />
         <Route path="/projects/:projectId/style" element={<Style />} />

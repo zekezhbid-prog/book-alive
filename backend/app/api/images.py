@@ -23,7 +23,16 @@ from app.images.reference_sort import SortResult, ask_model, decide
 from app.images.style_check import StyleVerdict, check_style
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
-from app.models import KIND_CHARACTER, KIND_LOCATION, Chapter, Entity, Image, Project, new_id
+from app.models import (
+    KIND_CHARACTER,
+    KIND_ITEM,
+    KIND_LOCATION,
+    Chapter,
+    Entity,
+    Image,
+    Project,
+    new_id,
+)
 
 router = APIRouter(prefix="/api", tags=["images"])
 
@@ -470,7 +479,7 @@ def create_entity(project_id: str, body: EntityCreate, session: SessionDep) -> d
     """An empty card for someone the search has not reached yet, so references can be
     attached now. A later search adds facts to it by name."""
     project = _project(session, project_id)
-    if body.kind not in (KIND_CHARACTER, KIND_LOCATION):
+    if body.kind not in (KIND_CHARACTER, KIND_LOCATION, KIND_ITEM):
         raise HTTPException(422, "bad_kind")
     name = body.name.strip()
     for existing in session.scalars(

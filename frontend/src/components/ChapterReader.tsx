@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, type Chapter, type EntityKind, type Project } from '../api'
+import { api, sectionOf, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n } from '../i18n'
 import { markMatches } from '../markMatches'
 import { ask } from '../dialogs'
@@ -151,7 +151,7 @@ function buildLinker(projectId: string, entities: NamedEntity[]): Linker {
       const entity = targets.get(match[1].toLowerCase())
       if (!entity) continue
       out.push(text.slice(last, match.index))
-      const section = entity.kind === 'character' ? 'characters' : 'locations'
+      const section = sectionOf(entity.kind)
       out.push(
         <Link
           key={`${keyPrefix}:${match.index}`}

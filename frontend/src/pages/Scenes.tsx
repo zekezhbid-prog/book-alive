@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   api,
   peek,
+  sectionOf,
   type Angle,
   type ChapterBrief,
+  type EntityKind,
   type ImageInfo,
   type Project,
   type Scene,
@@ -291,7 +293,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
     await saveEdit()
     location.href = api.sceneArchiveUrl(scene.id)
   }
-  const section = (kind: string) => (kind === 'character' ? 'characters' : 'locations')
+  const section = (kind: EntityKind) => sectionOf(kind)
   const describe = (main: boolean, angle: Angle | '', look: string) =>
     main
       ? [t('gallery.main'), angle && t(`angle.${angle}`)].filter(Boolean).join(', ')

@@ -446,13 +446,35 @@ def test_api_rescan_from_scratch_drops_stored_answers(client, session, project, 
     assert len(started) == 1
 
 
-def test_characters_are_living_beings_and_objects_go_with_locations():
+def test_characters_locations_and_items_are_searched_apart():
     characters = prompts.extract_system("character")
     assert "living, animate beings only" in characters
     assert "Never list objects" in characters
     locations = prompts.extract_system("location")
-    assert "notable inanimate things" in locations
-    assert prompts.summary_system("location").count("locations and objects") == 1
+    assert "places where the action happens" in locations
+    assert "Never list movable objects" in locations
+    items = prompts.extract_system("item")
+    assert "movable inanimate things" in items
+    assert "Never list places" in items
+    assert prompts.summary_system("location").count("locations") == 1
+    assert "objects" not in prompts.summary_system("location")
+    assert prompts.summary_system("item").count("objects") == 1
+    for build in (prompts.looks_system, prompts.reconcile_system, prompts.general_system):
+        assert build("item")
+    assert "Ignore every other object" in prompts.card_facts_system("item", "the sword")
+    from app.images.prompts import FRAMING
+
+    assert "item" in FRAMING
+
+
+def test_items_have_their_own_list(client, session, project):
+    sword = Entity(project_id=project.id, kind="item", name="Sword")
+    session.add_all([sword, Entity(project_id=project.id, kind="location", name="Mill")])
+    session.commit()
+    url = f"/api/projects/{project.id}/entities"
+    assert [e["name"] for e in client.get(url, params={"kind": "item"}).json()] == ["Sword"]
+    assert [e["name"] for e in client.get(url, params={"kind": "location"}).json()] == ["Mill"]
+    assert client.get(url, params={"kind": "spoon"}).status_code == 422
 
 
 def test_dialog_knows_which_chapters_are_read_and_which_changed(client, session, project):

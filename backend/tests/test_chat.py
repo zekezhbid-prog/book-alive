@@ -625,6 +625,23 @@ def test_a_crowded_chapter_lists_everyone_main_characters_first(session, project
     assert "А39" in line  # the 41st name is there too
 
 
+def test_contents_keeps_items_apart_from_people_and_places(session, project):
+    from app.rag import agent
+
+    chapter = project.chapters[0]
+    for kind, name in (("character", "Утей"), ("location", "Млын"), ("item", "Меч")):
+        card = Entity(project_id=project.id, kind=kind, name=name, aliases=[])
+        card.facts.append(
+            EntityFact(chapter_id=chapter.id, chapter_hash="", category="mention", text="")
+        )
+        session.add(card)
+    session.commit()
+    line = agent.contents(session, project).split("\n")[0]
+    assert "characters: Утей;" in line
+    assert "places: Млын;" in line
+    assert "items: Меч" in line
+
+
 def test_a_card_shows_where_the_story_of_someone_ends(session, project):
     from app.rag import agent
 

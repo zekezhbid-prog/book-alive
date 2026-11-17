@@ -300,6 +300,16 @@ export function PinIcon() {
   )
 }
 
+/** A key: the tab of objects (weapons, keys, letters). */
+export function KeyIcon() {
+  return (
+    <svg {...stroke}>
+      <circle cx="7.5" cy="15.5" r="4" />
+      <path d="M10.5 12.5 20 3M16 7l3 3M14 9l2 2" />
+    </svg>
+  )
+}
+
 export function FilmIcon() {
   return (
     <svg {...stroke}>

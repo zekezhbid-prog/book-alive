@@ -194,7 +194,10 @@ export interface TestResult {
   output_tokens: number
 }
 
-export type EntityKind = 'character' | 'location'
+export type EntityKind = 'character' | 'location' | 'item'
+export type EntitySection = 'characters' | 'locations' | 'items'
+/** The part of the site where cards of a kind live: /characters, /locations, /items. */
+export const sectionOf = (kind: EntityKind): EntitySection => `${kind}s`
 
 export interface Estimate {
   chapters: number

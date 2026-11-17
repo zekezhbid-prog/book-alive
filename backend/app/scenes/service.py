@@ -19,6 +19,7 @@ from app.models import (
     FACT_PERMANENT,
     FACT_STATE,
     KIND_CHARACTER,
+    KIND_ITEM,
     Chapter,
     Entity,
     Image,
@@ -315,7 +316,7 @@ def scene_context(
             continue
         permanent, state = _facts_at(project, entity, chapter)
         numbers = [f"reference {r.number} ({_label(r)})" for r in refs if r.entity.id == entity.id]
-        kind = "Character" if entity.kind == KIND_CHARACTER else "Location"
+        kind = {KIND_CHARACTER: "Character", KIND_ITEM: "Item"}.get(entity.kind, "Location")
         lines.append(f"{kind}: {entity.name} - {', '.join(numbers) or 'no reference picture'}")
         lines += [f"  permanent: {t}" for t in permanent]
         lines += [f"  at this point: {t}" for t in state]

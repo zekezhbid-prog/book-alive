@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.llm.calls import BadModelOutput, TextModel
-from app.models import KIND_LOCATION, Entity, EntityFact, Project
+from app.models import KIND_CHARACTER, KIND_ITEM, KIND_LOCATION, Entity, EntityFact, Project
 from app.rag.index import search
 
 # Decisions per question, the last one forced to be an answer. Each is a model call.
@@ -165,12 +165,13 @@ def contents(
             continue
         line = f"{number}. {chapter.title or '(untitled)'} — {len(chapter.text):,} characters"
         found = names.get(chapter.id, {})
-        people = [n for k, ns in found.items() if k != KIND_LOCATION for n in ns]
-        places = found.get(KIND_LOCATION, [])
-        if people:
-            line += f"; characters: {', '.join(people)}"
-        if places:
-            line += f"; places: {', '.join(places)}"
+        for kind, label in (
+            (KIND_CHARACTER, "characters"),
+            (KIND_LOCATION, "places"),
+            (KIND_ITEM, "items"),
+        ):
+            if found.get(kind):
+                line += f"; {label}: {', '.join(found[kind])}"
         if chapter.id == open_chapter_id:
             line += " (open now)"
         lines.append(line)

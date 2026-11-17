@@ -1,9 +1,9 @@
-"""Prompt templates for finding characters and locations."""
+"""Prompt templates for finding characters, locations and items."""
 
-from app.models import KIND_CHARACTER
+from app.models import KIND_CHARACTER, KIND_ITEM
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 7
+PROMPT_VERSION = 8
 
 _SUBJECT = {
     "character": {
@@ -24,16 +24,28 @@ the story makes it alive (it speaks or acts by itself)",
         "occupation",
     },
     "location": {
-        "what": "locations and objects: places where the action happens or that are \
-described, and notable inanimate things (weapons, artifacts, vehicles, buildings, \
-landmarks such as a bridge or a mill, important items a character owns or uses). Skip \
-living beings: they are characters. Skip ordinary everyday things that play no part",
-        "permanent": "what kind of place or thing it is, architecture, layout, shape, "
-        "materials, size, ornament, surroundings, landmarks",
-        "state": "time of day, weather, season, light, damage, wear, crowds or emptiness, "
-        "sounds and smells, who holds or uses it now",
-        "profile": "what the place or thing is for, who lives or works there or owns it, "
-        "what happens there or with it, its history and role in the story",
+        "what": "locations: places where the action happens or that are described (lands, \
+towns, villages, forests, rivers, roads, houses, rooms, and buildings or landmarks such as a \
+bridge, a tower or a mill). Never list movable objects (weapons, tools, jewels, books, \
+vehicles): they are items. Skip living beings: they are characters",
+        "permanent": "what kind of place it is, architecture, layout, shape, materials, "
+        "size, ornament, surroundings, landmarks",
+        "state": "time of day, weather, season, light, damage, crowds or emptiness, "
+        "sounds and smells",
+        "profile": "what the place is for, who lives or works there or owns it, what "
+        "happens there, its history and role in the story",
+    },
+    "item": {
+        "what": "items: notable movable inanimate things (weapons, armour, tools, jewels, \
+artifacts, books, letters, keys, vehicles, important things a character owns, carries or \
+uses). Never list places, buildings or landmarks: they are locations. Skip living beings: \
+they are characters. Skip ordinary everyday things that play no part",
+        "permanent": "what kind of thing it is, shape, size, materials, colours, make, "
+        "ornament, inscriptions, marks",
+        "state": "damage, wear, dirt or blood, whether it glows or is broken, who holds or "
+        "uses it now and where it is",
+        "profile": "what the thing is for, who made, owns or uses it, what it can do, its "
+        "history and role in the story",
     },
 }
 
@@ -219,7 +231,7 @@ def general_system(kind: str) -> str:
 
 
 def _noun(kind: str) -> str:
-    return "characters" if kind == KIND_CHARACTER else "locations and objects"
+    return {KIND_CHARACTER: "characters", KIND_ITEM: "objects"}.get(kind, "locations")
 
 
 # An illustrator who is not told the age draws an adult: a boy of fourteen came out bearded.
@@ -235,8 +247,10 @@ _APPEARANCE = {
     "character": "age, sex, build and height, face, hair, eyes, skin, scars or marks, and "
     "the clothes they usually wear; for a creature that is not human: what kind of being it "
     "is, size, body shape and every part of the body the book describes",
-    "location": "what kind of place or thing it is, its size and shape, materials, colours, "
-    "architecture or make, and what surrounds it",
+    "location": "what kind of place it is, its size and shape, materials, colours, "
+    "architecture, and what surrounds it",
+    "item": "what kind of thing it is, its size and shape, materials, colours, make, "
+    "ornament and marks",
 }
 
 
@@ -278,7 +292,7 @@ def card_facts_system(kind: str, target: str) -> str:
     subject = _SUBJECT[kind]
     return CARD_FACTS_SYSTEM.format(
         target=target,
-        noun_one="character" if kind == KIND_CHARACTER else "place or thing",
+        noun_one={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(kind, "place"),
         permanent=subject["permanent"],
         state=subject["state"],
         profile=subject["profile"],

@@ -155,6 +155,7 @@ class AppSetting(Base):
 
 KIND_CHARACTER = "character"
 KIND_LOCATION = "location"
+KIND_ITEM = "item"
 
 FACT_PERMANENT = "permanent"  # face, build, age, scars: true for the whole book
 FACT_STATE = "state"  # clothes, wounds, carried objects: true in one chapter
@@ -167,7 +168,7 @@ RUN_CANCELLED = "cancelled"
 
 
 class Entity(Base):
-    """A character or a location. Everything known about it lives in `facts`."""
+    """A character, a location or an item. Everything known about it lives in `facts`."""
 
     __tablename__ = "entities"
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, ApiError, peek, type Chapter, type EntityBrief, type Project } from '../api'
+import { api, ApiError, peek, type Chapter, type EntityBrief, type EntityKind, type Project } from '../api'
 import ChapterEditor, { type EditorControl } from '../components/ChapterEditor'
 import ChapterReader, { type NamedEntity } from '../components/ChapterReader'
 import ProjectHeader from '../components/ProjectHeader'
@@ -42,11 +42,12 @@ export default function Book() {
   )
   useEffect(() => {
     reloadProject()
-    const named = (kind: 'character' | 'location') => (list: EntityBrief[]) =>
+    const named = (kind: EntityKind) => (list: EntityBrief[]) =>
       list.map((e) => ({ id: e.id, kind, names: [e.name, ...e.aliases] }))
     Promise.all([
       api.entities(projectId, 'character').then(named('character')),
       api.entities(projectId, 'location').then(named('location')),
+      api.entities(projectId, 'item').then(named('item')),
     ]).then((lists) => setNames(lists.flat()), fail)
   }, [reloadProject, projectId, fail])
 

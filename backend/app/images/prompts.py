@@ -5,7 +5,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.images.angles import ANGLES
 from app.images.styles import style_prompt
 from app.llm.calls import TextModel
-from app.models import FACT_PERMANENT, FACT_STATE, KIND_CHARACTER, Chapter, Entity, Project
+from app.models import (
+    FACT_PERMANENT,
+    FACT_STATE,
+    KIND_CHARACTER,
+    KIND_ITEM,
+    Chapter,
+    Entity,
+    Project,
+)
 
 SYSTEM = """You write one prompt for an AI image generator. The picture is a reference \
 sheet image of a {subject} from a book, used later to keep it looking the same in every scene.
@@ -32,6 +40,8 @@ FRAMING = {
     "uncluttered background, even light, face clearly visible.",
     "location": "Wide establishing view of the place with no people, showing its overall "
     "shape, materials and surroundings.",
+    "item": "The object alone, whole and clearly visible, on a plain uncluttered background, "
+    "even light, no people.",
 }
 
 
@@ -94,7 +104,7 @@ def build_image_prompt(
     )
     system = SYSTEM.format(
         age=age,
-        subject="character" if entity.kind == KIND_CHARACTER else "location",
+        subject={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(entity.kind, "location"),
         framing=VIEW_FREE if view_free else ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,
         style=style_prompt(project) or "(no style chosen: omit this part)",

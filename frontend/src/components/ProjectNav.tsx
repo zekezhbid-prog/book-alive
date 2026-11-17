@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { api, peek, type EntityBrief, type EntityKind, type Project, type SceneBrief } from '../api'
+import { api, peek, type EntityBrief, type EntityKind, type EntitySection, type Project, type SceneBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { ArrowDownIcon, ArrowUpIcon, BoldPlusIcon, PlusIcon, SparklesIcon, TrashIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
 
-type Section = 'chapters' | 'characters' | 'locations' | 'scenes'
-const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'scenes']
-const KIND: Record<'characters' | 'locations', EntityKind> = { characters: 'character', locations: 'location' }
+type Section = 'chapters' | EntitySection | 'scenes'
+const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'items', 'scenes']
+const KIND: Record<EntitySection, EntityKind> = { characters: 'character', locations: 'location', items: 'item' }
+const isCards = (s: Section): s is EntitySection => s in KIND
 
 interface Props {
   project: Project
@@ -16,6 +17,7 @@ interface Props {
   /** A page passes the list it keeps current itself, so a running search shows up here too. */
   characters?: EntityBrief[] | null
   locations?: EntityBrief[] | null
+  items?: EntityBrief[] | null
   scenes?: SceneBrief[] | null
   /** Only while writing: adds a chapter after the open one. */
   onAddChapter?: () => void
@@ -25,7 +27,7 @@ interface Props {
 }
 
 /**
- * The list of the open part of the book (chapters, characters, locations or scenes) in a
+ * The list of the open part of the book (chapters, characters, locations, items or scenes) in a
  * column on the left. The parts themselves are the tabs of the top bar.
  */
 export default function ProjectNav({ project, activeChapter, onAddChapter, onMoveChapter, onDeleteChapter, ...given }: Props) {
@@ -49,17 +51,20 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
   const [fetched, setFetched] = useState<{
     characters?: EntityBrief[]
     locations?: EntityBrief[]
+    items?: EntityBrief[]
     scenes?: SceneBrief[]
   }>(() => ({
     // The last lists are shown at once (no blink when switching tabs), then refreshed.
     characters: peek.entities(project.id, 'character'),
     locations: peek.entities(project.id, 'location'),
+    items: peek.entities(project.id, 'item'),
     scenes: peek.scenes(project.id),
   }))
   const [error, setError] = useState('')
   // A list the page passes in (even while it is still loading) is not fetched again here.
   const hasCharacters = given.characters !== undefined
   const hasLocations = given.locations !== undefined
+  const hasItems = given.items !== undefined
   const hasScenes = given.scenes !== undefined
   useEffect(() => {
     const fail = (e: unknown) => setError(errorText(t, e))
@@ -67,10 +72,12 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
       api.entities(project.id, 'character').then((characters) => setFetched((f) => ({ ...f, characters })), fail)
     if (!hasLocations)
       api.entities(project.id, 'location').then((locations) => setFetched((f) => ({ ...f, locations })), fail)
+    if (!hasItems) api.entities(project.id, 'item').then((items) => setFetched((f) => ({ ...f, items })), fail)
     if (!hasScenes) api.scenes(project.id).then((scenes) => setFetched((f) => ({ ...f, scenes })), fail)
-  }, [project.id, t, hasCharacters, hasLocations, hasScenes])
+  }, [project.id, t, hasCharacters, hasLocations, hasItems, hasScenes])
   const characters = given.characters ?? fetched.characters
   const locations = given.locations ?? fetched.locations
+  const items = given.items ?? fetched.items
   const scenes = given.scenes ?? fetched.scenes
 
   // Chapters whose scenes are folded away in the list; a click on the chapter title toggles.
@@ -88,9 +95,9 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
   }
 
   // A card for someone the search has not reached yet, so pictures can be attached now.
-  const [adding, setAdding] = useState<'characters' | 'locations' | null>(null)
-  const addCard = (section: 'characters' | 'locations') => setAdding(section)
-  const added = (section: 'characters' | 'locations', created: EntityBrief) => {
+  const [adding, setAdding] = useState<EntitySection | null>(null)
+  const addCard = (section: EntitySection) => setAdding(section)
+  const added = (section: EntitySection, created: EntityBrief) => {
     setAdding(null)
     setFetched((f) => {
       const list = f[section] ?? []
@@ -157,6 +164,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
     ),
     characters: cards('characters', characters),
     locations: cards('locations', locations),
+    items: cards('items', items),
     scenes: (
       <>
         {scenes?.length === 0 && <p className="faint small nav-empty">{t('scenes.empty')}</p>}
@@ -208,7 +216,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
     ),
   }
 
-  function cards(section: 'characters' | 'locations', list?: EntityBrief[] | null) {
+  function cards(section: EntitySection, list?: EntityBrief[] | null) {
     const link = (item: EntityBrief) => (
       <button
         key={item.id}
@@ -242,7 +250,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
   }
 
   /** Beside the list's heading, where they are seen at once: add by hand or find in the book. */
-  function cardActions(section: 'characters' | 'locations') {
+  function cardActions(section: EntitySection) {
     return (
       <span className="nav-actions">
         <button
@@ -272,7 +280,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
         {error && <p className="error small">{error}</p>}
         <div className="nav-list-head">
           <h4>{t(`nav.${current}`)}</h4>
-          {(current === 'characters' || current === 'locations') && cardActions(current)}
+          {isCards(current) && cardActions(current)}
         </div>
         <nav>{body[current]}</nav>
       </div>

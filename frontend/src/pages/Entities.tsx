@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   api,
   peek,
+  sectionOf,
   type Entity,
   type EntityBrief,
   type EntityKind,
@@ -27,13 +28,13 @@ import SelectAll from '../components/SelectAll'
 
 const POLL_MS = 2000
 
-/** Characters or locations: cards built from the book, read-only. */
+/** Characters, locations or items: cards built from the book, read-only. */
 export default function Entities({ kind }: { kind: EntityKind }) {
   const { t } = useI18n()
   const { projectId = '', entityId } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const section = kind === 'character' ? 'characters' : 'locations'
+  const section = sectionOf(kind)
   // The last answers are shown at once (no blink when switching tabs), then refreshed.
   const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const [list, setList] = useState<EntityBrief[] | null>(() => peek.entities(projectId, kind) ?? null)

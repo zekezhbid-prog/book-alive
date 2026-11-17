@@ -19,6 +19,7 @@ from app.models import (
     FACT_PROFILE,
     FACT_STATE,
     KIND_CHARACTER,
+    KIND_ITEM,
     KIND_LOCATION,
     AnalysisRun,
     Chapter,
@@ -163,7 +164,7 @@ def _project(session: SessionDep, project_id: str) -> Project:
 
 
 def _kind(kind: str) -> str:
-    if kind not in (KIND_CHARACTER, KIND_LOCATION):
+    if kind not in (KIND_CHARACTER, KIND_LOCATION, KIND_ITEM):
         raise HTTPException(422, "bad_kind")
     return kind
 

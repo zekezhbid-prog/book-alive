@@ -5,7 +5,7 @@ import type { Project } from '../api'
 import { useI18n } from '../i18n'
 import { useSide, useView, type Side } from '../view'
 import BookSearch from './BookSearch'
-import { BookIcon, FilmIcon, HistoryIcon, PaletteIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
+import { BookIcon, FilmIcon, HistoryIcon, PaletteIcon, KeyIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
 import ChatDock from './ChatDock'
 
 interface Props {
@@ -64,6 +64,10 @@ export default function ProjectHeader({ project, children, chat }: Props) {
           <PinIcon />
           <span>{t('tabs.location')}</span>
         </NavLink>
+        <NavLink to={`${base}/items`} className={({ isActive }) => tabClass(isActive)}>
+          <KeyIcon />
+          <span>{t('tabs.item')}</span>
+        </NavLink>
         {/* Scenes are frames to draw and animate: the illustrator's part only. */}
         {illustrating && (
           <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
@@ -105,4 +109,4 @@ export default function ProjectHeader({ project, children, chat }: Props) {
 }
 
 const tabClass = (active: boolean) => `tab ${active ? 'active' : ''}`
-const isSection = () => /\/(characters|locations|scenes|style|usage)(\/|$)/.test(location.pathname)
+const isSection = () => /\/(characters|locations|items|scenes|style|usage)(\/|$)/.test(location.pathname)
