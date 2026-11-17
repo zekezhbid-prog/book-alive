@@ -11,7 +11,7 @@ import VersionsPanel from '../components/VersionsPanel'
 import { ask } from '../dialogs'
 import { errorText, useI18n } from '../i18n'
 import { savesSettled } from '../saveQueue'
-import { saveView, useChatOpen, useSide, useView, type View } from '../view'
+import { saveView, useSide, useView, type View } from '../view'
 
 export default function Book() {
   const { t } = useI18n()
@@ -31,12 +31,8 @@ export default function Book() {
   const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const view = useView({ id: projectId, mode: project?.mode ?? 'writer' })
   const [side, setSide] = useSide(projectId)
-  const [, setChatOpen] = useChatOpen()
-  // The cross of the checklist or versions: the book chat comes back in their place.
-  const closeSide = () => {
-    setSide('chat')
-    setChatOpen(true)
-  }
+  // The cross of the checklist or versions closes the panel; nothing opens in its place.
+  const closeSide = () => setSide('chat')
   const editor = useRef<EditorControl | null>(null)
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t])

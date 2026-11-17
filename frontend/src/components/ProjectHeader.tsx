@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { NavLink, useNavigate } from 'react-router-dom'
 import type { Project } from '../api'
 import { useI18n } from '../i18n'
-import { useChatOpen, useSide, useView, type Side } from '../view'
+import { useSide, useView, type Side } from '../view'
 import BookSearch from './BookSearch'
 import { BookIcon, FilmIcon, HistoryIcon, PaletteIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
 import ChatDock from './ChatDock'
@@ -22,7 +22,6 @@ export default function ProjectHeader({ project, children, chat }: Props) {
   const navigate = useNavigate()
   const view = useView(project)
   const [side, setSide] = useSide(project.id)
-  const [, setChatOpen] = useChatOpen()
   // The style is a step of the illustrator's work (references and frames wait for it).
   const illustrating = view === 'illustrator'
   const slot = document.getElementById('topbar-slot')
@@ -36,11 +35,8 @@ export default function ProjectHeader({ project, children, chat }: Props) {
       title={t(`side.${tool}`)}
       aria-pressed={side === tool}
       onClick={() => {
-        if (side === tool) {
-          // Folding the panel brings the book chat back in its place.
-          setSide('chat')
-          setChatOpen(true)
-        } else setSide(tool)
+        // A second press folds the panel; nothing opens in its place.
+        setSide(side === tool ? 'chat' : tool)
         if (!location.pathname.startsWith(`${base}/chapters/`) && location.pathname !== base) navigate(base)
       }}
     >
