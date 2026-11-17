@@ -103,6 +103,11 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", " ", text.casefold().replace("ё", "е")).strip(" .…\"'«»“”—–-")
 
 
+def supported(quote: str, paragraphs: list[str]) -> bool:
+    """A fact stands only on a quote that is really in the chapter."""
+    return bool(quote.strip()) and locate_quote(quote.strip(), paragraphs) is not None
+
+
 def locate_quote(quote: str, paragraphs: list[str]) -> int | None:
     """Paragraph that contains the quote, or None when the model made it up."""
     needle = _squash(quote)
@@ -376,6 +381,9 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
         entity.facts.append(fact(FACT_MENTION))
         seen = set()
         for found in item.facts:
+            # A detail with no quote from this chapter is the model's guess: dropped.
+            if not supported(found.quote, paragraphs):
+                continue
             if found.text.strip() and norm(found.text) not in seen:
                 seen.add(norm(found.text))
                 entity.facts.append(fact(found.category, found.text.strip(), found.quote.strip()))

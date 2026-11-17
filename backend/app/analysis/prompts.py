@@ -3,7 +3,7 @@
 from app.models import KIND_CHARACTER, KIND_ITEM
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
-PROMPT_VERSION = 8
+PROMPT_VERSION = 9
 
 _SUBJECT = {
     "character": {
@@ -49,6 +49,30 @@ they are characters. Skip ordinary everyday things that play no part",
     },
 }
 
+# Who a detail belongs to, what counts as true, how a voice sounds. Shared by the chapter
+# search and the rebuild of one card; written for any book, in any language.
+_FACT_RULES = """- A detail belongs to an entry only when the quoted words describe that entry \
+itself. In a dialogue or a scene with several people, work out whom each description and \
+each pronoun is about: a speaker who describes someone else, a listener who hears it, or \
+someone standing nearby never gets that detail. When it is unclear whose it is, write no \
+fact.
+- What one character says or thinks about another (an accusation, an insult, a rumour, a \
+guess, a threat, a lie, a mistaken belief) is not a fact about that other: never write it \
+as their trait, role or look. Plain information the story confirms (age, kinship, a name, \
+a job) may come from anyone's words.
+- The quote must show the detail itself: a fact about a beard needs words about the beard. \
+No quote, no fact.
+- Turning into something and taking someone's look: keep the direction exactly as the \
+text tells it - who changed, from what, into what, and whose look they took. Never turn it \
+around, never shorten it into a different story.
+- A way of speaking is described as the text renders it: drawn-out or doubled sounds \
+("s-s-so", "yesss", "rrright") are hissing, a drawl, a growl or a lisp. Call it stuttering \
+only when the words say so or the text repeats whole syllables at the start of a word \
+("I-I-I", "b-b-but"). Read the text in its own language, whatever it is.
+- When the chapter states an age (a number of years or winters, "turned fourteen", "a \
+child of five"), always write it as a "permanent" fact, even in passing.
+"""
+
 EXTRACT_SYSTEM = """You read one chapter of a book and list the entries of one kind in it, \
 with what the text says about how they look. The result feeds illustration and video \
 prompts, so visual detail matters most.
@@ -57,7 +81,7 @@ What to list: {what}.
 
 Rules:
 - Use only what this chapter states. Never invent details and never guess beyond the text.
-- "name": the fullest proper name the book uses. "aliases": other proper names and \
+{fact_rules}- "name": the fullest proper name the book uses. "aliases": other proper names and \
 nicknames of the same one, only when the text makes plain that it is the same one. Never put \
 there the name of another entry, a friend, relative or companion. Never put common words \
 there (girl, old man, guest, the smith): many others can be called that.
@@ -67,6 +91,13 @@ as the text uses it. They may be someone named elsewhere, so never invent a name
 - "group": true for several taken together (the merchants, the guards, the nieces), false \
 for a single one.
 - Two different beings are two entries, even when they travel together or are related.
+- One being in several forms (a shape-shifter, a disguise, a being turned into another \
+shape) is one entry, also when each form has its own name: put the other names in \
+"aliases" and write the form in its facts ("in the form of a cat: grey fur"). But \
+beings who only share a name or a title (a father and a son, an old one and a young one \
+of the same kind, one born or hatched later), and a being that split off from another and \
+acts on its own (a shadow, a double, a reflection), are separate entries: never make one \
+an alias of the other.
 - If it is one of the already known entries below, use exactly that name, also when this \
 chapter calls them only by a common word or a description (the girl, the old man) and the \
 known hint matches.
@@ -162,6 +193,9 @@ facts allow; for a main one that appears in many chapters, a full paragraph of s
 sentences that covers the whole book, not just its first chapters. Never pad beyond the facts.
 - A description written so far is the base: keep what the facts support, add what the new \
 facts tell, correct or drop what the facts do not support.
+- The trait that sets it apart from everyone else (an unusual gift or power, a striking \
+habit, the way it speaks) belongs in the description whenever the facts show it.
+- A being with several forms: say what each form is.
 - The description is of the card as a whole, not of a moment: leave out moods, feelings \
 and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
 a lasting trait.
@@ -275,7 +309,7 @@ action, a gesture or a moment (squinting, limping once, a flushed face).
 when the words say it outright. Closing, narrowing or covering an eye, a sideways look, \
 limping after a blow are actions: write no looks fact from them.
 - Never take a detail of someone or something else standing near it.
-- "profile" facts are the general description, not looks: at most 5, short and plain.
+{fact_rules}- "profile" facts are the general description, not looks: at most 5, short and plain.
 - Each fact:
   - "category": "permanent" for what stays the same through the book ({permanent}); \
 "state" for what is true at this point of the story ({state}); \
@@ -292,6 +326,7 @@ def card_facts_system(kind: str, target: str) -> str:
     subject = _SUBJECT[kind]
     return CARD_FACTS_SYSTEM.format(
         target=target,
+        fact_rules=_FACT_RULES,
         noun_one={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(kind, "place"),
         permanent=subject["permanent"],
         state=subject["state"],
@@ -305,7 +340,7 @@ def looks_system(kind: str) -> str:
 
 
 def extract_system(kind: str) -> str:
-    return EXTRACT_SYSTEM.format(**_SUBJECT[kind])
+    return EXTRACT_SYSTEM.format(fact_rules=_FACT_RULES, **_SUBJECT[kind])
 
 
 def reconcile_system(kind: str) -> str:

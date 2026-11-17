@@ -163,11 +163,10 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
     # "старик" is a common noun, not a name: it is not kept as an alias.
     assert set(rykhtash.aliases) == {"Мельник", "Дед"}
     facts = {f.text: f for f in rykhtash.facts if f.category != analysis.FACT_MENTION}
-    assert set(facts) == {"длинная седая борода", "чёрный плащ", "хромает", "кольчуга"}
+    # "хромает" came with a quote that is not in the chapter: an unsupported fact is dropped.
+    assert set(facts) == {"длинная седая борода", "чёрный плащ", "кольчуга"}
     assert facts["длинная седая борода"].paragraph == 1
     assert facts["чёрный плащ"].paragraph == 0
-    # The invented quote is dropped; the fact stays, without a source.
-    assert (facts["хромает"].quote, facts["хромает"].paragraph) == ("", None)
     # Present in both chapters, one mention each.
     mentions = [f for f in rykhtash.facts if f.category == analysis.FACT_MENTION]
     assert len(mentions) == 2
@@ -333,7 +332,9 @@ class ProfileModel(FakeModel):
                 if item.name == "Рыхташ":
                     item.facts.append(
                         analysis.ExtractedFact(
-                            category="profile", text="старый мельник, живёт один"
+                            category="profile",
+                            text="старый мельник, живёт один",
+                            quote="На нём был чёрный плащ",
                         )
                     )
         return result
@@ -591,11 +592,21 @@ def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(ses
                 if 'Chapter "Мельница"' in text:
                     entry = {
                         "name": "Рыхташ",
-                        "facts": [{"category": "permanent", "text": "седая борода"}],
+                        "facts": [
+                            {
+                                "category": "permanent",
+                                "text": "седая борода",
+                                "quote": "длинная седая борода",
+                            }
+                        ],
                     }
                 else:
                     assert "- Рыхташ - седая борода" in text  # known, with a hint
-                    entry = {"name": "Дзед", "aliases": ["Рыхташ"], "facts": [{"text": "кольчуга"}]}
+                    entry = {
+                        "name": "Дзед",
+                        "aliases": ["Рыхташ"],
+                        "facts": [{"text": "кольчуга", "quote": "надел кольчугу"}],
+                    }
                 return schema.model_validate({"entities": [entry]})
             if schema is analysis.Groups:
                 return analysis.Groups(groups=[])

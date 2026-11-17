@@ -18,6 +18,7 @@ from app.analysis.entities import (
     keep_general,
     locate_quote,
     norm,
+    supported,
     write_summaries,
 )
 from app.llm.calls import BadModelOutput, TextModel
@@ -142,6 +143,8 @@ def _add_facts(entity: Entity, chapter: Chapter, found: list[ExtractedFact]) -> 
     entity.facts.append(fact(FACT_MENTION))
     seen: set[str] = set()
     for item in found:
+        if not supported(item.quote, paragraphs):
+            continue
         if item.text.strip() and norm(item.text) not in seen:
             seen.add(norm(item.text))
             entity.facts.append(fact(item.category, item.text.strip(), item.quote.strip()))
