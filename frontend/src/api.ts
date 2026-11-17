@@ -72,6 +72,20 @@ export interface BetaReview {
   outdated: boolean
 }
 
+/** A finished check kept on the server: what was checked and, when opened, what was found. */
+export interface ReviewRunBrief {
+  id: string
+  kind: ReviewKind
+  /** Empty for contradictions: they look at the whole book. */
+  chapter_ids: string[]
+  checks: string[]
+  count: number
+  created_at: string
+}
+export interface ReviewRun extends ReviewRunBrief {
+  remarks: Remark[]
+}
+
 /** The book's language as found from its text, and the ticks offered for it. */
 export interface ReviewChecks {
   language: 'ru' | 'be' | 'en' | 'other'
@@ -610,6 +624,15 @@ export const api = {
       chapter_id: chapterId,
       checks,
     }),
+  reviewRuns: (projectId: string, kind: ReviewKind) =>
+    request<ReviewRunBrief[]>('GET', `/projects/${projectId}/review/runs?kind=${kind}`),
+  reviewRun: (projectId: string, id: string) => request<ReviewRun>('GET', `/projects/${projectId}/review/runs/${id}`),
+  keepReviewRun: (projectId: string, run: { kind: ReviewKind; chapter_ids: string[]; checks: string[]; remarks: Remark[] }) =>
+    request<ReviewRun>('POST', `/projects/${projectId}/review/runs`, run),
+  updateReviewRun: (projectId: string, id: string, remarks: Remark[]) =>
+    request<ReviewRun>('PUT', `/projects/${projectId}/review/runs/${id}`, { remarks }),
+  deleteReviewRun: (projectId: string, id: string) =>
+    request<void>('DELETE', `/projects/${projectId}/review/runs/${id}`),
   reviewStats: (projectId: string) => request<BookNumbers>('GET', `/projects/${projectId}/review/stats`),
   betaReviews: (projectId: string) => request<BetaReview[]>('GET', `/projects/${projectId}/beta`),
   betaReview: (projectId: string, chapterId: string, choice: { asks: string[]; reader: string; tone: string }) =>

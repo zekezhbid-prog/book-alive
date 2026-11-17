@@ -414,3 +414,21 @@ class BetaReview(Base):
     asks: Mapped[list[str]] = mapped_column(JSON, default=list)
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class ReviewRun(Base):
+    """One finished check of the manuscript (grammar, editorial or contradictions) as the
+    author saw it: which chapters and items, and the remarks found. Kept so the author can
+    come back to it; nothing is recomputed."""
+
+    __tablename__ = "review_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(20))  # grammar | editorial | contradictions
+    chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    checks: Mapped[list[str]] = mapped_column(JSON, default=list)
+    remarks: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=now)

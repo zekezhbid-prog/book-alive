@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, type BetaReview, type Project } from '../api'
 import { ask } from '../dialogs'
 import { errorText, useI18n, type MessageKey } from '../i18n'
+import CheckWindow, { CheckProgress, useWhen } from './CheckWindow'
 import { AiMark, TrashIcon } from './icons'
 import SelectAll from './SelectAll'
 
@@ -53,19 +53,28 @@ function blocks(text: string): { heading: string; body: string }[] {
 
 interface Props {
   project: Project
-  /** The chapter open in the book: ticked when the dialog opens. */
+  /** The chapter open in the book: ticked when the window opens. */
   chapterId?: string
   /** Another check is running: the button waits. */
   busy: boolean
+  /** Tells the checklist that a review is being written, so other checks wait. */
+  onBusy: (busy: boolean) => void
 }
 
-/** A living review of chapters, as from a reader the author knows. Reviews are kept. */
-export default function BetaReader({ project, chapterId, busy }: Props) {
+interface Job {
+  done: number
+  total: number
+}
+
+/** A living review of chapters, as from a reader the author knows. The button opens a
+ * window: the choice, the progress and the reviews stay in it; reviews are kept. */
+export default function BetaReader({ project, chapterId, busy, onBusy }: Props) {
   const { t } = useI18n()
-  const navigate = useNavigate()
   const [reviews, setReviews] = useState<BetaReview[]>([])
-  const [choosing, setChoosing] = useState(false)
-  const [progress, setProgress] = useState('')
+  const [open, setOpen] = useState(false)
+  const [job, setJob] = useState<Job | null>(null)
+  // The reviews the window shows; none means the window offers a new review.
+  const [shown, setShown] = useState<BetaReview[] | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -73,101 +82,153 @@ export default function BetaReader({ project, chapterId, busy }: Props) {
   }, [project.id, t])
 
   const run = async (chapterIds: string[], choice: Choice) => {
-    setChoosing(false)
     setError('')
+    onBusy(true)
+    const made: BetaReview[] = []
     try {
       for (const [n, id] of chapterIds.entries()) {
-        setProgress(t('beta.reading', { done: n + 1, n: chapterIds.length }))
+        setJob({ done: n, total: chapterIds.length })
         const review = await api.betaReview(project.id, id, choice)
+        made.push(review)
         setReviews((list) => [review, ...list])
       }
     } catch (e) {
       setError(errorText(t, e))
     }
-    setProgress('')
+    setShown(made.length ? made : null)
+    setJob(null)
+    onBusy(false)
   }
   const remove = async (review: BetaReview) => {
     if (!(await ask(t('beta.delete.confirm')))) return
     try {
       await api.deleteBetaReview(project.id, review.id)
       setReviews((list) => list.filter((r) => r.id !== review.id))
+      setShown((list) => (list ? list.filter((r) => r.id !== review.id) : list))
     } catch (e) {
       setError(errorText(t, e))
     }
   }
-  const title = (id: string) => project.chapters.find((c) => c.id === id)?.title || t('book.untitled')
 
   return (
-    <div className="stack">
-      <button className="btn badge-btn" disabled={busy || progress !== ''} onClick={() => setChoosing(true)}>
+    <>
+      <button className="btn badge-btn" disabled={busy} onClick={() => setOpen(true)}>
         <span className="grow">{t('beta.title')}</span>
+        {job && <span className="faint small">{Math.round((100 * job.done) / job.total)}%</span>}
         <AiMark title={t('review.engine.ai')} />
       </button>
-      {progress && <p className="muted">{progress}</p>}
-      {error && <p className="error">{error}</p>}
-      {reviews.length > 0 && (
-        <>
-          <b>{t('beta.saved', { n: reviews.length })}</b>
-          <ul className="history">
-            {reviews.map((review) => (
-              <li key={review.id}>
-                <div className="stack">
+      {open && (
+        <CheckWindow title={t('beta.title')} onClose={() => setOpen(false)}>
+          {job ? (
+            <CheckProgress
+              text={t('beta.reading', { done: job.done + 1, n: job.total })}
+              done={job.done}
+              total={job.total}
+            />
+          ) : (
+            <>
+              {error && <p className="error">{error}</p>}
+              {shown && shown.length > 0 ? (
+                <>
                   <div className="row">
-                    <button
-                      className="hit grow"
-                      title={t('review.open')}
-                      onClick={() => navigate(`/projects/${project.id}/chapters/${review.chapter_id}`)}
-                    >
-                      <span className="small">{title(review.chapter_id)}</span>
-                      <span className="faint small">
-                        {t(`beta.reader.${review.reader}` as MessageKey)} · {t(`beta.tone.${review.tone}` as MessageKey)}{' '}
-                        · {new Date(review.created_at).toLocaleDateString()}
-                      </span>
-                    </button>
-                    <button
-                      className="btn ghost small icon danger"
-                      title={t('app.delete')}
-                      aria-label={t('app.delete')}
-                      onClick={() => remove(review)}
-                    >
-                      <TrashIcon />
+                    <span className="spacer" />
+                    <button className="btn small" onClick={() => setShown(null)}>
+                      {t('beta.again')}
                     </button>
                   </div>
-                  {review.outdated && <span className="faint small">{t('beta.outdated')}</span>}
-                  <div className="beta-text small">
-                    {blocks(review.text).map((block, i) => (
-                      <p key={i}>
-                        {block.heading && <b>{block.heading}</b>}
-                        {block.body}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
+                  <ReviewList project={project} reviews={shown} full onRemove={remove} onLeave={() => setOpen(false)} />
+                </>
+              ) : (
+                <>
+                  <BetaSetup project={project} initial={chapterId} onStart={run} />
+                  {reviews.length > 0 && (
+                    <>
+                      <h4>{t('beta.history')}</h4>
+                      <ReviewList project={project} reviews={reviews} onOpen={(r) => setShown([r])} onRemove={remove} />
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </CheckWindow>
       )}
-      {choosing && (
-        <BetaDialog
-          project={project}
-          initial={chapterId}
-          onClose={() => setChoosing(false)}
-          onStart={run}
-        />
-      )}
-    </div>
+    </>
   )
 }
 
-interface DialogProps {
+interface ListProps {
+  project: Project
+  reviews: BetaReview[]
+  /** Show the text of each review; otherwise only its line, which opens it. */
+  full?: boolean
+  onOpen?: (review: BetaReview) => void
+  onRemove: (review: BetaReview) => void
+  /** The chapter was opened in the book: the window steps aside. */
+  onLeave?: () => void
+}
+
+function ReviewList({ project, reviews, full, onOpen, onRemove, onLeave }: ListProps) {
+  const { t } = useI18n()
+  const whenText = useWhen()
+  const navigate = useNavigate()
+  const title = (id: string) => project.chapters.find((c) => c.id === id)?.title || t('book.untitled')
+  return (
+    <ul className="history">
+      {reviews.map((review) => (
+        <li key={review.id}>
+          <div className="stack grow">
+            <div className="row">
+              <button
+                className="hit grow"
+                title={onOpen ? undefined : t('review.open')}
+                onClick={() => {
+                  if (onOpen) return onOpen(review)
+                  onLeave?.()
+                  navigate(`/projects/${project.id}/chapters/${review.chapter_id}`)
+                }}
+              >
+                <span className="small">{title(review.chapter_id)}</span>
+                <span className="faint small">
+                  {t(`beta.reader.${review.reader}` as MessageKey)} · {t(`beta.tone.${review.tone}` as MessageKey)} ·{' '}
+                  {whenText(review.created_at)}
+                </span>
+              </button>
+              <button
+                className="btn ghost small icon danger"
+                title={t('app.delete')}
+                aria-label={t('app.delete')}
+                onClick={() => onRemove(review)}
+              >
+                <TrashIcon />
+              </button>
+            </div>
+            {review.outdated && <span className="faint small">{t('beta.outdated')}</span>}
+            {full && (
+              <div className="beta-text small">
+                {blocks(review.text).map((block, i) => (
+                  <p key={i}>
+                    {block.heading && <b>{block.heading}</b>}
+                    {block.body}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+interface SetupProps {
   project: Project
   initial?: string
-  onClose: () => void
   onStart: (chapterIds: string[], choice: Choice) => void
 }
 
-function BetaDialog({ project, initial, onClose, onStart }: DialogProps) {
+/** What the reader is asked, who reads and how frankly, and which chapters. */
+function BetaSetup({ project, initial, onStart }: SetupProps) {
   const { t } = useI18n()
   const [choice, setChoice] = useState(() => savedChoice(project.id))
   const [selected, setSelected] = useState(() => new Set(initial ? [initial] : []))
@@ -183,79 +244,72 @@ function BetaDialog({ project, initial, onClose, onStart }: DialogProps) {
     if (!next.delete(id)) next.add(id)
     setSelected(next)
   }
-  return createPortal(
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog stack scroll">
-        <h2>{t('beta.title')}</h2>
-        <p className="muted small">{t('beta.hint')}</p>
-        <div className="row">
-          <h4>{t('beta.asks')}</h4>
-          <span className="spacer" />
-          <SelectAll
-            ids={ASKS}
-            selected={new Set(choice.asks)}
-            onChange={(next) => update({ ...choice, asks: ASKS.filter((a) => next.has(a)) })}
-          />
-        </div>
-        <div className="chapter-picker">
-          {ASKS.map((id) => (
-            <label key={id} className="row">
-              <input type="checkbox" checked={choice.asks.includes(id)} onChange={() => toggleAsk(id)} />
-              <span className="grow">{t(`beta.ask.${id}` as MessageKey)}</span>
-            </label>
-          ))}
-        </div>
-        <h4>{t('beta.who')}</h4>
-        <div className="stack">
-          {READERS.map((id) => (
-            <label key={id} className="row">
-              <input type="radio" name="beta-reader" checked={choice.reader === id} onChange={() => update({ ...choice, reader: id })} />
-              <span className="grow">
-                {t(`beta.reader.${id}` as MessageKey)}
-                <span className="faint small"> ({t(`beta.reader.${id}.ex` as MessageKey)})</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <h4>{t('beta.tone')}</h4>
-        <div className="row">
-          {TONES.map((id) => (
-            <label key={id} className="row">
-              <input type="radio" name="beta-tone" checked={choice.tone === id} onChange={() => update({ ...choice, tone: id })} />
-              <span>{t(`beta.tone.${id}` as MessageKey)}</span>
-            </label>
-          ))}
-        </div>
-        <div className="row">
-          <h4>{t('run.title')}</h4>
-          <span className="spacer" />
-          <SelectAll ids={project.chapters.map((c) => c.id)} selected={selected} onChange={setSelected} />
-        </div>
-        <div className="chapter-picker short">
-          {project.chapters.map((chapter) => (
-            <label key={chapter.id} className="row">
-              <input type="checkbox" checked={selected.has(chapter.id)} onChange={() => toggle(chapter.id)} />
-              <span className="grow">{chapter.title || t('book.untitled')}</span>
-              <span className="faint small">{chapter.chars.toLocaleString()}</span>
-            </label>
-          ))}
-        </div>
-        {ids.length > 1 && <p className="muted small">{t('beta.many', { n: ids.length })}</p>}
-        <div className="row">
-          <span className="spacer" />
-          <button className="btn" onClick={onClose}>
-            {t('app.cancel')}
-          </button>
-          <button
-            className="btn primary"
-            disabled={ids.length === 0 || choice.asks.length === 0}
-            onClick={() => onStart(ids, choice)}
-          >
-            {t('beta.start')}
-          </button>
-        </div>
+  return (
+    <>
+      <p className="muted small">{t('beta.hint')}</p>
+      <div className="row">
+        <h4>{t('beta.asks')}</h4>
+        <span className="spacer" />
+        <SelectAll
+          ids={ASKS}
+          selected={new Set(choice.asks)}
+          onChange={(next) => update({ ...choice, asks: ASKS.filter((a) => next.has(a)) })}
+        />
       </div>
-    </div>,
-    document.body,
+      <div className="chapter-picker">
+        {ASKS.map((id) => (
+          <label key={id} className="row">
+            <input type="checkbox" checked={choice.asks.includes(id)} onChange={() => toggleAsk(id)} />
+            <span className="grow">{t(`beta.ask.${id}` as MessageKey)}</span>
+          </label>
+        ))}
+      </div>
+      <h4>{t('beta.who')}</h4>
+      <div className="stack">
+        {READERS.map((id) => (
+          <label key={id} className="row">
+            <input type="radio" name="beta-reader" checked={choice.reader === id} onChange={() => update({ ...choice, reader: id })} />
+            <span className="grow">
+              {t(`beta.reader.${id}` as MessageKey)}
+              <span className="faint small"> ({t(`beta.reader.${id}.ex` as MessageKey)})</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <h4>{t('beta.tone')}</h4>
+      <div className="row">
+        {TONES.map((id) => (
+          <label key={id} className="row">
+            <input type="radio" name="beta-tone" checked={choice.tone === id} onChange={() => update({ ...choice, tone: id })} />
+            <span>{t(`beta.tone.${id}` as MessageKey)}</span>
+          </label>
+        ))}
+      </div>
+      <div className="row">
+        <h4>{t('run.title')}</h4>
+        <span className="spacer" />
+        <SelectAll ids={project.chapters.map((c) => c.id)} selected={selected} onChange={setSelected} />
+      </div>
+      <div className="chapter-picker short">
+        {project.chapters.map((chapter) => (
+          <label key={chapter.id} className="row">
+            <input type="checkbox" checked={selected.has(chapter.id)} onChange={() => toggle(chapter.id)} />
+            <span className="grow">{chapter.title || t('book.untitled')}</span>
+            <span className="faint small">{chapter.chars.toLocaleString()}</span>
+          </label>
+        ))}
+      </div>
+      {ids.length > 1 && <p className="muted small">{t('beta.many', { n: ids.length })}</p>}
+      <div className="row">
+        <span className="spacer" />
+        <button
+          className="btn primary"
+          disabled={ids.length === 0 || choice.asks.length === 0}
+          onClick={() => onStart(ids, choice)}
+        >
+          {t('beta.start')}
+        </button>
+      </div>
+    </>
   )
 }

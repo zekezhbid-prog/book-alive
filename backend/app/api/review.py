@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
-from app.models import MODE_WRITER, BetaReview, Project, text_hash
+from app.models import MODE_WRITER, BetaReview, Project, ReviewRun, text_hash
 from app.review import beta, checks, continuity, service, stats, typography
 from app.services import versions
 
@@ -230,4 +230,99 @@ def delete_beta_review(project_id: str, review_id: str, session: SessionDep) -> 
     if review is None or review.project_id != project_id:
         raise HTTPException(404, "review_not_found")
     session.delete(review)
+    session.commit()
+
+
+# ---------------------------------------------------------------- kept check results
+
+
+class RunIn(BaseModel):
+    kind: Kind
+    chapter_ids: list[str]
+    checks: list[str]
+    remarks: list[service.Remark]
+
+
+class RunUpdate(BaseModel):
+    remarks: list[service.Remark]
+
+
+class RunBrief(BaseModel):
+    id: str
+    kind: str
+    chapter_ids: list[str]
+    checks: list[str]
+    count: int
+    created_at: datetime
+
+
+class RunOut(RunBrief):
+    remarks: list[service.Remark]
+
+
+def _run_out(run: ReviewRun) -> RunOut:
+    return RunOut(
+        id=run.id,
+        kind=run.kind,
+        chapter_ids=run.chapter_ids,
+        checks=run.checks,
+        count=len(run.remarks),
+        created_at=run.created_at,
+        remarks=run.remarks,
+    )
+
+
+def _run(session, project_id: str, run_id: str) -> ReviewRun:
+    run = session.get(ReviewRun, run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(404, "review_not_found")
+    return run
+
+
+@router.post("/projects/{project_id}/review/runs")
+def keep_run(project_id: str, body: RunIn, session: SessionDep) -> RunOut:
+    """Keep a finished check as the author saw it. The client runs a check chapter by
+    chapter (to show progress) and hands the gathered remarks here."""
+    project = _writer_project(session, project_id)
+    run = ReviewRun(
+        project_id=project.id,
+        kind=body.kind,
+        chapter_ids=body.chapter_ids,
+        checks=body.checks,
+        remarks=[r.model_dump() for r in body.remarks],
+    )
+    session.add(run)
+    session.commit()
+    return _run_out(run)
+
+
+@router.get("/projects/{project_id}/review/runs")
+def list_runs(project_id: str, session: SessionDep, kind: Kind | None = None) -> list[RunBrief]:
+    """Kept checks of the book, newest first, without their remarks."""
+    project = _writer_project(session, project_id)
+    query = select(ReviewRun).where(ReviewRun.project_id == project.id)
+    if kind:
+        query = query.where(ReviewRun.kind == kind)
+    rows = session.scalars(query.order_by(ReviewRun.created_at.desc())).all()
+    return [RunBrief(**_run_out(r).model_dump(exclude={"remarks"})) for r in rows]
+
+
+@router.get("/projects/{project_id}/review/runs/{run_id}")
+def get_run(project_id: str, run_id: str, session: SessionDep) -> RunOut:
+    return _run_out(_run(session, project_id, run_id))
+
+
+@router.put("/projects/{project_id}/review/runs/{run_id}")
+def update_run(project_id: str, run_id: str, body: RunUpdate, session: SessionDep) -> RunOut:
+    """The remarks left after "Fix all" corrected the typesetting ones."""
+    run = _run(session, project_id, run_id)
+    run.remarks = [r.model_dump() for r in body.remarks]
+    session.commit()
+    return _run_out(run)
+
+
+@router.delete("/projects/{project_id}/review/runs/{run_id}", status_code=204)
+def delete_run(project_id: str, run_id: str, session: SessionDep) -> None:
+    run = _run(session, project_id, run_id)
+    session.delete(run)
     session.commit()

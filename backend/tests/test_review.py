@@ -431,3 +431,51 @@ def test_stats_of_an_empty_chapter_are_zero():
         0.0,
         0.0,
     )
+
+
+# ---------------------------------------------------------------- kept check results
+
+
+def test_check_results_are_kept_and_can_be_reopened(client, book):
+    first, second = (c.id for c in book.chapters)
+    remark = {
+        "category": "typography",
+        "problem": "Прямые кавычки",
+        "places": [{"chapter_id": first, "chapter_title": "Дорога", "quote": '"да"'}],
+        "fixable": True,
+    }
+    base = f"/api/projects/{book.id}/review/runs"
+    saved = client.post(
+        base,
+        json={
+            "kind": "grammar",
+            "chapter_ids": [first, second],
+            "checks": ["typography_ru"],
+            "remarks": [remark],
+        },
+    )
+    assert saved.status_code == 200
+    run = saved.json()
+    assert run["remarks"][0]["problem"] == "Прямые кавычки" and run["created_at"]
+    client.post(
+        base, json={"kind": "editorial", "chapter_ids": [first], "checks": [], "remarks": []}
+    )
+
+    listed = client.get(base, params={"kind": "grammar"}).json()
+    assert [(r["id"], r["count"], r["chapter_ids"]) for r in listed] == [
+        (run["id"], 1, [first, second])
+    ]
+    assert "remarks" not in listed[0]  # the list stays light; one run is opened by its id
+    assert len(client.get(base).json()) == 2
+
+    opened = client.get(f"{base}/{run['id']}").json()
+    assert opened["remarks"] == run["remarks"] and opened["checks"] == ["typography_ru"]
+
+    # "Fix all" corrected the typesetting: the kept result no longer offers it.
+    kept = client.put(f"{base}/{run['id']}", json={"remarks": []})
+    assert kept.status_code == 200 and kept.json()["remarks"] == []
+    assert client.get(base, params={"kind": "grammar"}).json()[0]["count"] == 0
+
+    assert client.delete(f"{base}/{run['id']}").status_code == 204
+    assert client.get(f"{base}/{run['id']}").status_code == 404
+    assert len(client.get(base).json()) == 1
