@@ -270,7 +270,7 @@ function AddConnection({ onAdded }: { onAdded: () => void }) {
 }
 
 /** Text work that may get its own model; empty means the main text model. */
-const TEXT_TASKS = ["analysis", "chat", "prompts"] as const;
+const TEXT_TASKS = ["analysis", "analysis_strong", "chat", "prompts"] as const;
 
 interface PickerProps {
   title: string;

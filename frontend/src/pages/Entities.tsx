@@ -588,6 +588,8 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
   const [selected, setSelected] = useState(() => new Set(initial))
   const [estimate, setEstimate] = useState<Estimate | null>(null)
   const [fresh, setFresh] = useState(false)
+  // The deep search reads the whole book, so every chapter is ticked and locked.
+  const [deep, setDeep] = useState(false)
   const [error, setError] = useState('')
   // Chapters already read stay ticked when adding: their answers are reused for free and the
   // book does not change under the illustrator. Starting from scratch frees every box.
@@ -604,7 +606,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     // Once, when the dialog opens: later changes to the props must not reset the ticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const locked = (id: string) => !fresh && !!status?.read.has(id)
+  const locked = (id: string) => (deep && kind === 'character') || (!fresh && !!status?.read.has(id))
   const ids = project.chapters.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
 
@@ -645,7 +647,9 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     setSelected(next)
   }
   const start = () =>
-    api.startRun(project.id, kind, ids, fresh).then(onStarted, (e) => setError(errorText(t, e)))
+    api
+      .startRun(project.id, kind, ids, fresh, deep && kind === 'character')
+      .then(onStarted, (e) => setError(errorText(t, e)))
   const number = (n: number) => n.toLocaleString()
 
   return (
@@ -662,6 +666,15 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
               </span>
             </label>
           ))}
+          {kind === 'character' && (
+            <label className="row">
+              <input type="checkbox" checked={deep} onChange={() => setDeep(!deep)} />
+              <span className="grow">
+                {t('run.deep')}
+                <span className="faint small"> — {t('run.deep.hint')}</span>
+              </span>
+            </label>
+          )}
         </div>
         <div className="row">
           <h4>{t('run.title')}</h4>
@@ -840,12 +853,13 @@ function duration(seconds: number, t: Translate): string {
 
 // After the chapters the run still has its final steps; the bar keeps a part for them,
 // so it never sits at the end while work goes on.
-const FINAL_STAGES = ['reconcile', 'adopt', 'summarize', 'general', 'looks']
+const FINAL_STAGES = ['reconcile', 'cards', 'check', 'adopt', 'summarize', 'general', 'looks']
 const READING_SHARE = 80
 
 function runPercent(run: Run): number {
   const reading = run.total ? (run.done / run.total) * READING_SHARE : 0
-  const index = FINAL_STAGES.indexOf(run.stage)
+  // Each card is written and then checked: both are one step of the bar.
+  const index = FINAL_STAGES.indexOf(run.stage === 'check' ? 'cards' : run.stage)
   if (index < 0) return reading
   const step = (100 - READING_SHARE) / FINAL_STAGES.length
   const inside = run.stage_total ? run.stage_done / run.stage_total : 0

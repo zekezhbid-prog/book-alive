@@ -178,6 +178,9 @@ export interface ModelSettings {
   /** Per task; empty means the main text model. */
   text_analysis_connection_id: string
   text_analysis_model: string
+  /** The strong model of the deep search: who is who and the main characters. */
+  text_analysis_strong_connection_id: string
+  text_analysis_strong_model: string
   text_chat_connection_id: string
   text_chat_model: string
   text_prompts_connection_id: string
@@ -654,11 +657,13 @@ export const api = {
       chapter_ids: chapterIds,
       fresh,
     }),
-  startRun: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false) =>
+  /** `deep`: characters only; the whole book, a strong model for the main characters. */
+  startRun: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false, deep = false) =>
     request<Run>('POST', `/projects/${projectId}/analysis`, {
       kind,
       chapter_ids: chapterIds,
       fresh,
+      mode: deep ? 'deep' : '',
     }),
   /** Which chapters were already read (free to run again) and which changed since. */
   chapterStatus: (projectId: string, kind: EntityKind) =>

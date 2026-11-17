@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useI18n } from '../i18n'
 
-const TASKS = ['analysis', 'chat', 'prompts'] as const
+const TASKS = ['analysis', 'analysis_strong', 'chat', 'prompts'] as const
 
 /**
  * Whether a model for text tasks is chosen in Settings: true / false, null while it is not known yet.
