@@ -300,6 +300,15 @@ export function PinIcon() {
   )
 }
 
+/** Two arrows: move the picked cards to another group. */
+export function MoveIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4" />
+    </svg>
+  )
+}
+
 /** A key: the tab of objects (weapons, keys, letters). */
 export function KeyIcon() {
   return (

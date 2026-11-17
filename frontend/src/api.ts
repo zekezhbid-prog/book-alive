@@ -804,6 +804,9 @@ export const api = {
   saveEntityDescription: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/description`, { text }),
   deleteEntity: (entityId: string) => request<void>('DELETE', `/entities/${entityId}`),
+  /** To another kind; a card of that kind with the same name takes it in (its id comes back). */
+  moveEntity: (entityId: string, kind: EntityKind) =>
+    request<Entity>('POST', `/entities/${entityId}/move`, { kind }),
   saveEntityAppearance: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/appearance`, { text }),
   saveSceneSummary: (sceneId: string, text: string) =>

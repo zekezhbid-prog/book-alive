@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { CloseIcon, TrashIcon } from './icons'
+import { CloseIcon, MoveIcon, TrashIcon } from './icons'
 
 export interface Tile {
   id: string
@@ -38,6 +38,9 @@ interface Props {
     selected: Set<string>
     onChange: (next: Set<string>) => void
     onDelete: () => void
+    /** Where the picked tiles can go (the other groups); the menu opens beside the bin. */
+    moveTo?: { label: string; onClick: () => void }[]
+    moveLabel?: string
     label: string
     startLabel: string
     allLabel: string
@@ -51,6 +54,7 @@ interface Props {
 export default function CardGrid({ actions, tiles, onOpen, more, selection }: Props) {
   // Picking mode: the boxes are hidden until asked for, so the tiles stay clean.
   const [picking, setPicking] = useState(false)
+  const [moving, setMoving] = useState(false)
   const active = picking && selection ? selection : undefined
   const stop = () => {
     setPicking(false)
@@ -149,6 +153,37 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
               >
                 <TrashIcon />
               </button>
+              {active.moveTo && active.moveTo.length > 0 && (
+                <div className="add-sample">
+                  <button
+                    className="btn ghost icon"
+                    title={active.moveLabel}
+                    aria-label={active.moveLabel}
+                    aria-expanded={moving}
+                    disabled={active.selected.size === 0}
+                    onClick={() => setMoving(!moving)}
+                  >
+                    <MoveIcon />
+                  </button>
+                  {moving && active.selected.size > 0 && (
+                    <div className="add-sample-menu">
+                      <span className="faint small">{active.moveLabel}</span>
+                      {active.moveTo.map((target) => (
+                        <button
+                          key={target.label}
+                          className="btn ghost small"
+                          onClick={() => {
+                            setMoving(false)
+                            target.onClick()
+                          }}
+                        >
+                          {target.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 className="btn ghost icon"
                 title={active.doneLabel}

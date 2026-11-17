@@ -188,6 +188,7 @@ export const by: Record<string, string> = {
   'entities.pick.done': 'Выйсці з выбару',
   'entities.picked': 'Выбрана: {n}',
   'entities.picked.delete': 'Выдаліць выбраныя',
+  'entities.picked.move': 'Перанесці выбраныя ў…',
   'entities.stale': 'састарэла',
   'entities.stale.hint':
     'Тэкст раздзела змяніўся пасля чытання. Запусціце пошук па гэтым раздзеле нанова.',

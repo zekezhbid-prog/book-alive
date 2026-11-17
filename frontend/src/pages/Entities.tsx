@@ -143,6 +143,15 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   const cancel = () =>
     run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)
   const runError = run?.error === 'interrupted' ? t('run.interrupted') : run?.error
+  const KINDS: EntityKind[] = ['character', 'location', 'item']
+  const movePicked = (target: EntityKind) => {
+    const ids = [...picked].filter((id) => list?.some((e) => e.id === id))
+    // One after another: two picked cards with the same name join each other there.
+    ids
+      .reduce<Promise<unknown>>((done, id) => done.then(() => api.moveEntity(id, target)), Promise.resolve())
+      .then(() => setPicked(new Set()), fail)
+      .finally(loadList)
+  }
   const deletePicked = async () => {
     const ids = [...picked].filter((id) => list?.some((e) => e.id === id))
     if (!ids.length || !(await ask(t('entities.delete.many.confirm', { n: ids.length })))) return
@@ -269,6 +278,11 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                         selected: picked,
                         onChange: setPicked,
                         onDelete: deletePicked,
+                        moveLabel: t('entities.picked.move'),
+                        moveTo: KINDS.filter((k) => k !== kind).map((k) => ({
+                          label: t(`tabs.${k}`),
+                          onClick: () => movePicked(k),
+                        })),
                         label: t('entities.pick'),
                         startLabel: t('entities.pick.start'),
                         allLabel: t('entities.pick.all'),

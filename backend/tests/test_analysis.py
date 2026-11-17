@@ -477,6 +477,34 @@ def test_items_have_their_own_list(client, session, project):
     assert client.get(url, params={"kind": "spoon"}).status_code == 422
 
 
+def test_a_card_moves_to_another_kind_and_joins_a_namesake_there(client, session, project):
+    mill = Entity(project_id=project.id, kind="location", name="Меч Цмока", aliases=["Клинок"])
+    mill.facts.append(
+        EntityFact(chapter_id="c1", chapter_hash="", category="permanent", text="стальной")
+    )
+    twin = Entity(project_id=project.id, kind="location", name="Кольцо")
+    ring = Entity(project_id=project.id, kind="item", name="кольцо")
+    session.add_all([mill, twin, ring])
+    session.commit()
+
+    moved = client.post(f"/api/entities/{mill.id}/move", json={"kind": "item"})
+    assert moved.status_code == 200
+    assert moved.json()["id"] == mill.id
+    session.expire_all()
+    assert session.get(Entity, mill.id).kind == "item"
+    assert [f.text for f in session.get(Entity, mill.id).facts] == ["стальной"]
+
+    # The same name is already an item: the moved card is merged into it, not doubled.
+    joined = client.post(f"/api/entities/{twin.id}/move", json={"kind": "item"})
+    assert joined.json()["id"] == ring.id
+    twin_id = twin.id
+    session.expunge_all()
+    assert session.get(Entity, twin_id) is None
+
+    assert client.post(f"/api/entities/{ring.id}/move", json={"kind": "spoon"}).status_code == 422
+    assert client.post("/api/entities/nope/move", json={"kind": "item"}).status_code == 404
+
+
 def test_dialog_knows_which_chapters_are_read_and_which_changed(client, session, project):
     url = f"/api/projects/{project.id}/analysis/chapters"
     assert client.get(url, params={"kind": "character"}).json() == {"read": [], "changed": []}

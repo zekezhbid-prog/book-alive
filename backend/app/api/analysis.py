@@ -516,6 +516,40 @@ def merge_entities(entity_id: str, body: MergeRequest, session: SessionDep) -> E
     return get_entity(main.id, session)
 
 
+class MoveRequest(BaseModel):
+    kind: str
+
+
+@router.post("/entities/{entity_id}/move")
+def move_entity(entity_id: str, body: MoveRequest, session: SessionDep) -> EntityOut:
+    """The user says a card is of another kind (a sword found among the places). It keeps
+    its facts and pictures; a card of that kind with the same name takes it in instead."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    kind = _kind(body.kind)
+    if kind == entity.kind:
+        return get_entity(entity.id, session)
+    names = {analysis.norm(n) for n in (entity.name, *entity.aliases)}
+    namesake = next(
+        (
+            e
+            for e in session.scalars(
+                select(Entity).where(Entity.project_id == entity.project_id, Entity.kind == kind)
+            )
+            if names & {analysis.norm(n) for n in (e.name, *e.aliases)}
+        ),
+        None,
+    )
+    if namesake is not None:
+        analysis.merge_by_hand(session, namesake, entity)
+        session.commit()
+        return get_entity(namesake.id, session)
+    entity.kind = kind
+    session.commit()
+    return get_entity(entity.id, session)
+
+
 @router.post("/entities/{entity_id}/split")
 def split_entity(entity_id: str, body: SplitRequest, session: SessionDep) -> EntityOut:
     entity = session.get(Entity, entity_id)
