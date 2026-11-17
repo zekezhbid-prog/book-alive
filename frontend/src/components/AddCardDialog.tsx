@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { api, type EntityBrief, type EntityKind } from '../api'
 import { errorText, useI18n } from '../i18n'
+import { UploadIcon } from './icons'
 
 interface Props {
   projectId: string
@@ -9,13 +10,37 @@ interface Props {
   onCreated: (card: EntityBrief) => void
 }
 
-/** A card made by hand in one step: its name and, if the user wants, a description. */
+/** A card made by hand in one step: its name and, if the user wants, a description.
+ * Or a whole card from a file saved by the export in another project. */
 export function AddCardDialog({ projectId, kind, onClose, onCreated }: Props) {
   const { t } = useI18n()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const load = async (file: File | undefined) => {
+    if (!file || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const created = await api.importEntity(projectId, kind, file)
+      const card = await api.entity(created.id)
+      onCreated({
+        id: card.id,
+        name: card.name,
+        aliases: card.aliases,
+        chapters: 0,
+        facts: 0,
+        stale: false,
+        blurb: card.description,
+      })
+    } catch (err) {
+      setError(errorText(t, err))
+      setBusy(false)
+    }
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -67,6 +92,25 @@ export function AddCardDialog({ projectId, kind, onClose, onCreated }: Props) {
         </label>
         {error && <p className="error">{error}</p>}
         <div className="row">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            onChange={(e) => {
+              load(e.target.files?.[0])
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            className="btn"
+            title={t('add.fromFile.hint')}
+            disabled={busy}
+            onClick={() => fileInput.current?.click()}
+          >
+            <UploadIcon /> {t('add.fromFile')}
+          </button>
           <span className="spacer" />
           <button type="button" className="btn" onClick={onClose}>
             {t('app.cancel')}

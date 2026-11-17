@@ -1,14 +1,18 @@
+import io
+import json
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePath
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
-from app.analysis.entities import norm
+from app.analysis.entities import merge_by_hand, norm
 from app.config import settings
 from app.db import SessionDep
 from app.images import angles
@@ -24,6 +28,8 @@ from app.images.style_check import StyleVerdict, check_style
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
 from app.llm.calls import ModelNotConfigured, TextModel
 from app.models import (
+    FACT_PERMANENT,
+    FACT_PROFILE,
     KIND_CHARACTER,
     KIND_ITEM,
     KIND_LOCATION,
@@ -489,5 +495,194 @@ def create_entity(project_id: str, body: EntityCreate, session: SessionDep) -> d
             return {"id": existing.id}
     entity = Entity(project_id=project.id, kind=body.kind, name=name, aliases=[], standalone=True)
     session.add(entity)
+    session.commit()
+    return {"id": entity.id}
+
+
+# ---------- a card carried from one project to another ----------
+
+CARD_FORMAT = "lorebook-card"
+MAX_CARD_FILE = 200 * 1024 * 1024
+MAX_CARD_IMAGES = 100
+DESCRIPTION_LIMIT = 6000
+
+
+@router.get("/entities/{entity_id}/export")
+def export_entity(entity_id: str, session: SessionDep) -> Response:
+    """One card as a zip: card.json with its texts and facts, and its pictures beside it.
+    Chapters are named by title, since their ids mean nothing in another project."""
+    entity = _entity(session, entity_id)
+    project = _project(session, entity.project_id)
+    titles = {c.id: c.title for c in project.chapters}
+    positions = {c.id: c.position for c in project.chapters}
+    facts = sorted(entity.facts, key=lambda f: positions.get(f.chapter_id, len(positions)))
+    buffer = io.BytesIO()
+    pictures = []
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for n, image in enumerate(entity.images, 1):
+            source = settings.files_dir / image.path
+            if not source.is_file():
+                continue
+            name = f"images/{n}{EXTENSIONS.get(image.mime, '')}"
+            archive.writestr(name, source.read_bytes())
+            pictures.append(
+                {
+                    "file": name,
+                    "origin": image.origin,
+                    "style_key": image.style_key,
+                    "is_main": image.is_main,
+                    "angle": image.angle,
+                    "look_label": image.look_label,
+                    "prompt": image.prompt,
+                }
+            )
+        card = {
+            "format": CARD_FORMAT,
+            "version": 1,
+            "kind": entity.kind,
+            "name": entity.name,
+            "aliases": entity.aliases,
+            "description": entity.description,
+            "summary": entity.summary,
+            "appearance": entity.appearance,
+            "appearance_own": entity.appearance_own,
+            "facts": [
+                {
+                    "category": f.category,
+                    "text": f.text,
+                    "quote": f.quote,
+                    "chapter": titles.get(f.chapter_id, ""),
+                }
+                for f in facts
+                if f.text.strip()
+            ],
+            "images": pictures,
+        }
+        archive.writestr("card.json", json.dumps(card, ensure_ascii=False, indent=2))
+    disposition = "attachment; filename=\"card.zip\"; filename*=UTF-8''" + quote(
+        f"{entity.name}.zip"
+    )
+    return Response(
+        buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": disposition},
+    )
+
+
+def _text(card: dict, key: str) -> str:
+    value = card.get(key, "")
+    return value.strip() if isinstance(value, str) else ""
+
+
+@router.post("/projects/{project_id}/entities/import")
+def import_entity(
+    project_id: str,
+    session: SessionDep,
+    file: UploadFile,
+    kind: Annotated[str, Form()] = "",
+) -> dict:
+    """A card from a file made by the export. Facts were read from another book's chapters,
+    so the lasting ones go into the author's description, which later searches keep. A card
+    of the same name here takes the new one in."""
+    project = _project(session, project_id)
+    data = file.file.read(MAX_CARD_FILE + 1)
+    if len(data) > MAX_CARD_FILE:
+        raise HTTPException(413, "file_too_large")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+        card = json.loads(archive.read("card.json"))
+    except (zipfile.BadZipFile, KeyError, ValueError) as exc:
+        raise HTTPException(422, "not_a_card_file") from exc
+    if not isinstance(card, dict) or card.get("format") != CARD_FORMAT:
+        raise HTTPException(422, "not_a_card_file")
+    kind = kind or str(card.get("kind", ""))
+    if kind not in (KIND_CHARACTER, KIND_LOCATION, KIND_ITEM):
+        raise HTTPException(422, "bad_kind")
+    name = _text(card, "name")[:200]
+    if not name:
+        raise HTTPException(422, "not_a_card_file")
+    aliases = list(
+        dict.fromkeys(
+            a.strip()[:200]
+            for a in card.get("aliases") or []
+            if isinstance(a, str) and a.strip() and norm(a) != norm(name)
+        )
+    )
+
+    description = _text(card, "description") or _text(card, "summary")
+    lasting: list[str] = []
+    for fact in card.get("facts") or []:
+        if not isinstance(fact, dict) or fact.get("category") not in (FACT_PROFILE, FACT_PERMANENT):
+            continue
+        text = _text(fact, "text")
+        if text and text not in lasting and text not in description:
+            lasting.append(text)
+    if lasting:
+        listed = "\n".join(f"— {t}" for t in lasting)
+        description = f"{description}\n\n{listed}" if description else listed
+    entity = Entity(
+        project_id=project.id,
+        kind=kind,
+        name=name,
+        aliases=aliases,
+        pinned_names=aliases,
+        standalone=True,
+        description=description[:DESCRIPTION_LIMIT],
+        summary=_text(card, "summary"),
+        appearance=_text(card, "appearance"),
+        appearance_own=_text(card, "appearance_own"),
+    )
+    session.add(entity)
+    session.flush()
+
+    for picture in (card.get("images") or [])[:MAX_CARD_IMAGES]:
+        if not isinstance(picture, dict) or not isinstance(picture.get("file"), str):
+            continue
+        try:
+            info = archive.getinfo(picture["file"])
+        except KeyError:
+            continue
+        if info.file_size > MAX_IMAGE_BYTES:
+            continue
+        content = archive.read(info)
+        mime = _sniff(content)
+        if mime is None:
+            continue
+        image_id, relative = _store(project, content, mime)
+        angle = _text(picture, "angle")
+        session.add(
+            Image(
+                id=image_id,
+                project_id=project.id,
+                entity_id=entity.id,
+                origin="generated" if picture.get("origin") == "generated" else "upload",
+                style_key=_text(picture, "style_key")[:40],
+                is_main=bool(picture.get("is_main")),
+                angle=angle if angle in angles.ANGLES else "",
+                look_label=_text(picture, "look_label")[:200],
+                prompt=_text(picture, "prompt"),
+                filename=PurePath(info.filename).name[:300],
+                path=relative,
+                mime=mime,
+            )
+        )
+    session.flush()
+
+    for existing in session.scalars(
+        select(Entity).where(
+            Entity.project_id == project.id, Entity.kind == kind, Entity.id != entity.id
+        )
+    ):
+        if norm(name) in {norm(existing.name), *map(norm, existing.aliases)}:
+            fill = {
+                key: getattr(entity, key)
+                for key in ("description", "summary", "appearance", "appearance_own")
+                if not getattr(existing, key).strip()
+            }
+            merge_by_hand(session, existing, entity)
+            for key, value in fill.items():
+                setattr(existing, key, value)
+            session.commit()
+            return {"id": existing.id}
     session.commit()
     return {"id": entity.id}

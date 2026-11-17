@@ -427,3 +427,102 @@ def test_the_image_prompt_is_told_the_age(session, project):
     build_image_prompt(model, project, hero, None, "", has_reference=False)
     assert "Who it is: Мальчик четырнадцати лет" in model.facts
     assert "never with a beard" in model.system
+
+
+# ---------- a card carried to another project ----------
+
+
+def _exported(client, entity_id):
+    import io
+    import zipfile
+
+    response = client.get(f"/api/entities/{entity_id}/export")
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/zip"
+    assert "attachment" in response.headers["content-disposition"]
+    return response.content, zipfile.ZipFile(io.BytesIO(response.content))
+
+
+def test_card_export_holds_texts_facts_and_pictures(client, session, project):
+    hero = session.get(Entity, project.hero_id)
+    hero.aliases = ["Лютка"]
+    hero.description = "Мельникова дочь."
+    hero.summary = "Рыжая девушка с мельницы."
+    hero.appearance_own = "Рыжая, веснушки."
+    session.commit()
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    upload(client, project, project.hero_id)
+
+    _, archive = _exported(client, project.hero_id)
+    card = json.loads(archive.read("card.json"))
+    assert card["format"] == "lorebook-card"
+    assert (card["kind"], card["name"], card["aliases"]) == ("character", "Люта", ["Лютка"])
+    assert (card["description"], card["summary"], card["appearance_own"]) == (
+        "Мельникова дочь.",
+        "Рыжая девушка с мельницы.",
+        "Рыжая, веснушки.",
+    )
+    assert {(f["category"], f["text"], f["chapter"]) for f in card["facts"]} == {
+        ("permanent", "рыжие волосы", "Мельница"),
+        ("state", "красный платок", "Мельница"),
+        ("state", "кольчуга", "Замок"),
+    }
+    [picture] = card["images"]
+    assert (picture["is_main"], picture["style_key"]) == (True, "anime")
+    assert archive.read(picture["file"]) == PNG
+
+
+def test_card_file_makes_a_full_card_in_another_project(client, session, project):
+    hero = session.get(Entity, project.hero_id)
+    hero.aliases = ["Лютка"]
+    hero.summary = "Рыжая девушка с мельницы."
+    hero.appearance_own = "Рыжая, веснушки."
+    session.commit()
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    upload(client, project, project.hero_id)
+    data, _ = _exported(client, project.hero_id)
+
+    sequel = Project(title="Продолжение", mode="writer")
+    session.add(sequel)
+    session.commit()
+    client.put(f"/api/projects/{sequel.id}/style", json={"style_id": "anime"})
+    response = client.post(
+        f"/api/projects/{sequel.id}/entities/import",
+        files={"file": ("Люта.zip", data, "application/zip")},
+        data={"kind": "character"},
+    )
+    assert response.status_code == 200, response.text
+    card = client.get(f"/api/entities/{response.json()['id']}").json()
+    assert (card["name"], card["aliases"]) == ("Люта", ["Лютка"])
+    # Facts belong to the old book's chapters; the description keeps them as text, so a
+    # search in the new book (which rewrites the summary) cannot lose them.
+    assert card["description"].startswith("Рыжая девушка с мельницы.")
+    assert "рыжие волосы" in card["description"]
+    assert card["appearance_own"] == "Рыжая, веснушки."
+    [picture] = client.get(
+        f"/api/projects/{sequel.id}/images", params={"entity_id": card["id"]}
+    ).json()
+    assert (picture["is_main"], picture["current_style"]) == (True, True)
+    assert client.get(picture["url"]).content == PNG
+
+
+def test_card_file_into_a_namesake_joins_it(client, session, project):
+    data, _ = _exported(client, project.hero_id)
+    existing = client.post(
+        f"/api/projects/{project.id}/entities", json={"kind": "location", "name": "люта"}
+    ).json()
+    response = client.post(
+        f"/api/projects/{project.id}/entities/import",
+        files={"file": ("x.zip", data, "application/zip")},
+        data={"kind": "location"},
+    )
+    assert response.json()["id"] == existing["id"]
+
+
+def test_card_file_must_be_a_card(client, project):
+    response = client.post(
+        f"/api/projects/{project.id}/entities/import",
+        files={"file": ("x.zip", b"not a zip", "application/zip")},
+        data={"kind": "character"},
+    )
+    assert (response.status_code, response.json()["detail"]) == (422, "not_a_card_file")

@@ -752,6 +752,14 @@ export const api = {
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
+  /** A card saved by the export (a zip), with its texts and pictures. */
+  importEntity: (projectId: string, kind: EntityKind, file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    form.set('kind', kind)
+    return request<{ id: string }>('POST', `/projects/${projectId}/entities/import`, form)
+  },
+  exportEntityUrl: (entityId: string) => `/api/entities/${entityId}/export`,
   scenes: (projectId: string) => request<SceneBrief[]>('GET', `/projects/${projectId}/scenes`),
   scene: (id: string) => request<Scene>('GET', `/scenes/${id}`),
   deleteScene: (id: string) => request<void>('DELETE', `/scenes/${id}`),

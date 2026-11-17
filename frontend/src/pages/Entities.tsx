@@ -20,7 +20,14 @@ import Gallery from '../components/Gallery'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, RefreshIcon, TrashIcon } from '../components/icons'
+import {
+  DownloadIcon,
+  GoldPlusSymbol,
+  GoldSparklesSymbol,
+  PencilIcon,
+  RefreshIcon,
+  TrashIcon,
+} from '../components/icons'
 import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
 import { useView } from '../view'
 import { ask } from '../dialogs'
@@ -441,6 +448,15 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
           >
             <RefreshIcon />
           </button>
+          <a
+            className="btn ghost icon"
+            href={api.exportEntityUrl(entity.id)}
+            download
+            title={t('entities.export')}
+            aria-label={t('entities.export')}
+          >
+            <DownloadIcon />
+          </a>
           <button
             className="btn ghost icon"
             title={t('entities.delete')}
