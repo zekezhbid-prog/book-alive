@@ -447,6 +447,42 @@ def test_api_rescan_from_scratch_drops_stored_answers(client, session, project, 
     assert len(started) == 1
 
 
+@pytest.fixture
+def no_start(monkeypatch):
+    monkeypatch.setattr(analysis_api.runner, "start", lambda run_id: None)
+    monkeypatch.setattr(
+        analysis_api, "TextModel", lambda *a: type("M", (), {"request_overhead": 0})
+    )
+
+
+def start(client, project, **body):
+    response = client.post(f"/api/projects/{project.id}/analysis", json=body)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_first_character_search_is_deep_over_the_whole_book(client, project, no_start):
+    first = project.chapters[0].id
+    started = start(client, project, kind="character", chapter_ids=[first])
+    assert started["mode"] == "deep"
+    assert started["total"] == len(project.chapters)
+
+
+def test_adding_chapters_to_cards_is_not_deep(client, session, project, no_start):
+    run(session, project, FakeModel())  # there are cards now
+    first = project.chapters[0].id
+    assert start(client, project, kind="character", chapter_ids=[first])["mode"] == ""
+
+
+def test_from_scratch_is_deep(client, session, project, no_start):
+    run(session, project, FakeModel())
+    assert start(client, project, kind="character", fresh=True)["mode"] == "deep"
+
+
+def test_locations_are_never_deep(client, project, no_start):
+    assert start(client, project, kind="location", fresh=True)["mode"] == ""
+
+
 def test_characters_locations_and_items_are_searched_apart():
     characters = prompts.extract_system("character")
     assert "living, animate beings only" in characters

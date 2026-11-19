@@ -657,13 +657,13 @@ export const api = {
       chapter_ids: chapterIds,
       fresh,
     }),
-  /** `deep`: characters only; the whole book, a strong model for the main characters. */
-  startRun: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false, deep = false) =>
+  /** Characters with no cards yet, or from scratch, get the deep search over the whole book
+   *  (the server decides). */
+  startRun: (projectId: string, kind: EntityKind, chapterIds: string[], fresh = false) =>
     request<Run>('POST', `/projects/${projectId}/analysis`, {
       kind,
       chapter_ids: chapterIds,
       fresh,
-      mode: deep ? 'deep' : '',
     }),
   /** Which chapters were already read (free to run again) and which changed since. */
   chapterStatus: (projectId: string, kind: EntityKind) =>

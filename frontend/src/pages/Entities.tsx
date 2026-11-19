@@ -588,8 +588,6 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
   const [selected, setSelected] = useState(() => new Set(initial))
   const [estimate, setEstimate] = useState<Estimate | null>(null)
   const [fresh, setFresh] = useState(false)
-  // The deep search reads the whole book, so every chapter is ticked and locked.
-  const [deep, setDeep] = useState(false)
   const [error, setError] = useState('')
   // Chapters already read stay ticked when adding: their answers are reused for free and the
   // book does not change under the illustrator. Starting from scratch frees every box.
@@ -606,7 +604,10 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     // Once, when the dialog opens: later changes to the props must not reset the ticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const locked = (id: string) => (deep && kind === 'character') || (!fresh && !!status?.read.has(id))
+  // Characters found from nothing (nothing read yet, or from scratch) get the deep search,
+  // as the server decides: it reads the whole book, so every chapter is ticked and locked.
+  const deep = kind === 'character' && (fresh || status?.read.size === 0)
+  const locked = (id: string) => deep || (!fresh && !!status?.read.has(id))
   const ids = project.chapters.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
 
@@ -648,7 +649,7 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
   }
   const start = () =>
     api
-      .startRun(project.id, kind, ids, fresh, deep && kind === 'character')
+      .startRun(project.id, kind, ids, fresh)
       .then(onStarted, (e) => setError(errorText(t, e)))
   const number = (n: number) => n.toLocaleString()
 
@@ -666,14 +667,11 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
               </span>
             </label>
           ))}
-          {kind === 'character' && (
-            <label className="row">
-              <input type="checkbox" checked={deep} onChange={() => setDeep(!deep)} />
-              <span className="grow">
-                {t('run.deep')}
-                <span className="faint small"> — {t('run.deep.hint')}</span>
-              </span>
-            </label>
+          {deep && (
+            <p className="small">
+              {t('run.deep')}
+              <span className="faint"> — {t('run.deep.hint')}</span>
+            </p>
           )}
         </div>
         <div className="row">
