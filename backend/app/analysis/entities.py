@@ -158,11 +158,12 @@ def start_fresh(session: Session, project_id: str, chapters: list[Chapter], kind
     reuses their answers nor sees their names as already known. The chosen chapters lose
     their stored model answers. Cards are dropped, except those carrying the user's own work
     (pictures, hand merges or splits, cards made by hand): they only lose their facts and
-    summary, and the run fills them again if it finds them."""
+    summary, and the run fills them again if it finds them. The deep search's own reading
+    of the chapters (`<kind>_index`) goes too, so it reads them again as well."""
     session.execute(
         delete(ChapterExtraction).where(
             ChapterExtraction.chapter_id.in_([c.id for c in chapters]),
-            ChapterExtraction.kind == kind,
+            ChapterExtraction.kind.in_([kind, f"{kind}_index"]),
         )
     )
     for entity in _entities(session, project_id, kind):

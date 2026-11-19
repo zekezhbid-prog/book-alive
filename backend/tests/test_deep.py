@@ -227,6 +227,15 @@ def test_index_is_kept_and_not_read_again(session, project):
     assert starik["paragraphs"] == [1]
 
 
+def test_from_scratch_reads_the_chapters_again(session, project):
+    run_deep(session, project, DeepModel("light"), DeepModel("strong"))
+    analysis.start_fresh(session, project.id, project.chapters, "character")
+    session.commit()
+    again = DeepModel("light")
+    run_deep(session, project, again, DeepModel("strong"))
+    assert again.calls.count("index_characters") == 2
+
+
 def test_user_card_with_pictures_or_split_stays(session, project):
     session.add(Entity(project_id=project.id, kind="character", name="Призрак", standalone=True))
     session.commit()

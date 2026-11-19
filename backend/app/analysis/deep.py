@@ -153,6 +153,7 @@ def numbered_parts(paragraphs: list[str], limit: int = CHUNK_CHARS) -> list[str]
 # ---------- step A: who is mentioned where ----------
 
 
+# `entities.start_fresh` drops it by this name ("<kind>_index").
 INDEX_KIND = "character_index"
 
 
