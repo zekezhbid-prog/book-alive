@@ -32,6 +32,7 @@ from app.analysis.entities import (
     show_stage,
     write_summaries,
 )
+from app.config import settings
 from app.llm import parallel
 from app.llm.calls import BadModelOutput, TextModel
 from app.models import (
@@ -49,9 +50,9 @@ from app.models import (
 MODE_DEEP = "deep"
 INDEX_VERSION = 1
 # A main character is written by the strong model: seen in this many chapters at least,
-# and no more than this many of them (the strong model costs several times more).
+# and no more than `settings.deep_main_limit` of them (the strong model costs several
+# times more).
 MAIN_MIN_CHAPTERS = 5
-MAIN_LIMIT = 8
 # A word for a person nobody was found for gets a card of its own in a chapter only when
 # that chapter speaks of it in this many paragraphs.
 UNNAMED_MIN_PARAGRAPHS = 2
@@ -383,7 +384,7 @@ def pick_main(plans: list[Plan]) -> set[str]:
         (p for p in plans if p.named and p.chapter_count >= MAIN_MIN_CHAPTERS),
         key=lambda p: -p.chapter_count,
     )
-    return {norm(p.name) for p in ranked[:MAIN_LIMIT]}
+    return {norm(p.name) for p in ranked[: settings.deep_main_limit]}
 
 
 # ---------- step C: the card from every paragraph about it ----------

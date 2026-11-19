@@ -42,6 +42,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       HUBRIS_API_KEY: ${HUBRIS_API_KEY:-}
+      # Deep search: main characters written by the strong model; 0 = only the cast.
+      DEEP_MAIN_LIMIT: ${DEEP_MAIN_LIMIT:-8}
     volumes:
       - data:/data
     ports:

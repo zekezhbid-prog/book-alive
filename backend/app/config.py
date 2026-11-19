@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Model requests sent at once by the whole app (a run sends its independent calls
     # together). Bounded by the provider's rate limits and the pool above.
     llm_parallel: int = 4
+    # Deep search: how many main characters the strong model writes. 0 leaves it only the
+    # cast; every card, summary and look then comes from the light model.
+    deep_main_limit: int = 8
     # The model provider. With a key here the "Hubris" connection is created (and its key
     # kept current) on every start, so the key never has to be typed into the interface.
     hubris_api_key: str = ""

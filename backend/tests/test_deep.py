@@ -194,6 +194,15 @@ def test_strong_model_only_for_cast_and_main_cards(session, project):
     assert "index_characters" not in strong.calls
 
 
+def test_no_main_characters_leaves_strong_model_only_the_cast(session, project, monkeypatch):
+    monkeypatch.setattr(deep.settings, "deep_main_limit", 0)
+    light, strong = DeepModel("light"), DeepModel("strong")
+    record = run_deep(session, project, light, strong)
+    assert record.status == "done", record.error
+    assert strong.calls == ["cast_characters"]
+    assert light.calls.count("card_characters") == 2  # Рыхташ and Люта
+
+
 def test_ages_of_main_characters_reach_the_others(session, project):
     light = DeepModel("light")
     run_deep(session, project, light, DeepModel("strong"))
