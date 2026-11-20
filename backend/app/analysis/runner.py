@@ -43,7 +43,9 @@ def execute(
         return
     project = session.get(Project, run.project_id)
     forget_deleted_chapters(session, project, run.kind)
-    if not run.done_chapter_ids and {c.id for c in project.chapters} <= set(run.chapter_ids):
+    if not run.done_chapter_ids and {c.id for c in project.chapters if not c.private} <= set(
+        run.chapter_ids
+    ):
         # A run over the whole book rebuilds the cards from scratch, so other names
         # collected by earlier runs must not carry over. Facts are rebuilt per chapter.
         for entity in session.scalars(

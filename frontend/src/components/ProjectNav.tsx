@@ -119,6 +119,11 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
               {/* A title like "Глава 3" or "III" already carries its number. */}
               {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
               <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
+              {item.private && (
+                <span className="faint" title={t('chapter.private.hint')}>
+                  🔒
+                </span>
+              )}
               {project.changes?.edited.includes(item.id) || project.changes?.added.includes(item.id) ? (
                 <span className="dot" title={t('versions.dirty')} />
               ) : null}

@@ -63,11 +63,11 @@ def index_project(session: Session, project: Project) -> int:
             .group_by(Chunk.chapter_id)
         ).all()
     )
-    current = {c.id for c in project.chapters}
+    current = {c.id for c in project.chapters if not c.private}  # never searched or quoted
     gone = [chapter_id for chapter_id in indexed if chapter_id not in current]
     if gone:
         session.execute(delete(Chunk).where(Chunk.chapter_id.in_(gone)))
-    changed = [c for c in project.chapters if indexed.get(c.id) != c.content_hash]
+    changed = [c for c in project.chapters if not c.private and indexed.get(c.id) != c.content_hash]
     embeddings = get_embeddings()
     for chapter in changed:
         session.execute(delete(Chunk).where(Chunk.chapter_id == chapter.id))

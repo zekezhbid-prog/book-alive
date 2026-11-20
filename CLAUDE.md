@@ -58,6 +58,10 @@ demo/                a short original story used for demos and end-to-end checks
 - Nothing calls an AI model unless the user pressed a button for it. Import only splits
   the book into chapters, deterministically.
 - All model access goes through `llm/registry.py`. No provider SDK calls elsewhere.
+- A `private` chapter (the author's personal data, split off on import by
+  `importing/private.py`) is never sent to a model: every AI feature skips it, and
+  `TextModel` refuses a request that carries its text (`chapter_private`). A new feature
+  that reads chapters must skip `chapter.private` too.
 - API keys are stored encrypted and never returned to the browser, only the last 4 characters.
 - A "finished book" project (`reader`) has read-only text and no versions. A "writing"
   project (`writer`) has the editor and whole-book versions. Chapter boundaries can be

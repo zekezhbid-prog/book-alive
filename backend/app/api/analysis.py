@@ -171,7 +171,7 @@ def _kind(kind: str) -> str:
 
 
 def _chapters(project: Project, chapter_ids: list[str]) -> list[Chapter]:
-    ordered = sorted(project.chapters, key=lambda c: c.position)
+    ordered = [c for c in project.chapters if not c.private]  # never sent to a model
     if not chapter_ids:
         return ordered
     wanted = set(chapter_ids)
@@ -249,7 +249,7 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
     ).first()
     mode = deep.MODE_DEEP if kind == KIND_CHARACTER and (body.fresh or not has_cards) else ""
     if mode:
-        chapters = list(project.chapters)  # who is who needs the whole book
+        chapters = [c for c in project.chapters if not c.private]  # who is who: the whole book
     if body.fresh:
         analysis.start_fresh(session, project.id, chapters, kind)
     run = AnalysisRun(

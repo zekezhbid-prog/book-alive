@@ -87,6 +87,8 @@ class Chapter(Base):
     title: Mapped[str] = mapped_column(String(300))
     text: Mapped[str] = mapped_column(Text, default="")
     content_hash: Mapped[str] = mapped_column(String(64))
+    # Never sent to a model (the author's personal data): see app.importing.private.
+    private: Mapped[bool] = mapped_column(default=False)
 
     project: Mapped[Project] = relationship(back_populates="chapters")
 

@@ -97,6 +97,8 @@ def review(project_id: str, body: ReviewRequest, session: SessionDep) -> ReviewO
         chapter = next((c for c in project.chapters if c.id == body.chapter_id), None)
         if chapter is None:
             raise HTTPException(404, "chapter_not_found")
+        if chapter.private:
+            raise HTTPException(403, "chapter_private")
     notes_only = body.kind == service.KIND_CONTRADICTIONS and chapter is not None
     if notes_only and not any(c.reads_text for c in items):
         return ReviewOut(kind=body.kind, remarks=[])
@@ -132,7 +134,7 @@ def fix(project_id: str, body: FixRequest, session: SessionDep) -> FixOut:
     if _language(project) != checks.LANG_RU:
         raise HTTPException(409, "fix_language_unsupported")
     wanted = set(body.chapter_ids)
-    targets = [c for c in project.chapters if c.id in wanted]
+    targets = [c for c in project.chapters if c.id in wanted and not c.private]
     fixed = {c.id: typography.fix_typography(c.text) for c in targets}
     changed = [c for c in targets if fixed[c.id] != c.text]
     if not changed:
@@ -196,6 +198,8 @@ def beta_review(project_id: str, body: BetaRequest, session: SessionDep) -> Beta
     chapter = next((c for c in project.chapters if c.id == body.chapter_id), None)
     if chapter is None:
         raise HTTPException(404, "chapter_not_found")
+    if chapter.private:
+        raise HTTPException(403, "chapter_private")
     if not chapter.text.strip():
         raise HTTPException(409, "chapter_empty")
     try:

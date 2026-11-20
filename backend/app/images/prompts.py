@@ -47,7 +47,7 @@ FRAMING = {
 
 def chapters_between(project: Project, from_id: str, to_id: str) -> list[Chapter]:
     """Chapters of a look's range, in book order. An open end means "to the edge"."""
-    ordered = sorted(project.chapters, key=lambda c: c.position)
+    ordered = sorted((c for c in project.chapters if not c.private), key=lambda c: c.position)
     by_id = {c.id: c.position for c in ordered}
     low = by_id.get(from_id, 0)
     high = by_id.get(to_id, len(ordered))

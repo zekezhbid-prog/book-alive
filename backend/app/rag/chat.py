@@ -144,7 +144,7 @@ def ask_events(
         content=question,
         created_at=now(),
     )
-    if not any(c.text.strip() for c in project.chapters):
+    if not any(c.text.strip() for c in project.chapters if not c.private):
         reply = ChatMessage(
             project_id=project.id,
             thread_id=thread.id,
@@ -308,6 +308,8 @@ class SearchQuery(BaseModel):
 def _book_sample(project: Project, size: int = 6000) -> str:
     text = ""
     for chapter in project.chapters:
+        if chapter.private:
+            continue
         text += chapter.text[: size - len(text)]
         if len(text) >= size:
             break
@@ -480,7 +482,7 @@ def suggest(
     index_project(session, project)
     thread = _thread(session, project, thread)
     chapter = next((c for c in project.chapters if c.id == chapter_id), None)
-    tail = (chapter.text if chapter else "")[-TAIL_CHARS:]
+    tail = (chapter.text if chapter and not chapter.private else "")[-TAIL_CHARS:]
     # As in `ask_events`: nothing is written until the model has answered.
     asked = ChatMessage(
         project_id=project.id,

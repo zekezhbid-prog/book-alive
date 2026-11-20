@@ -98,6 +98,8 @@ export interface ChapterBrief {
   title: string
   chars: number
   content_hash: string
+  /** Closed to AI: the author's personal data, never sent to a model. */
+  private?: boolean
 }
 
 export interface Chapter extends ChapterBrief {
@@ -602,7 +604,7 @@ export const api = {
     request<SearchHit[]>('GET', `/projects/${id}/search?q=${encodeURIComponent(q)}`),
 
   chapter: (id: string) => request<Chapter>('GET', `/chapters/${id}`),
-  updateChapter: (id: string, patch: { title?: string; text?: string }) =>
+  updateChapter: (id: string, patch: { title?: string; text?: string; private?: boolean }) =>
     request<Chapter>('PATCH', `/chapters/${id}`, patch),
   createChapter: (projectId: string, title: string, afterId?: string) =>
     request<Chapter>('POST', `/projects/${projectId}/chapters`, { title, after_id: afterId }),

@@ -20,6 +20,8 @@ interface Props {
   /** The search that led here: its matches are marked in the text. */
   found?: string
   onError: (error: unknown) => void
+  /** The chapter was closed to AI or opened again. */
+  onChanged?: (chapter: Chapter) => void
 }
 
 /** The chapter as read: nothing in it can be changed here, only scenes picked from it. */
@@ -30,6 +32,7 @@ export default function ChapterReader({
   highlighted,
   found,
   onError,
+  onChanged,
 }: Props) {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -75,6 +78,8 @@ export default function ChapterReader({
     const range = [Number(first.dataset.index), Number(last.dataset.index)].sort((a, b) => a - b)
     setPicked([range[0], range[1]])
   }
+  const togglePrivate = () =>
+    api.updateChapter(chapter.id, { private: !chapter.private }).then((c) => onChanged?.(c), onError)
   const markScene = async () => {
     if (!picked) return
     await api
@@ -87,7 +92,18 @@ export default function ChapterReader({
       <div className="chapter-tools">
         <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
         <span className="spacer" />
-        <button className="btn small" disabled={splitting || !paragraphs.length} onClick={splitIntoScenes}>
+        <button
+          className="btn ghost small"
+          onClick={togglePrivate}
+          title={t('chapter.private.hint')}
+        >
+          {chapter.private ? t('chapter.private.on') : t('chapter.private.off')}
+        </button>
+        <button
+          className="btn small"
+          disabled={splitting || !paragraphs.length || chapter.private}
+          onClick={splitIntoScenes}
+        >
           {splitting ? t('scenes.split.busy') : t('scenes.split')}
         </button>
       </div>

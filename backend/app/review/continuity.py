@@ -149,6 +149,8 @@ def stored_notes(session: Session, project: Project) -> dict[str, list[Note]]:
     by_chapter = {r.chapter_id: r for r in rows}
     result: dict[str, list[Note]] = {}
     for chapter in project.chapters:
+        if chapter.private:
+            continue
         row = by_chapter.get(chapter.id)
         if _fresh(row, chapter):
             result[chapter.id] = [Note.model_validate(n) for n in row.payload.get("notes", [])]

@@ -61,7 +61,11 @@ def card_chapters(session: Session, entity: Entity) -> list[Chapter]:
     ).all()
     had = {f.chapter_id for f in entity.facts}
     names_it = name_matcher(entity)
-    return [c for c in chapters if c.text.strip() and (c.id in had or names_it(c.text))]
+    return [
+        c
+        for c in chapters
+        if not c.private and c.text.strip() and (c.id in had or names_it(c.text))
+    ]
 
 
 def _target(entity: Entity) -> str:

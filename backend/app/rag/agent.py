@@ -161,7 +161,7 @@ def contents(
         names.setdefault(chapter_id, {}).setdefault(kind, []).append(name)
     lines = []
     for number, chapter in enumerate(project.chapters, 1):
-        if scope and chapter.id not in scope:
+        if (scope and chapter.id not in scope) or chapter.private:
             continue
         line = f"{number}. {chapter.title or '(untitled)'} — {len(chapter.text):,} characters"
         found = names.get(chapter.id, {})
@@ -287,6 +287,8 @@ def read_tool(state: State, config: RunnableConfig) -> dict:
     if not 1 <= number <= len(chapters):
         return {"log": [*state["log"], f"read chapter {number}: there is no such chapter"]}
     chapter = chapters[number - 1]
+    if chapter.private:
+        return {"log": [*state["log"], f"read chapter {number}: closed to AI"]}
     scope = c.get("scope") or []
     if scope and chapter.id not in scope:
         log = f"read chapter {number}: outside this conversation's chapters"

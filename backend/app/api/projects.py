@@ -13,6 +13,7 @@ from app.config import settings
 from app.db import SessionDep
 from app.importing.chapters import detect_chapters
 from app.importing.extract import UnsupportedBook, extract
+from app.importing.private import split_off_personal
 from app.models import (
     MODE_READER,
     MODE_WRITER,
@@ -38,6 +39,7 @@ class ChapterBrief(BaseModel):
     title: str
     chars: int
     content_hash: str
+    private: bool = False  # closed to AI
 
 
 class ChapterFull(ChapterBrief):
@@ -95,6 +97,7 @@ class ProjectPatch(BaseModel):
 class ChapterPatch(BaseModel):
     title: str | None = None
     text: str | None = None
+    private: bool | None = None
 
 
 class ChapterCreate(BaseModel):
@@ -176,6 +179,7 @@ def _brief(chapter: Chapter) -> ChapterBrief:
         title=chapter.title,
         chars=len(chapter.text),
         content_hash=chapter.content_hash,
+        private=chapter.private,
     )
 
 
@@ -278,6 +282,7 @@ def create_project(
             # One short line before the first chapter is the book's title, not a chapter.
             book.title = book.title or opening.text.replace("\n\n", " ")
             detected = detected[1:]
+        detected = split_off_personal(detected)
         project.source_filename = filename
         project.author = book.author[:TITLE_MAX]
         project.title = project.title or book.title[:TITLE_MAX] or PurePath(filename).stem
@@ -288,6 +293,7 @@ def create_project(
                     title=chapter.title[:TITLE_MAX],
                     text=chapter.text,
                     content_hash=text_hash(chapter.text),
+                    private=chapter.private,
                 )
             )
     project.title = project.title or "Untitled"
@@ -371,6 +377,8 @@ def update_chapter(chapter_id: str, patch: ChapterPatch, session: SessionDep) ->
         _set_text(chapter, patch.text)
     if patch.title is not None:
         chapter.title = _title(patch.title)
+    if patch.private is not None:
+        chapter.private = patch.private
     session.commit()
     return _full(chapter)
 

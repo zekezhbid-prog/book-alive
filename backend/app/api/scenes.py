@@ -218,6 +218,8 @@ def split(chapter_id: str, session: SessionDep) -> list[SceneBrief]:
     chapter = _chapter(session, chapter_id)
     if not chapter.text.strip():
         raise HTTPException(422, "empty_chapter")
+    if chapter.private:
+        raise HTTPException(403, "chapter_private")
     model = _text_model(session, chapter.project_id, "analysis")
     try:
         scenes = service.split_chapter(session, model, chapter)

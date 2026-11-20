@@ -8,11 +8,12 @@ import threading
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import release_connection
 from app.llm import parallel, prefs, registry
-from app.models import Connection, UsageEvent, new_id
+from app.models import Chapter, Connection, UsageEvent, new_id
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,29 @@ class ModelNotConfigured(RuntimeError):
 
 class BadModelOutput(RuntimeError):
     pass
+
+
+class PrivateTextBlocked(RuntimeError):
+    """A request carried the text of a chapter closed to AI; it was not sent."""
+
+
+# Lines of a private chapter shorter than this are too common to look for ("Тэл.:").
+PRIVATE_LINE_MIN = 15
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text).casefold().strip()
+
+
+def private_lines(session: Session, project_id: str | None) -> list[str]:
+    """The lines of the project's private chapters, to be sure none of them is ever sent."""
+    if not project_id:
+        return []
+    texts = session.scalars(
+        select(Chapter.text).where(Chapter.project_id == project_id, Chapter.private)
+    )
+    lines = (_squash(line) for text in texts for line in text.split("\n\n"))
+    return [line for line in lines if len(line) >= PRIVATE_LINE_MIN]
 
 
 class TextModel:
@@ -59,6 +83,8 @@ class TextModel:
         # The chat should answer the same question the same way: no sampling randomness.
         # Some models accept only their default temperature; see `invoke`.
         self.temperature = STEADY_TEMPERATURE if task in STEADY_TASKS else None
+        # The last guard for chapters closed to AI: every feature skips them on its own.
+        self.private = private_lines(session, project_id)
         self.llm: BaseChatModel = self._build()
 
     def _build(self) -> BaseChatModel:
@@ -66,6 +92,7 @@ class TextModel:
         return registry.chat_model(self.connection, self.model_name, **extra)
 
     def invoke(self, operation: str, messages: list[BaseMessage]) -> str:
+        self._refuse_private(operation, messages)
         here = threading.current_thread()
         if getattr(self, "home", here) is here:
             release_connection(self.session)  # nothing held while the model answers
@@ -87,6 +114,15 @@ class TextModel:
             )
             journal.commit()
         return answer.content if isinstance(answer.content, str) else str(answer.content)
+
+    def _refuse_private(self, operation: str, messages: list[BaseMessage]) -> None:
+        private = getattr(self, "private", None)
+        if not private:
+            return
+        sent = _squash(" ".join(str(m.content) for m in messages))
+        if any(line in sent for line in private):
+            log.error("%s: a request with the text of a private chapter was not sent", operation)
+            raise PrivateTextBlocked("chapter_private")
 
     def _ask(self, messages: list[BaseMessage]) -> AIMessage:
         try:

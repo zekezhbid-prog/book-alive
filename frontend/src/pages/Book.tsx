@@ -200,6 +200,10 @@ export default function Book() {
               highlighted={highlighted}
               found={searchParams.get('q') ?? undefined}
               onError={fail}
+              onChanged={(changed) => {
+                setChapter(changed)
+                reloadProject()
+              }}
             />
           )}
         </section>

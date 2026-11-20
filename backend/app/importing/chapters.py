@@ -32,6 +32,7 @@ SECTION_CHARS = 15000
 class DetectedChapter:
     title: str
     text: str
+    private: bool = False  # never sent to a model, see app.importing.private
 
 
 def detect_chapters(paragraphs: list[Paragraph]) -> tuple[str, list[DetectedChapter]]:
