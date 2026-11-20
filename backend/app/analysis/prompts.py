@@ -350,16 +350,25 @@ def reconcile_system(kind: str) -> str:
 # ---------- deep search (app.analysis.deep) ----------
 
 INDEX_SYSTEM = """You read one chapter of a book, given as numbered paragraphs, and list \
-every character mentioned in it and the numbers of the paragraphs where each one is \
-mentioned or acts (also through a pronoun or a word like "the old man" when it is clear \
-who that is). Characters are living, animate beings only: people, animals, spirits, \
-creatures that think, speak or act on their own.
+the characters in it with the numbers of the paragraphs where each one is mentioned or acts \
+(also through a pronoun or a word like "the old man" when it is clear who that is). \
+Characters are living, animate beings only: people, animals, spirits, creatures that think, \
+speak or act on their own. Named characters matter most: find every one, even one named \
+only once.
 
-Write each character under the name the chapter uses for them, exactly as written in the \
-text (same language, same spelling). A different name or a nickname in the same chapter for \
-the same character is a separate entry: do not decide who is who, that is done later. A \
-character the chapter never names gets its describing words ("the old man", "the guards") \
-and "named": false.
+- Write the name in its base form, as a dictionary would list it (nominative, singular), in \
+the language and spelling of the book: "Цмок" for "Цмока", "Цмоку", "Цмокам"; "Уцей" for \
+"Уцея", "Уцею". All forms of one name in the chapter are ONE entry with all their paragraphs.
+- When the chapter calls a named character also by a common word or a pronoun ("the old \
+man", "he", "the prince"), put those paragraphs under the name; the word gets no entry of \
+its own.
+- Two different proper names or a nickname for the same character stay separate entries: \
+do not decide who is who, that is done later.
+- A single character the chapter never names gets an entry under its describing word in \
+the base form ("the old man", not "of the old man") and "named": false, only when it speaks \
+or acts in this chapter. Skip crowds and groups of ordinary people (people, guards, traders, \
+servants, warriors) and anyone only spoken about in passing. A kind of creature the story \
+is about (mermaids, goblins) is listed once, under the plural.
 
 Do not describe anyone, do not explain. Reply with JSON only:
 {"mentions": [{"name": "...", "named": true, "paragraphs": [0, 3, 4]}]}"""

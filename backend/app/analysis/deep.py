@@ -48,7 +48,8 @@ from app.models import (
 )
 
 MODE_DEEP = "deep"
-INDEX_VERSION = 1
+# Bump when `prompts.INDEX_SYSTEM` changes: chapters indexed by an older prompt are read again.
+INDEX_VERSION = 2
 # A main character is written by the strong model: seen in this many chapters at least,
 # and no more than `settings.deep_main_limit` of them (the strong model costs several
 # times more).
@@ -248,7 +249,88 @@ def gather(index: list[list[Mention]]) -> dict[str, Name]:
             entry = names.setdefault(norm(mention.name), Name(mention.name, mention.named))
             entry.named = entry.named or mention.named
             entry.places[chapter] = sorted({*entry.places.get(chapter, []), *mention.paragraphs})
-    return names
+    return fold_cases(names)
+
+
+# Endings that only mark a grammatical case (Belarusian and Russian, nouns and adjectives).
+# A light model often writes the name as it stands in the text ("Цмока", "Уцею"); every such
+# form would become a card of its own and burden the cast.
+CASE_ENDINGS = (  # noqa: SIM905 - one string reads better than 38 quoted items
+    "а я у ю ы і и е э о ой ай ей эй яй ою аю ам ом ем эм ым ім им ах ях оў аў "
+    "ога ага ому аму ую ая ыя ые ых іх"
+).split()
+CASE_STEM_MIN = 3
+
+
+def _stems(word: str) -> set[str]:
+    stems = {word}
+    if word.endswith("й") and len(word) - 1 >= CASE_STEM_MIN:
+        stems.add(word[:-1])  # Уцей -> Уцея, Уцею
+    stems.update(
+        word[: -len(e)]
+        for e in CASE_ENDINGS
+        if word.endswith(e) and len(word) - len(e) >= CASE_STEM_MIN
+    )
+    return stems
+
+
+def _case_words(name: str) -> list[set[str]]:
+    return [_stems(w) for w in norm(name).replace("ў", "у").split()]
+
+
+def _same_word(a: list[set[str]], b: list[set[str]]) -> bool:
+    return len(a) == len(b) and all(x & y for x, y in zip(a, b, strict=True))
+
+
+def _side_by_side(a: Name, b: Name) -> bool:
+    """Both forms in one paragraph while each also has paragraphs of its own: two beings
+    acting together. One form's paragraphs inside the other's is one being the model wrote
+    twice ("Рыхташ" and "Рыхташа" in the same paragraphs)."""
+    for c in a.places.keys() & b.places.keys():
+        x, y = set(a.places[c]), set(b.places[c])
+        if x & y and not (x <= y or y <= x):
+            return True
+    return False
+
+
+def fold_cases(names: dict[str, Name]) -> dict[str, Name]:
+    """Forms of one name that differ only by a case ending become one name, written in the
+    form the book uses most. A proper name and a common word are never folded, nor two
+    forms acting side by side ("Аляксандр і Аляксандра")."""
+    keys = list(names)
+    words = {k: _case_words(names[k].name) for k in keys}
+    parent = {k: k for k in keys}
+
+    def root(k: str) -> str:
+        while parent[k] != k:
+            k = parent[k]
+        return k
+
+    for i, a in enumerate(keys):
+        for b in keys[i + 1 :]:
+            x, y = names[a], names[b]
+            if x.named == y.named and _same_word(words[a], words[b]) and not _side_by_side(x, y):
+                parent[root(b)] = root(a)
+    groups: dict[str, list[Name]] = {}
+    for k in keys:
+        groups.setdefault(root(k), []).append(names[k])
+    folded: dict[str, Name] = {}
+    for group in groups.values():
+        main = max(
+            group,
+            key=lambda n: (
+                len(n.places),
+                sum(len(p) for p in n.places.values()),
+                -len(n.name),
+                not n.name.lower().startswith("ў"),
+            ),
+        )
+        places: dict[int, list[int]] = {}
+        for n in group:
+            for c, p in n.places.items():
+                places[c] = sorted({*places.get(c, []), *p})
+        folded[norm(main.name)] = Name(main.name, main.named, dict(sorted(places.items())))
+    return folded
 
 
 # ---------- step B: who is who ----------

@@ -263,6 +263,68 @@ def test_namesakes_split_by_chapters():
     assert places == {"Цмок": {0: {0}}, "Маленький Цмок": {1: {2}}}
 
 
+def test_case_forms_of_one_name_are_one_name():
+    names = deep.gather(
+        [
+            [
+                deep.Mention(name="Цмок", paragraphs=[0, 1]),
+                deep.Mention(name="Ўцей", paragraphs=[2]),
+            ],
+            [deep.Mention(name="Цмока", paragraphs=[3]), deep.Mention(name="Уцею", paragraphs=[0])],
+            [
+                deep.Mention(name="Цмок", paragraphs=[1]),
+                deep.Mention(name="Уцей", paragraphs=[3]),
+                deep.Mention(name="Ваяводу Зура", paragraphs=[4]),
+                deep.Mention(name="бацьку", named=False, paragraphs=[5]),
+            ],
+            [
+                # The model wrote one being twice: one form's paragraphs inside the other's.
+                deep.Mention(name="Цмок", paragraphs=[1, 2, 3]),
+                deep.Mention(name="Цмока", paragraphs=[2]),
+                deep.Mention(name="Уцей", paragraphs=[2]),
+                deep.Mention(name="Ваявода Зур", paragraphs=[1]),
+                deep.Mention(name="бацька", named=False, paragraphs=[0, 2]),
+            ],
+        ]
+    )
+    assert {n.name: n.places for n in names.values()} == {
+        "Цмок": {0: [0, 1], 1: [3], 2: [1], 3: [1, 2, 3]},
+        "Уцей": {0: [2], 1: [0], 2: [3], 3: [2]},
+        "Ваявода Зур": {2: [4], 3: [1]},
+        "бацька": {2: [5], 3: [0, 2]},
+    }
+
+
+def test_case_folding_keeps_apart_what_may_be_two_beings():
+    names = deep.gather(
+        [
+            # Together in one paragraph, each with paragraphs of its own: two beings.
+            [
+                deep.Mention(name="Аляксандр", paragraphs=[0, 1]),
+                deep.Mention(name="Аляксандра", paragraphs=[1, 2]),
+            ],
+            # A name and a common word are never folded; short stems are never folded.
+            [
+                deep.Mention(name="Грак", paragraphs=[0]),
+                deep.Mention(name="грака", named=False, paragraphs=[1]),
+                deep.Mention(name="Ян", paragraphs=[2]),
+                deep.Mention(name="Яна", paragraphs=[3]),
+            ],
+            # A diminutive is another name, not a case: left to the cast.
+            [deep.Mention(name="Уцейка", paragraphs=[0])],
+        ]
+    )
+    assert {n.name for n in names.values()} == {
+        "Аляксандр",
+        "Аляксандра",
+        "Грак",
+        "грака",
+        "Ян",
+        "Яна",
+        "Уцейка",
+    }
+
+
 def test_dossier_is_in_story_order_with_neighbours():
     chapter = Chapter(position=0, title="Один", text="а\n\nб\n\nв\n\nг", content_hash="x")
     book = deep.Book([chapter])
