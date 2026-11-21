@@ -11,6 +11,7 @@ const ru = {
   'account.menu': 'Аккаунт',
   'chat.close': 'Свернуть чат',
   'settings.language': 'Язык интерфейса',
+  'settings.project_title': 'Название проекта',
   'projects.start.reader.title': 'Иллюстрировать готовую книгу',
   'projects.start.reader.body':
     'Загрузите книгу (TXT, EPUB, FB2, DOCX, PDF): сервис разобьёт её на главы, найдёт персонажей, локации и сцены и соберёт промпты для картинок и видео с одними и теми же героями.',
@@ -76,8 +77,6 @@ const ru = {
   'projects.chapters': 'глав: {n}',
   'projects.delete.confirm':
     'Удалить проект «{title}» со всеми главами и версиями? Отменить это нельзя.',
-  'projects.rename': 'Переименовать',
-  'projects.rename.prompt': 'Новое название проекта',
 
   'mode.reader': 'Готовая книга',
   'mode.writer': 'Пишу книгу',
@@ -853,6 +852,7 @@ const en: Record<keyof typeof ru, string> = {
   'account.menu': 'Account',
   'chat.close': 'Fold the chat',
   'settings.language': 'Interface language',
+  'settings.project_title': 'Project name',
   'projects.start.reader.title': 'Illustrate a finished book',
   'projects.start.reader.body':
     'Upload a book (TXT, EPUB, FB2, DOCX, PDF): the service splits it into chapters, finds characters, locations and scenes, and builds prompts for pictures and video that keep the same characters throughout.',
@@ -918,8 +918,6 @@ const en: Record<keyof typeof ru, string> = {
   'projects.chapters': 'chapters: {n}',
   'projects.delete.confirm':
     'Delete “{title}” with all its chapters and versions? This cannot be undone.',
-  'projects.rename': 'Rename',
-  'projects.rename.prompt': 'New project name',
 
   'mode.reader': 'Finished book',
   'mode.writer': 'Writing a book',

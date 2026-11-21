@@ -50,7 +50,8 @@ export default function AccountMenu({ accounts, email, onLogout }: Props) {
           {email && <p className="faint small account-email">{email}</p>}
           <Link to="/">{t('nav.my_projects')}</Link>
           {projectId && <Link to={`/projects/${projectId}/usage`}>{t('tabs.usage')}</Link>}
-          <Link to="/settings">{t('app.settings')}</Link>
+          {/* From inside a project the settings also show its name, to edit in place. */}
+          <Link to={projectId ? `/settings?project=${projectId}` : '/settings'}>{t('app.settings')}</Link>
           {accounts && <button onClick={onLogout}>{t('login.logout')}</button>}
         </nav>
       )}

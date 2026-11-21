@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   type Connection,
@@ -22,6 +22,8 @@ export default function Settings() {
   const [accounts, setAccounts] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
+  // Opened from inside a project (the account menu adds ?project=<id>).
+  const projectId = useSearchParams()[0].get("project");
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t]);
   const loadConnections = useCallback(
@@ -67,6 +69,8 @@ export default function Settings() {
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+
+      {projectId && <ProjectTitle projectId={projectId} onError={fail} />}
 
       <section className="panel pad row">
         <h2 className="grow">{t("settings.language")}</h2>
@@ -169,6 +173,53 @@ export default function Settings() {
       )}
       {accounts && <ChangePassword />}
     </main>
+  );
+}
+
+/** The open project's name, edited in place: saved on Enter or when the field loses focus. */
+function ProjectTitle({
+  projectId,
+  onError,
+}: {
+  projectId: string;
+  onError: (e: unknown) => void;
+}) {
+  const { t } = useI18n();
+  const [saved, setSaved] = useState<string | null>(null);
+  const [value, setValue] = useState("");
+  useEffect(() => {
+    api.project(projectId).then((p) => {
+      setSaved(p.title);
+      setValue(p.title);
+    }, onError);
+  }, [projectId, onError]);
+
+  const commit = () => {
+    const title = value.trim();
+    if (saved === null || !title || title === saved) {
+      setValue(saved ?? "");
+      return;
+    }
+    api.updateProject(projectId, { title }).then((p) => {
+      setSaved(p.title);
+      setValue(p.title);
+    }, onError);
+  };
+
+  if (saved === null) return null;
+  return (
+    <section className="panel pad stack">
+      <h2>{t("settings.project_title")}</h2>
+      <input
+        className="input"
+        value={value}
+        maxLength={300}
+        aria-label={t("settings.project_title")}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      />
+    </section>
   );
 }
 
