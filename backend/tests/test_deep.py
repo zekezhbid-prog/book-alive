@@ -399,9 +399,32 @@ def test_crowds_headings_and_lone_words_get_no_card():
             ],
             [deep.Mention(name="людзі", named=False, paragraphs=[2])],
         ],
-        deep.Cast(not_characters=["людзі", "Аўтар Кнігі"]),
+        deep.Cast(not_characters=["людзі"], titles=["Аўтар Кнігі"]),
     )
     assert plans == {}
+
+
+def test_proper_name_put_among_not_characters_keeps_a_card_in_question():
+    # The model is free with not_characters; a proper name that is no title or heading
+    # never vanishes, it stays a card marked uncertain.
+    plans = plans_of(
+        [
+            [
+                deep.Mention(name="Жыж", paragraphs=[0, 1]),
+                deep.Mention(name="Аўтар Кнігі", paragraphs=[0]),
+                deep.Mention(name="людзі", named=False, paragraphs=[1]),
+            ],
+        ],
+        deep.Cast(not_characters=["Жыж", "людзі"], titles=["Аўтар Кнігі"]),
+    )
+    assert set(plans) == {"Жыж"}
+    assert plans["Жыж"].doubtful
+    assert plans["Жыж"].named
+
+
+def test_a_doubtful_card_is_never_a_main_one():
+    plan = deep.Plan("Жыж", [], {c: {0} for c in range(9)}, True, doubtful=True)
+    assert deep.pick_main([plan]) == set()
 
 
 def test_main_and_other_cards_are_written_side_by_side(session, project, monkeypatch):

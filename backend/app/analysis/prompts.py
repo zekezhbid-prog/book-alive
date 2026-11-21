@@ -400,17 +400,22 @@ as a source ONLY with the chapter numbers where it means that being, never for t
 book. Where it fits nobody, leave it out.
 - A form of a name in another grammatical case ("Uladara", "Uteiku") is a source of that \
 being.
-- Crowds and roles of ordinary people ("people", "traders", "guards", "servants"), the \
-book's title, headings and the author's name are not characters: put them in \
-not_characters. A kind of creature the story is about (mermaids, goblins) stays a being.
+- The book's title, headings and the author's name go to titles.
+- not_characters is ONLY for crowds and roles of ordinary people ("people", "traders", \
+"guards", "servants") and for ordinary animals or things that only pass by. Everything else \
+is a being, however minor, even if it appears in one chapter only: anyone with a proper \
+name; any spirit, monster, magic or talking creature; a kind of such creatures, even \
+written in lower case or in the plural ("goblins", "will-o'-the-wisps"); a part or a shadow \
+that split off and acts on its own. When in doubt, keep it as a being.
 - Keep every decision of the user listed at the end.
 
 Use the main name the book uses most. Every proper name in the list must end up somewhere: \
-a being's source, a false name or not_characters.
+a being's source, a false name, titles or not_characters.
 
 Reply with JSON only:
 {"beings": [{"name": "...", "sources": [{"name": "...", "chapters": []}], "forms": ["..."]}],
  "false_names": [{"name": "...", "belongs_to": "...", "reason": "..."}],
+ "titles": ["..."],
  "not_characters": ["..."]}
 "chapters": [] means everywhere in the book (for proper names only)."""
 

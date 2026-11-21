@@ -96,8 +96,11 @@ class FalseName(BaseModel):
 class Cast(BaseModel):
     beings: list[Being] = []
     false_names: list[FalseName] = []
-    # Crowds, roles, headings, the author: no card, and no being's paragraphs either.
+    # Crowds and roles of ordinary people: no card, and no being's paragraphs either. A
+    # proper name here still keeps a card in question: the model drops minor beings too.
     not_characters: list[str] = []
+    # The book's title, headings, the author's name: no card at all.
+    titles: list[str] = []
 
 
 class DeepFact(BaseModel):
@@ -383,6 +386,8 @@ class Plan:
     places: dict[int, set[int]]
     named: bool
     forms: list[str] = field(default_factory=list)
+    # A proper name the model called no character: kept, but as a card in question.
+    doubtful: bool = False
 
     @property
     def chapter_count(self) -> int:
@@ -393,7 +398,10 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
     """Cards from the model's cast; a name it left out is a card of its own. A false name
     is no card and no alias, but its paragraphs go to the being it was said about."""
     false = {norm(f.name): f for f in cast.false_names}
-    used: set[str] = {norm(n) for n in cast.not_characters}
+    titles = {norm(n) for n in cast.titles}
+    dropped = {norm(n) for n in cast.not_characters} - titles
+    # A proper name is never dropped by the model alone: only a title or a heading is.
+    used: set[str] = titles | {k for k in dropped if not (k in names and names[k].named)}
     # Chapters where a name was given to some being: elsewhere it may still be someone else.
     claimed: dict[str, set[int]] = {}
     plans: list[Plan] = []
@@ -446,7 +454,7 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
         rest = {c: set(p) for c, p in entry.places.items() if c not in claimed.get(key, ())}
         if entry.named:
             if rest:
-                plan = Plan(entry.name, [], rest, True)
+                plan = Plan(entry.name, [], rest, True, doubtful=key in dropped)
                 plans.append(plan)
                 by_name[key] = plan
             continue
@@ -464,7 +472,7 @@ def plan_cards(names: dict[str, Name], cast: Cast) -> list[Plan]:
 
 def pick_main(plans: list[Plan]) -> set[str]:
     ranked = sorted(
-        (p for p in plans if p.named and p.chapter_count >= MAIN_MIN_CHAPTERS),
+        (p for p in plans if p.named and not p.doubtful and p.chapter_count >= MAIN_MIN_CHAPTERS),
         key=lambda p: -p.chapter_count,
     )
     return {norm(p.name) for p in ranked[: settings.deep_main_limit]}
@@ -654,6 +662,8 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
     run.report = {
         "merged": [[a, p.name] for p in plans for a in p.aliases],
         "adopted": [],
+        # The model's whole answer: what it dropped is seen only here.
+        "cast": cast.model_dump(),
     }
     session.commit()
     # Main characters first: their ages help to work out the others' ("as old as Uts").
@@ -719,7 +729,7 @@ def _bind(
             session.add(entity)
         entity.name = plan.name
         entity.aliases = list(dict.fromkeys([*plan.aliases, *(entity.pinned_names or [])]))
-        entity.uncertain = not plan.named
+        entity.uncertain = not plan.named or plan.doubtful
         entity.facts.clear()
         bound[norm(plan.name)] = entity
     for entity in existing:
