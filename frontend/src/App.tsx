@@ -46,7 +46,7 @@ export default function App() {
         <header className="topbar">
           <Link to="/about" className="brand">
             <span className="brand-mark">
-              <img src="/favicon.svg" alt="" />
+              <img src="/emblem.svg" alt="" />
             </span>
             <span className="brand-name">Lorebook</span>
           </Link>
@@ -65,7 +65,7 @@ export default function App() {
         {/* The name of the app leads to what it is; the projects are in the account menu. */}
         <Link to="/about" className="brand brand-mark-only" title="Lorebook">
           <span className="brand-mark">
-            <img src="/favicon.svg" alt="Lorebook" />
+            <img src="/emblem.svg" alt="Lorebook" />
           </span>
         </Link>
         <div id="topbar-slot" className="topbar-slot" />

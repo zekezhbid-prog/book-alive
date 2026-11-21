@@ -6,7 +6,12 @@ import '@fontsource/lora/700.css'
 import App from './App.tsx'
 import DialogHost from './components/DialogHost'
 import { I18nProvider } from './i18n.tsx'
+import '@fontsource/lora/400.css'
+import '@fontsource/cormorant-sc/700.css'
+import '@fontsource/cormorant-garamond/600.css'
+import '@fontsource/cormorant-garamond/700.css'
 import './index.css'
+import './castle.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

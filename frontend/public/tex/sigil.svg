@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g opacity="0.13" style="filter:grayscale(1)">
+  <!-- Lorebook emblem: an old book on a bronze seal. Drawn for Lorebook, no outside assets. -->
+  <defs>
+    <radialGradient id="seal" cx="40%" cy="32%" r="75%">
+      <stop offset="0" stop-color="#d9b46a"/>
+      <stop offset="0.45" stop-color="#9a6f2e"/>
+      <stop offset="1" stop-color="#3f2a10"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1d79a"/>
+      <stop offset="0.5" stop-color="#7a5521"/>
+      <stop offset="1" stop-color="#2b1c09"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3e6c4"/>
+      <stop offset="1" stop-color="#bfa577"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a2f1c"/>
+      <stop offset="1" stop-color="#2a140b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#rim)"/>
+  <circle cx="32" cy="32" r="26.5" fill="url(#seal)"/>
+  <circle cx="32" cy="32" r="26.5" fill="none" stroke="#2b1c09" stroke-opacity="0.6" stroke-width="1"/>
+  <circle cx="32" cy="32" r="23" fill="none" stroke="#f1d79a" stroke-opacity="0.35" stroke-width="0.8" stroke-dasharray="1.5 2.5"/>
+  <!-- the book: leather cover, two pages, a ribbon -->
+  <path d="M12 23 Q22 19 32 24 Q42 19 52 23 L52 45 Q42 41 32 46 Q22 41 12 45 Z" fill="url(#cover)" stroke="#1a0c05" stroke-width="1"/>
+  <path d="M14.5 22 Q23 18.5 31.2 23 L31.2 43.5 Q23 39.5 14.5 42.5 Z" fill="url(#page)"/>
+  <path d="M49.5 22 Q41 18.5 32.8 23 L32.8 43.5 Q41 39.5 49.5 42.5 Z" fill="url(#page)"/>
+  <g stroke="#7b6343" stroke-width="0.8" stroke-linecap="round" opacity="0.8">
+    <path d="M18 26.5 Q23 25 28.5 27"/><path d="M18 29.5 Q23 28 28.5 30"/><path d="M18 32.5 Q23 31 28.5 33"/><path d="M18 35.5 Q22 34.3 26 35.6"/>
+    <path d="M35.5 27 Q41 25 46 26.5"/><path d="M35.5 30 Q41 28 46 29.5"/><path d="M35.5 33 Q41 31 46 32.5"/><path d="M38 35.6 Q42 34.3 46 35.5"/>
+  </g>
+  <path d="M32 24 L32 46" stroke="#3a1f10" stroke-width="1.2"/>
+  <path d="M33.5 43 L33.5 52 L35.3 50.2 L37 52 L37 43.5" fill="#7d1d17" stroke="#3b0c09" stroke-width="0.6"/>
+  <!-- a small star above the book -->
+  <path d="M32 9.5 L33.3 13.2 L37 14.5 L33.3 15.8 L32 19.5 L30.7 15.8 L27 14.5 L30.7 13.2 Z" fill="#fbe7a8"/>
+</g></svg>

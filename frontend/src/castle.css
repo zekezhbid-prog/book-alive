@@ -1,0 +1,376 @@
+/* ==========================================================================
+   Lorebook theme "Dark Fantasy Castle": an old magic book inside a stone castle lit by
+   torches. Loaded after index.css and only restyles it: no markup, logic or layout of the
+   app depends on this file.
+
+   Materials (public/tex, CC0 textures from ambientCG, toned and compressed for the web):
+   stone-wall (the castle wall behind everything), stone-panel (panels, niches), metal
+   (top bar, buttons), wood, leather (dialogs), parchment (the pages of a chapter).
+   ========================================================================== */
+
+:root {
+  /* ---- materials ---- */
+  --tex-wall: url('/tex/stone-wall.webp');
+  --tex-stone: url('/tex/stone-panel.webp');
+  --tex-metal: url('/tex/metal.webp');
+  --tex-wood: url('/tex/wood.webp');
+  --tex-leather: url('/tex/leather.webp');
+  --tex-parchment: url('/tex/parchment.webp');
+
+  /* ---- colours: warm stone greys, aged gold and bronze ---- */
+  --bg: #0d0d0e;
+  --panel: rgba(17, 16, 15, 0.9);
+  --panel-2: rgba(30, 28, 25, 0.92);
+  --line: rgba(0, 0, 0, 0.7);
+  --line-2: rgba(120, 96, 58, 0.35);
+  --text: #ece3cf;
+  --muted: #b3a88f;
+  --faint: #7f7663;
+  --accent: #dcb866;
+  --accent-2: #b97b34;
+  --accent-ink: #1e1407;
+  --accent-soft: rgba(220, 184, 102, 0.1);
+  --accent-line: rgba(220, 184, 102, 0.38);
+  --gold-light: #f1dca0;
+  --bronze: #8c6430;
+  --ok: #8fbf7f;
+  --err: #e07b62;
+
+  /* aged gold, without the mirror polish of the old theme */
+  --gold: linear-gradient(180deg, #f2dc9c 0%, #d9b363 24%, #b88834 52%, #8c6223 74%, #c79b4d 100%);
+  --gold-text: linear-gradient(180deg, #f6e5b0 0%, #dcb866 48%, #a5762f 100%);
+  --gradient: linear-gradient(90deg, var(--accent), var(--accent-2));
+  --glow: 0 0 0 transparent;
+
+  /* ---- shape and depth ---- */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --bevel: inset 0 1px 0 rgba(255, 238, 205, 0.09), inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  --trim: inset 0 0 0 1px rgba(170, 128, 66, 0.28);
+  --shade-in: inset 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 -16px 34px rgba(0, 0, 0, 0.35);
+  --drop: 0 14px 30px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.6);
+  --corners: url('/tex/corner-tl.svg') top 3px left 3px / 18px no-repeat,
+    url('/tex/corner-tr.svg') top 3px right 3px / 18px no-repeat,
+    url('/tex/corner-bl.svg') bottom 3px left 3px / 18px no-repeat,
+    url('/tex/corner-br.svg') bottom 3px right 3px / 18px no-repeat;
+
+  /* surfaces, ready to drop into `background` */
+  --surface-stone: linear-gradient(180deg, rgba(26, 25, 23, 0.62), rgba(12, 12, 12, 0.78)), var(--tex-stone) center / 320px;
+  --surface-stone-deep: linear-gradient(180deg, rgba(16, 15, 14, 0.7), rgba(8, 8, 8, 0.82)), var(--tex-stone) center / 320px;
+  --surface-metal: linear-gradient(180deg, rgba(58, 54, 48, 0.78), rgba(22, 21, 19, 0.92) 55%, rgba(12, 12, 11, 0.96)), var(--tex-metal) center / 260px;
+  --surface-leather: linear-gradient(170deg, rgba(48, 30, 20, 0.55), rgba(14, 9, 7, 0.9)), var(--tex-leather) center / 256px;
+
+  /* ---- type: carved capitals for titles, a calm serif for reading, plain text for data ---- */
+  --display: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
+  --book: 'Cormorant Garamond', 'Lora', Georgia, serif;
+  --serif: 'Lora', Georgia, 'Times New Roman', serif;
+}
+
+/* ---------- the castle hall behind every page ---------- */
+html { background: #0a0a0a; }
+body::before {
+  background:
+    /* two torches on the walls and a cold window light above */
+    radial-gradient(circle at 6% 30%, rgba(255, 158, 64, 0.2), transparent 30%),
+    radial-gradient(circle at 96% 62%, rgba(255, 150, 60, 0.15), transparent 28%),
+    radial-gradient(ellipse 60% 40% at 55% -8%, rgba(170, 185, 210, 0.08), transparent 70%),
+    /* pillars of shadow at the sides, a dark floor, a vignette */
+    linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 14%, transparent 86%, rgba(0, 0, 0, 0.5)),
+    linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.55)),
+    radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.6) 92%),
+    var(--tex-wall) center / 560px repeat,
+    #1a1918;
+}
+/* The torchlight breathes a little; nothing else moves. */
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle at 6% 30%, rgba(255, 170, 80, 0.07), transparent 22%);
+  animation: torch 5.5s ease-in-out infinite alternate;
+}
+@keyframes torch { 0% { opacity: 0.55; } 40% { opacity: 1; } 70% { opacity: 0.7; } 100% { opacity: 0.95; } }
+@media (prefers-reduced-motion: reduce) { body::after { animation: none; } }
+/* The old open book lies on a stone ledge at the foot of the wall, lit by a candle.
+   `lighten` drops the photo's black backdrop, the mask melts its edges into the stone. */
+#root::before {
+  content: ''; position: fixed; z-index: -1; pointer-events: none;
+  left: 50%; bottom: -4vh; width: min(1150px, 92vw); aspect-ratio: 2 / 1; transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 45% 40% at 52% 45%, rgba(255, 190, 110, 0.16), transparent 70%),
+    url('/bg-book.jpg') center / contain no-repeat;
+  filter: sepia(0.55) saturate(1.1) brightness(0.62) contrast(1.05);
+  mix-blend-mode: lighten; opacity: 0.8;
+  -webkit-mask-image: radial-gradient(ellipse 52% 50% at 50% 52%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 52% 50% at 50% 52%, #000 55%, transparent 100%);
+}
+/* A ledge of shadow the book rests on. */
+#root::after {
+  content: ''; position: fixed; z-index: -1; pointer-events: none; left: 0; right: 0; bottom: 0; height: 14vh;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.45));
+}
+@media (max-width: 720px) { #root::before { width: 140vw; bottom: -2vh; opacity: 0.6; } }
+
+::selection { background: rgba(220, 184, 102, 0.3); }
+* { scrollbar-color: #4a3d28 transparent; }
+
+/* ---------- type ---------- */
+h1, h2, h3, .entity-name, .chapter-title, .about h2 {
+  font-family: var(--display); font-weight: 700; letter-spacing: 0.4px; color: var(--gold-light);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+}
+h1 { font-size: 40px; }
+h2 { font-size: 27px; }
+h3 { font-size: 21px; }
+h4 { font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: 1.6px; color: var(--accent); text-transform: none; }
+.tile-title { font-family: var(--display); font-size: 19px; letter-spacing: 0.3px; }
+.entity-name { font-size: 40px; }
+.badge, .nav-count, .chip { font-family: var(--sans); }
+
+/* ---------- controls: dark iron, aged gold for the main action ---------- */
+.btn {
+  border: 1px solid #050505; border-radius: var(--radius-sm);
+  background: var(--surface-metal);
+  box-shadow: var(--bevel), inset 0 0 0 1px rgba(170, 128, 66, 0.4), 0 2px 5px rgba(0, 0, 0, 0.6);
+  color: #e7d6ab; font-family: var(--book); font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+.btn:hover {
+  border-color: #050505; color: var(--gold-light);
+  background: linear-gradient(180deg, rgba(90, 76, 52, 0.55), rgba(26, 24, 21, 0.92) 60%), var(--tex-metal) center / 260px;
+  box-shadow: var(--bevel), inset 0 0 0 1px rgba(220, 184, 102, 0.6), 0 2px 5px rgba(0, 0, 0, 0.6), 0 0 14px rgba(255, 170, 70, 0.12);
+}
+.btn:active { transform: translateY(1px); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(170, 128, 66, 0.4); }
+.btn.primary {
+  background: var(--gold); color: #24170a; text-shadow: 0 1px 0 rgba(255, 238, 190, 0.45);
+  border-color: #3a2509;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.7), inset 0 -2px 0 rgba(70, 40, 5, 0.55), 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+.btn.primary:hover {
+  background: var(--gold); color: #1a0f04; filter: brightness(1.07); transform: none;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.8), inset 0 -2px 0 rgba(70, 40, 5, 0.55), 0 3px 8px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 180, 80, 0.22);
+}
+.btn.primary::after, .brand-mark::after { display: none; }
+.btn.primary:disabled { background: #2c2925; color: var(--faint); box-shadow: inset 0 0 0 1px rgba(120, 96, 58, 0.3); }
+.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--muted); text-shadow: none; }
+.btn.ghost:hover { background: rgba(220, 184, 102, 0.07); box-shadow: none; color: var(--gold-light); }
+.btn.ghost.active, .btn.active { color: var(--gold-light); border-color: rgba(220, 184, 102, 0.35); background: linear-gradient(180deg, rgba(220, 184, 102, 0.16), rgba(220, 184, 102, 0.04)); }
+.btn.small { border-radius: var(--radius-sm); font-size: 14px; }
+.btn.gold:hover, .row-action:hover:not(:disabled), .slot-plus:hover, .view-slot-box:hover .slot-plus, .look-new:hover .look-new-icon { filter: none; }
+.btn.icon { border-radius: var(--radius-sm); }
+
+.input, .segmented {
+  background: rgba(6, 6, 6, 0.72); border: 1px solid #050505; border-radius: var(--radius-sm);
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 236, 200, 0.06);
+}
+.input:focus { border-color: rgba(220, 184, 102, 0.55); box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.85), 0 0 0 2px rgba(220, 184, 102, 0.12); }
+.input::file-selector-button { background: var(--surface-metal); border-color: #050505; border-radius: var(--radius-sm); color: #e7d6ab; }
+.segmented button { border-radius: 3px; font-size: 15px; }
+.segmented button.active { background: linear-gradient(180deg, rgba(220, 184, 102, 0.22), rgba(220, 184, 102, 0.06)); color: var(--gold-light); box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.3); }
+.badge { border-radius: 3px; border-color: rgba(120, 96, 58, 0.45); background: rgba(0, 0, 0, 0.35); }
+.chip { border-radius: 3px; border-color: rgba(120, 96, 58, 0.45); background: rgba(0, 0, 0, 0.3); }
+.notice {
+  border-radius: var(--radius-sm); border: 1px solid rgba(170, 128, 66, 0.45);
+  background: linear-gradient(180deg, rgba(60, 44, 20, 0.55), rgba(26, 19, 10, 0.75)), var(--tex-leather) center / 256px;
+  box-shadow: var(--bevel), 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.notice.error { background: linear-gradient(180deg, rgba(90, 30, 20, 0.5), rgba(30, 10, 8, 0.8)); border-color: rgba(224, 123, 98, 0.45); }
+.dot, mark { box-shadow: none; }
+mark { background: rgba(220, 184, 102, 0.85); }
+.badge-btn:hover:not(:disabled) { text-shadow: none; }
+.ai-mark { filter: none; }
+
+/* ---------- top bar: a dark iron beam with a bronze edge ---------- */
+.topbar {
+  background: var(--surface-metal); backdrop-filter: none;
+  border-bottom: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 238, 205, 0.08), inset 0 -1px 0 rgba(220, 184, 102, 0.42), 0 8px 22px rgba(0, 0, 0, 0.7);
+}
+.brand { font-family: var(--display); font-size: 24px; }
+.brand-name {
+  background: var(--gold-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.8));
+}
+.brand-mark { width: 40px; height: 40px; border-radius: 50%; animation: none; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7); }
+.book-title {
+  font-family: var(--display); font-size: 24px; font-weight: 700; letter-spacing: 0.4px;
+  color: var(--gold-light); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.8), 0 0 18px rgba(255, 170, 70, 0.15);
+}
+.tabs { gap: 0; }
+.tab { position: relative; font-family: var(--book); font-size: 17px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; }
+.topbar .tab { font-size: 16px; }
+/* thin carved dividers between the parts of the book */
+.tab + .tab::before {
+  content: ''; position: absolute; left: 0; top: 30%; bottom: 30%; width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(170, 128, 66, 0.5), transparent);
+}
+.tab:hover { color: var(--gold-light); }
+.tab.active {
+  color: var(--gold-light); border-bottom-color: var(--accent);
+  background: radial-gradient(ellipse 80% 70% at 50% 100%, rgba(255, 180, 80, 0.18), transparent 75%);
+}
+.tab svg { color: var(--accent); opacity: 0.85; }
+.book-search .input { background: rgba(6, 6, 6, 0.6); }
+.book-search-results, .account-menu, .chat-settings, .add-sample-menu {
+  background: var(--surface-stone-deep); border: 1px solid #050505; border-radius: var(--radius);
+  box-shadow: var(--trim), var(--drop);
+}
+
+/* ---------- left side: a stone recess of its own ---------- */
+.nav-rail, .chapters, .nav-list, .side {
+  background: var(--surface-stone-deep); backdrop-filter: none;
+  border-right: 1px solid #000;
+  box-shadow: inset -1px 0 0 rgba(170, 128, 66, 0.22), inset -14px 0 24px rgba(0, 0, 0, 0.45);
+}
+.nav-list { background: var(--surface-stone); }
+.side { border-left: 1px solid #000; border-right: 0; box-shadow: inset 1px 0 0 rgba(170, 128, 66, 0.22), inset 14px 0 24px rgba(0, 0, 0, 0.45); }
+.nav-head { border-radius: var(--radius-sm); font-family: var(--book); font-size: 18px; }
+.nav-head:hover { background: rgba(220, 184, 102, 0.06); color: var(--gold-light); }
+.nav-head.current, .chapter-link.active {
+  color: var(--gold-light);
+  background: linear-gradient(90deg, rgba(220, 184, 102, 0.2), rgba(220, 184, 102, 0.03) 85%);
+  border-color: transparent; box-shadow: inset 3px 0 0 var(--accent);
+}
+.chapter-link, .hit { border-radius: var(--radius-sm); }
+.chapter-link:hover, .hit:hover { background: rgba(255, 236, 200, 0.05); color: var(--text); }
+.nav-count { background: rgba(0, 0, 0, 0.35); color: var(--faint); opacity: 0.8; }
+.chapter-num { color: #6d6555; }
+.nav-list h4, .nav-list-head h4 { font-size: 16px; }
+.btn.nav-action {
+  border-radius: var(--radius-sm); color: var(--accent);
+  background: var(--surface-metal);
+  box-shadow: var(--bevel), inset 0 0 0 1px rgba(220, 184, 102, 0.5), 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+.btn.nav-action:hover { color: var(--gold-light); }
+.nav-footer { border-top: 1px solid rgba(170, 128, 66, 0.2); }
+.nav-toggle { border-radius: 3px; }
+
+/* ---------- panels, cards and windows: dark stone, a bronze trim, corner fittings ---------- */
+.panel, .card, .start-card {
+  background: var(--corners), var(--surface-stone); backdrop-filter: none;
+  border: 1px solid #050505; border-radius: var(--radius);
+  box-shadow: var(--trim), var(--bevel), var(--shade-in), var(--drop);
+}
+.project-card:hover { border-color: #050505; transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.55), var(--bevel), var(--shade-in), var(--drop), 0 0 22px rgba(255, 170, 70, 0.1); }
+.overlay { background: rgba(0, 0, 0, 0.72); }
+.dialog {
+  background: var(--corners), var(--surface-leather); border: 1px solid #050505; border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px rgba(170, 128, 66, 0.4), inset 0 0 0 5px rgba(0, 0, 0, 0.35), inset 0 0 0 6px rgba(170, 128, 66, 0.18), var(--shade-in), 0 30px 80px rgba(0, 0, 0, 0.8);
+}
+.mode-option { border-radius: var(--radius-sm); border-color: rgba(120, 96, 58, 0.4); background: rgba(0, 0, 0, 0.25); }
+.mode-option.active { border-color: var(--accent); background: rgba(220, 184, 102, 0.1); }
+.chapter-picker, .stats-table-wrap, .stats-tile { border-color: rgba(120, 96, 58, 0.35); border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.3); }
+
+/* ---------- card tiles: stone niches; a picture fills the niche, the name sits on a plate ---------- */
+.card-grid { grid-auto-rows: 210px; gap: 16px; }
+.tile {
+  border: 1px solid #050505; border-radius: var(--radius);
+  background: var(--corners),
+    url('/tex/sigil.svg') right 14px bottom 12px / 58px no-repeat,
+    var(--surface-stone-deep);
+  box-shadow: var(--trim), inset 0 10px 28px rgba(0, 0, 0, 0.6), inset 0 -18px 30px rgba(0, 0, 0, 0.45), var(--drop);
+  transition: box-shadow 0.2s, transform 0.2s, filter 0.2s;
+}
+/* the faint sigil in an empty niche, like a carving */
+.tile:hover {
+  border-color: #050505; transform: translateY(-2px); background: var(--corners), url('/tex/sigil.svg') right 14px bottom 12px / 58px no-repeat, var(--surface-stone-deep);
+  box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.6), inset 0 10px 28px rgba(0, 0, 0, 0.5), 0 18px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 170, 70, 0.1);
+}
+.tile.picked { box-shadow: inset 0 0 0 2px var(--accent), var(--drop); }
+.tile-cover { opacity: 0.92; filter: saturate(0.85) contrast(1.05); }
+.tile:hover .tile-cover { opacity: 1; }
+.tile.with-cover { padding: 0; gap: 0; justify-content: flex-end; }
+.tile.with-cover::after { background: linear-gradient(180deg, rgba(8, 7, 6, 0.25) 0%, transparent 30%, transparent 55%, rgba(8, 7, 6, 0.55) 100%); box-shadow: inset 0 0 0 1px rgba(170, 128, 66, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.55); z-index: 1; }
+.tile.with-cover > .tile-title, .tile.with-cover > .tile-text, .tile.with-cover > .tile-meta {
+  z-index: 2; margin: 0; padding-inline: 14px;
+  background: linear-gradient(180deg, rgba(22, 19, 15, 0.92), rgba(10, 9, 8, 0.96));
+}
+.tile.with-cover > .tile-title { order: 1; padding-top: 8px; border-top: 1px solid rgba(220, 184, 102, 0.45); box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.8); }
+.tile.with-cover > .tile-text { order: 2; -webkit-line-clamp: 1; }
+.tile.with-cover > .tile-meta { order: 3; padding-bottom: 8px; padding-top: 2px; }
+.tile-text { color: var(--muted); }
+.tile-meta { color: var(--faint); }
+.tile-action .tile-title { color: var(--gold-light); }
+.tile-action > .tile-action-icon { opacity: 0.6; filter: sepia(0.4) saturate(0.7) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.8)); }
+.tile-action:disabled:hover { background: var(--corners), var(--surface-stone-deep); box-shadow: var(--trim), var(--drop); }
+.tile-check { accent-color: var(--accent); }
+
+/* pictures of a card: framed like small paintings */
+.shot, .refs img, .view-slot-face, .look-tile, .sample-face, .picture-slot {
+  border-color: #050505; border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px rgba(170, 128, 66, 0.35), 0 6px 14px rgba(0, 0, 0, 0.55);
+}
+.shot:hover { border-color: #050505; box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.6), 0 8px 18px rgba(0, 0, 0, 0.6); }
+
+/* ---------- the reading room ---------- */
+.reading { background: linear-gradient(180deg, rgba(10, 10, 10, 0.35), rgba(6, 6, 6, 0.55)); }
+/* A chapter is a page of the old book: parchment, dark ink, darkened edges. */
+article.chapter {
+  --text: #2c2114; --muted: #5b4930; --faint: #7d6a4c; --line: rgba(90, 64, 30, 0.25); --line-2: rgba(90, 64, 30, 0.35);
+  --accent: #8a5317; --accent-soft: rgba(138, 83, 23, 0.14); --accent-line: rgba(138, 83, 23, 0.4); --panel-2: rgba(120, 90, 50, 0.14);
+  color: var(--text); max-width: 900px; padding: 44px 56px 64px; border-radius: 3px;
+  background:
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(92, 58, 20, 0.35) 100%),
+    radial-gradient(circle at 85% 12%, rgba(120, 80, 30, 0.12), transparent 22%),
+    radial-gradient(circle at 12% 88%, rgba(120, 80, 30, 0.1), transparent 25%),
+    var(--tex-parchment) center / 420px;
+  box-shadow: inset 0 0 60px rgba(70, 40, 10, 0.35), inset 0 0 0 1px rgba(90, 60, 25, 0.35), 0 0 0 6px #1b130c, 0 0 0 7px rgba(170, 128, 66, 0.45), 0 24px 60px rgba(0, 0, 0, 0.75);
+  margin: 8px 0 0 8px;
+}
+article.chapter .chapter-title { color: #3a2612; text-shadow: none; font-size: 40px; }
+article.chapter p, article.chapter .chapter-text { color: var(--text); }
+article.chapter .btn { color: #e7d6ab; }
+article.chapter .btn.ghost { color: var(--muted); text-shadow: none; }
+article.chapter .btn.ghost:hover { color: #3a2612; background: rgba(120, 80, 30, 0.12); }
+article.chapter .quote { color: var(--muted); }
+article.chapter .split { background: rgba(240, 226, 190, 0.9); color: #3a2612; }
+article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
+.chapter p.muted, .chapter p.faint { color: var(--muted); }
+.quote { border-left-color: rgba(170, 128, 66, 0.5); }
+.quote:hover { border-left-color: var(--accent); }
+
+/* ---------- the book chat ---------- */
+.chat-dock { background: var(--surface-stone-deep); backdrop-filter: none; border-left: 1px solid #000; box-shadow: inset 1px 0 0 rgba(170, 128, 66, 0.3), -18px 0 40px rgba(0, 0, 0, 0.6); }
+.chat-fab { border-radius: var(--radius); }
+.bubble { border-radius: var(--radius-sm); }
+.bubble.user { background: linear-gradient(180deg, rgba(220, 184, 102, 0.16), rgba(220, 184, 102, 0.06)); border-color: rgba(220, 184, 102, 0.3); }
+.bubble.assistant { background: rgba(0, 0, 0, 0.35); border-color: rgba(120, 96, 58, 0.35); }
+.cite { border-radius: 3px; }
+
+/* ---------- progress: molten bronze, no neon ---------- */
+.live-progress { border-radius: 3px; background: rgba(0, 0, 0, 0.5); border-color: rgba(170, 128, 66, 0.45); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
+.live-progress-fill { border-radius: 2px; background: repeating-linear-gradient(115deg, #b88834 0 14px, #d9b363 14px 28px); box-shadow: none; }
+.run-progress { background: var(--surface-stone); backdrop-filter: none; }
+
+/* ---------- tables ---------- */
+.table th, .stats-table th { font-family: var(--display); font-size: 14px; letter-spacing: 1px; color: var(--accent); }
+.table th, .table td { border-bottom-color: rgba(120, 96, 58, 0.25); }
+.chat-fab { font-size: 17px; color: #1a0f04; }
+
+/* ---------- refinements after the first look ---------- */
+/* The side columns: stone you can see, a little lighter than the niches. */
+.nav-rail, .chapters, .side {
+  background: linear-gradient(90deg, rgba(20, 19, 18, 0.55), rgba(10, 10, 10, 0.72)), var(--tex-stone) center / 300px;
+}
+.nav-list { background: linear-gradient(90deg, rgba(28, 27, 25, 0.45), rgba(12, 12, 12, 0.66)), var(--tex-stone) center / 300px; }
+/* A card or a scene opened in the work area lies on a stone slab of its own. */
+.reading > div.chapter {
+  max-width: 1100px; padding: 30px 34px 40px;
+  background: var(--corners), var(--surface-stone); border: 1px solid #050505; border-radius: var(--radius);
+  box-shadow: var(--trim), var(--bevel), var(--shade-in), var(--drop);
+}
+/* The two action tiles carry their own + and ✨: no sigil behind the words. */
+.tile.tile-action, .tile.tile-action:hover { background: var(--corners), var(--surface-stone-deep); }
+/* Style choices and other option tiles: solid stone, never the bare wall under the words. */
+.mode-option, button.mode-option {
+  background: var(--surface-stone-deep); border: 1px solid #050505;
+  box-shadow: var(--trim), var(--bevel), 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+.mode-option:hover { box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.55), var(--bevel), 0 6px 16px rgba(0, 0, 0, 0.5); }
+.mode-option.active { background: linear-gradient(180deg, rgba(220, 184, 102, 0.14), rgba(220, 184, 102, 0.03)), var(--surface-stone-deep); box-shadow: inset 0 0 0 1px var(--accent), var(--bevel), 0 6px 16px rgba(0, 0, 0, 0.5); }
+.page-head p, .page > .muted { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+@media (max-width: 900px) {
+  article.chapter { padding: 22px 16px 36px; margin: 0; box-shadow: inset 0 0 40px rgba(70, 40, 10, 0.35), 0 0 0 4px #1b130c, 0 0 0 5px rgba(170, 128, 66, 0.45), 0 14px 30px rgba(0, 0, 0, 0.7); }
+  article.chapter .chapter-title { font-size: 30px; }
+  .reading > div.chapter { padding: 20px 16px 28px; }
+  h1 { font-size: 32px; }
+  .entity-name { font-size: 32px; }
+}
