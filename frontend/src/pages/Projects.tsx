@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Mode, type ProjectBrief } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { ask } from '../dialogs'
+import { ask, askText } from '../dialogs'
 
 export default function Projects() {
   const { t } = useI18n()
@@ -25,6 +25,17 @@ export default function Projects() {
     if (!(await ask(t('projects.delete.confirm', { title: project.title })))) return
     await api.deleteProject(project.id)
     load()
+  }
+
+  const rename = async (project: ProjectBrief) => {
+    const title = (await askText(t('projects.rename.prompt'), project.title))?.trim()
+    if (!title || title === project.title) return
+    try {
+      await api.updateProject(project.id, { title })
+      load()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
   }
 
   return (
@@ -64,9 +75,14 @@ export default function Projects() {
                 {t('app.chars', { n: project.chars.toLocaleString() })}
               </div>
             </Link>
-            <button className="btn ghost small danger" onClick={() => remove(project)}>
-              {t('app.delete')}
-            </button>
+            <div className="row">
+              <button className="btn ghost small" onClick={() => rename(project)}>
+                {t('projects.rename')}
+              </button>
+              <button className="btn ghost small danger" onClick={() => remove(project)}>
+                {t('app.delete')}
+              </button>
+            </div>
           </div>
         ))}
       </div>

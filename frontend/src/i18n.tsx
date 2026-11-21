@@ -76,6 +76,8 @@ const ru = {
   'projects.chapters': 'глав: {n}',
   'projects.delete.confirm':
     'Удалить проект «{title}» со всеми главами и версиями? Отменить это нельзя.',
+  'projects.rename': 'Переименовать',
+  'projects.rename.prompt': 'Новое название проекта',
 
   'mode.reader': 'Готовая книга',
   'mode.writer': 'Пишу книгу',
@@ -916,6 +918,8 @@ const en: Record<keyof typeof ru, string> = {
   'projects.chapters': 'chapters: {n}',
   'projects.delete.confirm':
     'Delete “{title}” with all its chapters and versions? This cannot be undone.',
+  'projects.rename': 'Rename',
+  'projects.rename.prompt': 'New project name',
 
   'mode.reader': 'Finished book',
   'mode.writer': 'Writing a book',
