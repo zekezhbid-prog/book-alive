@@ -461,11 +461,11 @@ def start(client, project, **body):
     return response.json()
 
 
-def test_first_character_search_is_deep_over_the_whole_book(client, project, no_start):
+def test_first_character_search_is_deep_over_the_chosen_chapters(client, project, no_start):
     first = project.chapters[0].id
     started = start(client, project, kind="character", chapter_ids=[first])
     assert started["mode"] == "deep"
-    assert started["total"] == len(project.chapters)
+    assert started["total"] == 1
 
 
 def test_adding_chapters_to_cards_is_not_deep(client, session, project, no_start):

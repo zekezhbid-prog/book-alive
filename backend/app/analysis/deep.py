@@ -627,7 +627,14 @@ AGE_FACT = re.compile(r"\d")
 def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextModel) -> None:
     """Steps A-D and the descriptions. Chapters indexed before a failure are kept."""
     project = session.get(Project, run.project_id)
-    book = Book(sorted((c for c in project.chapters if not c.private), key=lambda c: c.position))
+    # The chapters the user chose, usually the whole book; a part of it for a trial run.
+    chosen = set(run.chapter_ids)
+    book = Book(
+        sorted(
+            (c for c in project.chapters if not c.private and c.id in chosen),
+            key=lambda c: c.position,
+        )
+    )
     index: list[list[Mention] | None] = [stored_index(session, c) for c in book.chapters]
     for number, mentions in enumerate(index):
         if mentions is not None:

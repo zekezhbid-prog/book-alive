@@ -242,14 +242,13 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     kind = _kind(body.kind)
-    # Characters found from nothing (no cards yet, or from scratch) get the deep search
-    # over the whole book; adding chapters to cards that exist is the ordinary search.
+    # Characters found from nothing (no cards yet, or from scratch) get the deep search over
+    # the chosen chapters (the whole book, or a part for a trial); adding chapters to cards
+    # that exist is the ordinary search.
     has_cards = session.scalars(
         select(Entity.id).where(Entity.project_id == project.id, Entity.kind == kind).limit(1)
     ).first()
     mode = deep.MODE_DEEP if kind == KIND_CHARACTER and (body.fresh or not has_cards) else ""
-    if mode:
-        chapters = [c for c in project.chapters if not c.private]  # who is who: the whole book
     if body.fresh:
         analysis.start_fresh(session, project.id, chapters, kind)
     run = AnalysisRun(

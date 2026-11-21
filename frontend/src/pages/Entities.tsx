@@ -605,10 +605,12 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Characters found from nothing (nothing read yet, or from scratch) get the deep search,
-  // as the server decides: it reads the whole book, so every chapter is ticked and locked.
+  // as the server decides: over the chosen chapters, the whole book or a part for a trial.
   const deep = kind === 'character' && (fresh || status?.read.size === 0)
-  const locked = (id: string) => deep || (!fresh && !!status?.read.has(id))
-  const ids = project.chapters.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
+  const locked = (id: string) => !deep && !fresh && !!status?.read.has(id)
+  // A chapter closed for AI is never sent to a model, so it is not offered at all.
+  const open = project.chapters.filter((c) => !c.private)
+  const ids = open.filter((c) => selected.has(c.id) || locked(c.id)).map((c) => c.id)
   const idsKey = ids.join(',')
 
   // The old estimate stays on screen while the new one is counted (by the server, from the
@@ -678,13 +680,13 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
           <h4>{t('run.title')}</h4>
           <span className="spacer" />
           <SelectAll
-            ids={project.chapters.filter((c) => !locked(c.id)).map((c) => c.id)}
+            ids={open.filter((c) => !locked(c.id)).map((c) => c.id)}
             selected={selected}
             onChange={setSelected}
           />
         </div>
         <div className="chapter-picker">
-          {project.chapters.map((chapter) => (
+          {open.map((chapter) => (
             <label key={chapter.id} className="row">
               <input
                 type="checkbox"

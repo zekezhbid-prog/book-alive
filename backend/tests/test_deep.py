@@ -227,6 +227,24 @@ def test_index_is_kept_and_not_read_again(session, project):
     assert starik["paragraphs"] == [1]
 
 
+def test_deep_search_over_chosen_chapters_reads_only_them(session, project):
+    # A trial run over a part of the book: the other chapters are neither read nor used.
+    record = AnalysisRun(
+        project_id=project.id,
+        kind="character",
+        chapter_ids=[project.chapters[0].id],
+        mode=deep.MODE_DEEP,
+    )
+    session.add(record)
+    session.commit()
+    light = DeepModel("light")
+    runner.execute(session, record, light, DeepModel("strong"))
+    assert record.status == "done", record.error
+    assert light.calls.count("index_characters") == 1
+    rykhtash = cast(session, project)["Рыхташ"]
+    assert {f.chapter_id for f in rykhtash.facts} == {project.chapters[0].id}
+
+
 def test_from_scratch_reads_the_chapters_again(session, project):
     run_deep(session, project, DeepModel("light"), DeepModel("strong"))
     analysis.start_fresh(session, project.id, project.chapters, "character")
