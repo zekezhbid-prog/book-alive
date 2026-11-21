@@ -49,7 +49,7 @@ from app.models import (
 
 MODE_DEEP = "deep"
 # Bump when `prompts.INDEX_SYSTEM` changes: chapters indexed by an older prompt are read again.
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 # A main character is written by the strong model: seen in this many chapters at least,
 # and no more than `settings.deep_main_limit` of them (the strong model costs several
 # times more).

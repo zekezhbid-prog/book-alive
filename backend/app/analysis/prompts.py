@@ -362,6 +362,12 @@ the language and spelling of the book: "Цмок" for "Цмока", "Цмоку"
 - When the chapter calls a named character also by a common word or a pronoun ("the old \
 man", "he", "the prince"), put those paragraphs under the name; the word gets no entry of \
 its own.
+- A thing or an animal a character has turned into ("the whistle", "the kitten") is that \
+character: those paragraphs go under the character's name, even when the word is written \
+with a capital letter.
+- A new being that shares a name with an older one (a newborn, a child, an heir, someone \
+reborn: "the little X", "young X", "X the girl") is a separate entry under the name or title \
+the chapter gives it ("the Lady", "little X"), never under the older one's name.
 - Two different proper names or a nickname for the same character stay separate entries: \
 do not decide who is who, that is done later.
 - A single character the chapter never names gets an entry under its describing word in \
@@ -378,7 +384,8 @@ where it occurs and a few paragraphs where it first (and last) appears. Work out
 
 - The same being under several names, nicknames or forms (someone who turns into an animal, \
 a star, a boy, someone who takes another's look) is ONE being: list all those names as its \
-sources and its forms.
+sources and its forms. A thing or an animal it turns into, even written with a capital \
+letter ("Whistle", "Kitten"), is a source of that being, not a being of its own.
 - Two different beings under one name (a namesake, a newborn named after someone, a part \
 that split off and lives on its own, twins) are TWO beings: give each its own name and the \
 chapter numbers where the shared name means that one.
