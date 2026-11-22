@@ -399,3 +399,9 @@ article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
   .entity-index .card-grid > * { content-visibility: auto; contain-intrinsic-size: auto 210px; }
   .entity-index .tile-cover { filter: none; }
 }
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .tile-action > .tile-action-icon, .tile-action:hover > .tile-action-icon {
+    filter: none; transform: translateY(-50%); transition: none;
+  }
+}

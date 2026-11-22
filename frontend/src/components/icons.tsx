@@ -1,5 +1,5 @@
 // Small inline icons; they take the button's text colour.
-import { useId, type ReactNode } from 'react'
+import { useId, useSyncExternalStore, type ReactNode } from 'react'
 
 const stroke = {
   width: 16,
@@ -199,9 +199,22 @@ export function ImageIcon() {
   )
 }
 
+const staticSymbolQuery = window.matchMedia('(max-width: 900px), (prefers-reduced-motion: reduce)')
+const subscribeSymbolMode = (notify: () => void) => {
+  staticSymbolQuery.addEventListener('change', notify)
+  return () => staticSymbolQuery.removeEventListener('change', notify)
+}
+const staticSymbols = () => staticSymbolQuery.matches
+
 /** The large symbols behind the action tiles: drawn for their size (not a stretched line
  * icon), gold with a highlight that slowly runs across, a lit top edge and a soft shadow. */
 function GoldSymbol({ id, children }: { id: string; children: (fill: string) => ReactNode }) {
+  const simple = useSyncExternalStore(subscribeSymbolMode, staticSymbols)
+  if (simple) return (
+    <svg viewBox="0 0 100 100" className="gold-symbol" aria-hidden="true">
+      {children('var(--accent)')}
+    </svg>
+  )
   return (
     <svg viewBox="0 0 100 100" className="gold-symbol" aria-hidden="true">
       <defs>
