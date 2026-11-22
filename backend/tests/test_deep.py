@@ -217,7 +217,7 @@ def test_index_is_kept_and_not_read_again(session, project):
     assert "index_characters" not in again.calls
     stored = (
         session.query(ChapterExtraction)
-        .filter_by(kind=deep.INDEX_KIND, project_id=project.id)
+        .filter_by(kind=deep.index_kind("character"), project_id=project.id)
         .all()
     )
     assert len(stored) == 2
@@ -460,3 +460,86 @@ def test_main_and_other_cards_are_written_side_by_side(session, project, monkeyp
     record = run_deep(session, project, light, DeepModel("strong"))
     assert record.status == "done", record.error
     assert any(name.startswith("model") for name in seen)
+
+
+PLACES = {
+    "Мельница": [{"name": "мельница", "named": False, "paragraphs": [0, 1]}],
+    "Дорога": [{"name": "окно", "named": False, "paragraphs": [1]}],
+}
+
+
+class PlaceModel(DeepModel):
+    def invoke_json(self, operation, messages, schema):
+        self.calls.append(operation)
+        self.prompts.append(messages[0].content + "\n" + messages[-1].content)
+        text = messages[-1].content
+        if schema is deep.ChapterMentions:
+            title = next(t for t in PLACES if f'Chapter "{t}"' in text)
+            return deep.ChapterMentions.model_validate({"mentions": PLACES[title]})
+        if schema is deep.Cast:
+            # Places answer with "entries" and "dropped", not "beings" and "not_characters".
+            return deep.Cast.model_validate(
+                {
+                    "entries": [{"name": "Мельница", "sources": [{"name": "мельница"}]}],
+                    "dropped": ["окно"],
+                }
+            )
+        if schema is deep.CardDraft:
+            assert text.startswith("Place: Мельница")
+            return deep.CardDraft.model_validate(
+                {
+                    "facts": [
+                        {
+                            "category": "permanent",
+                            "text": "мельница",
+                            "quote": "вошёл в мельницу",
+                            "chapter": 1,
+                        }
+                    ]
+                }
+            )
+        if schema is deep.Wrong:
+            return deep.Wrong()
+        self.calls.pop()
+        return FakeModel.invoke_json(self, operation, messages, schema)
+
+
+def test_places_get_the_deep_search_with_their_own_prompts(session, project):
+    light, strong = PlaceModel("light"), PlaceModel("strong")
+    record = AnalysisRun(
+        project_id=project.id,
+        kind="location",
+        chapter_ids=[c.id for c in project.chapters],
+        mode=deep.MODE_DEEP,
+    )
+    session.add(record)
+    session.commit()
+    runner.execute(session, record, light, strong)
+    assert record.status == "done", record.error
+    assert light.calls.count("index_locations") == 2
+    assert strong.calls.count("cast_locations") == 1
+    assert all("characters" not in c for c in light.calls + strong.calls)
+    assert all("Characters are living" not in p for p in light.prompts + strong.prompts)
+    session.expire_all()
+    places = session.query(Entity).filter_by(project_id=project.id, kind="location").all()
+    assert [p.name for p in places] == ["Мельница"]
+    assert places[0].uncertain  # no proper name: in question, as in the ordinary search
+    assert {f.text for f in places[0].facts if f.text} == {"мельница"}
+    assert session.query(Entity).filter_by(project_id=project.id, kind="character").count() == 0
+    stored = session.query(ChapterExtraction).filter_by(kind="location_index").count()
+    assert stored == 2
+
+
+def test_place_and_object_prompts_speak_of_their_kind():
+    from app.analysis import prompts
+
+    for kind, word in (("location", "place"), ("item", "object")):
+        for build in (
+            prompts.index_system,
+            prompts.cast_system,
+            prompts.dossier_system,
+            prompts.check_system,
+        ):
+            assert word in build(kind)
+    assert prompts.index_system("character") == prompts.INDEX_SYSTEM
+    assert prompts.check_system("character") == prompts.CHECK_SYSTEM

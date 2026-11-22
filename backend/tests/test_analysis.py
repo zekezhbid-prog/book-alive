@@ -479,8 +479,12 @@ def test_from_scratch_is_deep(client, session, project, no_start):
     assert start(client, project, kind="character", fresh=True)["mode"] == "deep"
 
 
-def test_locations_are_never_deep(client, project, no_start):
-    assert start(client, project, kind="location", fresh=True)["mode"] == ""
+def test_locations_from_scratch_are_deep(client, project, no_start):
+    assert start(client, project, kind="location", fresh=True)["mode"] == "deep"
+
+
+def test_first_item_search_is_deep(client, project, no_start):
+    assert start(client, project, kind="item", chapter_ids=[])["mode"] == "deep"
 
 
 def test_characters_locations_and_items_are_searched_apart():

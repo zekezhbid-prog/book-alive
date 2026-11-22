@@ -604,9 +604,9 @@ function RunDialog({ aiReady, project, kind, initial, onClose, onStarted }: Dial
     // Once, when the dialog opens: later changes to the props must not reset the ticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  // Characters found from nothing (nothing read yet, or from scratch) get the deep search,
+  // Cards found from nothing (nothing read yet, or from scratch) get the deep search,
   // as the server decides: over the chosen chapters, the whole book or a part for a trial.
-  const deep = kind === 'character' && (fresh || status?.read.size === 0)
+  const deep = fresh || status?.read.size === 0
   const locked = (id: string) => !deep && !fresh && !!status?.read.has(id)
   // A chapter closed for AI is never sent to a model, so it is not offered at all.
   const open = project.chapters.filter((c) => !c.private)

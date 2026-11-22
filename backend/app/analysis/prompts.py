@@ -471,3 +471,199 @@ are wrong as facts. When the quote does speak about this character, the fact is 
 
 Reply with JSON only: {"wrong": [numbers of the wrong facts]} - an empty list when all are \
 right."""
+
+
+# The deep search for places and objects: the same four steps, told what to look for.
+
+_INDEX_OTHER = """You read one chapter of a book, given as numbered paragraphs, and list \
+the {noun} in it with the numbers of the paragraphs where each one is mentioned{where} (also \
+through a pronoun or a word like {words} when it is clear which one that is). {what} Named \
+{noun} matter most: find every one, even one named only once.
+
+- Write the name in its base form, as a dictionary would list it (nominative, singular), in \
+the language and spelling of the book: "Палац" for "Палаца", "Палацы". All forms of one name \
+in the chapter are ONE entry with all their paragraphs.
+- When the chapter calls a named one also by a common word or a pronoun ({words}), put \
+those paragraphs under the name; the word gets no entry of its own.
+{extra}- Two different proper names for the same one stay separate entries: do not decide \
+which is which, that is done later.
+- One the chapter never names gets an entry under its describing word in the base form \
+({words}) and "named": false, only when {unnamed}. Skip {skip}.
+
+Do not describe anything, do not explain. Reply with JSON only:
+{{"mentions": [{{"name": "...", "named": true, "paragraphs": [0, 3, 4]}}]}}"""
+
+_INDEX_PARTS = {
+    "location": {
+        "noun": "places",
+        "where": " or where the action happens",
+        "words": '"the castle", "the village", "there"',
+        "what": "Places are lands, towns, villages, forests, rivers, lakes, roads, houses, "
+        "rooms, and buildings or landmarks such as a bridge, a tower or a mill.",
+        "extra": "- A part of a place (a room, a tower, a courtyard, a cellar) is an entry of "
+        "its own when the chapter names it or the action happens in it.\n",
+        "unnamed": "the action happens there or the chapter describes it",
+        "skip": "places only mentioned in passing that the chapter neither names nor shows, "
+        "vague spots and directions (somewhere, the ground, home as a direction), living "
+        "beings and movable objects",
+    },
+    "item": {
+        "noun": "objects",
+        "where": "",
+        "words": '"the sword", "the ring", "it"',
+        "what": "Objects are notable movable inanimate things: weapons, armour, tools, "
+        "jewels, artifacts, books, letters, keys, vehicles, important things someone owns, "
+        "carries, seeks or uses.",
+        "extra": "- A thing a character has turned into, or one that speaks and acts by "
+        "itself, is a character, not an object: skip it.\n",
+        "unnamed": "it plays a part in this chapter (it is used, given, sought, lost, made "
+        "or described)",
+        "skip": "ordinary everyday things that play no part (a cup drunk from once, a door "
+        "opened), places and buildings, living beings",
+    },
+}
+
+_CAST_OTHER = """Below is every {noun_one} found in a whole book: each name, the chapters \
+where it occurs and a few paragraphs where it first (and last) appears. Work out which \
+entries are the same {noun_one}.
+
+- The same {noun_one} under several names, a short name or a description ({same}) is ONE \
+entry: list all those names as its sources. Other looks it takes in the story ({forms}) go \
+to its forms.
+- Two different {noun} under one name ({two}) are TWO entries: give each its own name and \
+the chapter numbers where the shared name means that one.
+- A name that is only a lie, a cover or a mistake inside the story is a false name: it is \
+not the {noun_one}'s name. Put it in false_names with which one it was said about.
+- A common word ({common}; marked "not a proper name") may mean different {noun} in \
+different chapters. Give it to an entry as a source ONLY with the chapter numbers where it \
+means that one, never for the whole book. Where it fits none, leave it out.
+{extra}- A form of a name in another grammatical case is a source of that entry.
+- The book's title, headings and the author's name go to titles.
+- dropped is ONLY for what is no {noun_one} at all ({dropped}). Everything else is an \
+entry, however minor, even if it appears in one chapter only: anything with a proper name, \
+anything the story describes or returns to. When in doubt, keep it.
+- Keep every decision of the user listed at the end.
+
+Use the main name the book uses most. Every proper name in the list must end up somewhere: \
+an entry's source, a false name, titles or dropped.
+
+Reply with JSON only:
+{{"entries": [{{"name": "...", "sources": [{{"name": "...", "chapters": []}}], \
+"forms": ["..."]}}],
+ "false_names": [{{"name": "...", "belongs_to": "...", "reason": "..."}}],
+ "titles": ["..."],
+ "dropped": ["..."]}}
+"chapters": [] means everywhere in the book (for proper names only)."""
+
+_CAST_PARTS = {
+    "location": {
+        "noun_one": "place",
+        "noun": "places",
+        "same": '"the castle", "Vavel", "the prince\'s castle"',
+        "forms": "a castle before and after a fire, a village in ruins",
+        "two": "two villages of one name, the forest of one chapter and another forest",
+        "common": '"the forest", "the house", "the road", "the hut"',
+        "extra": "- A part of a place (a room, a tower, a courtyard) stays an entry of its "
+        "own when the book names it or the action happens in it; do not fold it into the "
+        "whole.\n",
+        "dropped": "a living being, a movable object, a time, an idea, a vague spot or a "
+        "direction that only passes by (somewhere, the ground, home as a direction)",
+    },
+    "item": {
+        "noun_one": "object",
+        "noun": "objects",
+        "same": '"the sword", "Grandfather\'s sword", "the blade"',
+        "forms": "a broken and a mended sword, a ring that turned into a key",
+        "two": "two swords both called \"the sword\", a father's and a son's ring",
+        "common": '"the sword", "the ring", "the letter", "the book"',
+        "extra": "- A thing a character has turned into, or one that speaks and acts by "
+        "itself, is a character: put it in dropped.\n",
+        "dropped": "a living being, a place or a building, an everyday thing that plays no "
+        "part, an idea",
+    },
+}
+
+_DOSSIER_OTHER = """Below is every passage of a book about ONE {noun_one}, in story order, \
+chapter by chapter, with numbered paragraphs. Write down what the book says about this \
+{noun_one} as facts, each with a quote copied word for word from one paragraph and the \
+chapter number it is in.
+
+Categories:
+- "permanent": {permanent}
+- "state": {state} (true in one chapter)
+- "profile": {profile}; also what happens {there} in the story
+
+{fact_rules}- You see the whole story: use it. A claim made once and contradicted by \
+everything else (a lie, a cover story, a mistake of a character, a joke) is not a fact; if \
+you keep it at all, mark it "doubtful": true.
+- A detail of someone or something else in the same paragraph (a person's clothes in the \
+room, another {noun_one} nearby) is not about this {noun_one}.
+- Write every description of shape, size, materials, colours and ornament the passages \
+give; never write that something is not described when a passage describes it.
+- Several looks of one {noun_one} (before and after it was burnt, broken, rebuilt): say \
+for each look which one it is.
+- Write the facts in the language of the book.
+
+Reply with JSON only:
+{{"aliases": ["other real names of the {noun_one}"],
+ "facts": [{{"category": "permanent", "text": "...", "quote": "...", "chapter": 3, \
+"doubtful": false}}]}}"""
+
+_CHECK_OTHER = """Below are numbered facts written about ONE {noun_one}, each with its quote \
+and the paragraph the quote is from. Read each paragraph and decide whether the quote really \
+speaks about this {noun_one}. A detail of something else in the same paragraph ({other}) is \
+wrong. Words a character says that the story does not confirm (a lie, a boast, a guess) are \
+wrong as facts. When the quote does speak about this {noun_one}, the fact is right.
+
+Reply with JSON only: {{"wrong": [numbers of the wrong facts]}} - an empty list when all are \
+right."""
+
+_OTHER = {
+    "location": {
+        "noun_one": "place",
+        "there": "there",
+        "other": "another place, a person or an object in this place",
+    },
+    "item": {
+        "noun_one": "object",
+        "there": "with it",
+        "other": "another object, the person who holds it, the place where it lies",
+    },
+}
+
+
+def card_label(kind: str) -> str:
+    """What a card is called at the head of a request: "Character: Люта"."""
+    return {KIND_CHARACTER: "Character", KIND_ITEM: "Object"}.get(kind, "Place")
+
+
+def index_system(kind: str) -> str:
+    if kind == KIND_CHARACTER:
+        return INDEX_SYSTEM
+    return _INDEX_OTHER.format(**_INDEX_PARTS[kind])
+
+
+def cast_system(kind: str) -> str:
+    if kind == KIND_CHARACTER:
+        return CAST_SYSTEM
+    return _CAST_OTHER.format(**_CAST_PARTS[kind])
+
+
+def dossier_system(kind: str) -> str:
+    if kind == KIND_CHARACTER:
+        return DOSSIER_SYSTEM
+    subject = _SUBJECT[kind]
+    return _DOSSIER_OTHER.format(
+        fact_rules=_FACT_RULES,
+        permanent=subject["permanent"],
+        state=subject["state"],
+        profile=subject["profile"],
+        noun_one=_OTHER[kind]["noun_one"],
+        there=_OTHER[kind]["there"],
+    )
+
+
+def check_system(kind: str) -> str:
+    if kind == KIND_CHARACTER:
+        return CHECK_SYSTEM
+    return _CHECK_OTHER.format(noun_one=_OTHER[kind]["noun_one"], other=_OTHER[kind]["other"])

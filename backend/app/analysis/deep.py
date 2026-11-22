@@ -1,4 +1,4 @@
-"""Deep search for characters: a light model indexes, a strong one decides and writes.
+"""Deep search for characters, places and objects: a light model indexes, a strong one decides and writes.
 
     index (light, per chapter)  ->  cast (strong, once)  ->  cards (strong for the main
     characters, light for the rest)  ->  check (light)  ->  summaries and looks
@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -39,6 +39,9 @@ from app.models import (
     FACT_PERMANENT,
     FACT_PROFILE,
     FACT_STATE,
+    KIND_CHARACTER,
+    KIND_ITEM,
+    KIND_LOCATION,
     AnalysisRun,
     Chapter,
     ChapterExtraction,
@@ -94,11 +97,14 @@ class FalseName(BaseModel):
 
 
 class Cast(BaseModel):
-    beings: list[Being] = []
+    # Places and objects are asked for "entries" and "dropped": "beings" reads oddly there.
+    beings: list[Being] = Field([], validation_alias=AliasChoices("beings", "entries"))
     false_names: list[FalseName] = []
     # Crowds and roles of ordinary people: no card, and no being's paragraphs either. A
     # proper name here still keeps a card in question: the model drops minor beings too.
-    not_characters: list[str] = []
+    not_characters: list[str] = Field(
+        [], validation_alias=AliasChoices("not_characters", "dropped")
+    )
     # The book's title, headings, the author's name: no card at all.
     titles: list[str] = []
 
@@ -157,15 +163,25 @@ def numbered_parts(paragraphs: list[str], limit: int = CHUNK_CHARS) -> list[str]
 # ---------- step A: who is mentioned where ----------
 
 
-# `entities.start_fresh` drops it by this name ("<kind>_index").
-INDEX_KIND = "character_index"
+# The names of the model calls in the usage journal: "index_characters", "cast_items".
+OPERATION_NOUN = {KIND_CHARACTER: "characters", KIND_LOCATION: "locations", KIND_ITEM: "items"}
 
 
-def stored_index(session: Session, chapter: Chapter) -> list[Mention] | None:
+def operation(step: str, kind: str) -> str:
+    return f"{step}_{OPERATION_NOUN[kind]}"
+
+
+def index_kind(kind: str) -> str:
+    """`entities.start_fresh` drops the stored reading by this name."""
+    return f"{kind}_index"
+
+
+def stored_index(session: Session, chapter: Chapter, kind: str) -> list[Mention] | None:
     """The mentions read before from this very text, or None."""
     stored = session.scalars(
         select(ChapterExtraction).where(
-            ChapterExtraction.chapter_id == chapter.id, ChapterExtraction.kind == INDEX_KIND
+            ChapterExtraction.chapter_id == chapter.id,
+            ChapterExtraction.kind == index_kind(kind),
         )
     ).first()
     if (
@@ -177,14 +193,14 @@ def stored_index(session: Session, chapter: Chapter) -> list[Mention] | None:
     return None
 
 
-def read_chapter(model: TextModel, title: str, paragraphs: list[str]) -> list[Mention]:
+def read_chapter(model: TextModel, kind: str, title: str, paragraphs: list[str]) -> list[Mention]:
     """Who is mentioned in which paragraphs: the model only, safe in another thread."""
     found: list[Mention] = []
     for part in numbered_parts(paragraphs):
         answer = model.invoke_json(
-            "index_characters",
+            operation("index", kind),
             [
-                SystemMessage(prompts.INDEX_SYSTEM),
+                SystemMessage(prompts.index_system(kind)),
                 HumanMessage(f'Chapter "{title}":\n\n{part}'),
             ],
             ChapterMentions,
@@ -194,19 +210,20 @@ def read_chapter(model: TextModel, title: str, paragraphs: list[str]) -> list[Me
 
 
 def keep_index(
-    session: Session, project_id: str, chapter: Chapter, mentions: list[Mention]
+    session: Session, project_id: str, chapter: Chapter, kind: str, mentions: list[Mention]
 ) -> None:
     """Kept with the chapter's hash: the same text is never read again."""
     session.execute(
         delete(ChapterExtraction).where(
-            ChapterExtraction.chapter_id == chapter.id, ChapterExtraction.kind == INDEX_KIND
+            ChapterExtraction.chapter_id == chapter.id,
+            ChapterExtraction.kind == index_kind(kind),
         )
     )
     session.add(
         ChapterExtraction(
             project_id=project_id,
             chapter_id=chapter.id,
-            kind=INDEX_KIND,
+            kind=index_kind(kind),
             chapter_hash=chapter.content_hash,
             payload={
                 "version": INDEX_VERSION,
@@ -339,7 +356,9 @@ def fold_cases(names: dict[str, Name]) -> dict[str, Name]:
 # ---------- step B: who is who ----------
 
 
-def cast_listing(book: Book, names: dict[str, Name], pinned: list[list[str]]) -> str:
+def cast_listing(
+    book: Book, names: dict[str, Name], pinned: list[list[str]], same: str = "being"
+) -> str:
     """Every name with its chapters and its first appearances, for one look at the cast."""
     lines = []
     for entry in sorted(names.values(), key=lambda n: (-len(n.places), n.name)):
@@ -357,19 +376,20 @@ def cast_listing(book: Book, names: dict[str, Name], pinned: list[list[str]]) ->
             lines.append(f"- ch. {chapter + 1} ¶{paragraph}: {text}")
     if pinned:
         lines.append("\n## Decided by the user (always keep)")
-        lines.extend(f"- the same being: {', '.join(group)}" for group in pinned)
+        lines.extend(f"- the same {same}: {', '.join(group)}" for group in pinned)
     return "\n".join(lines)
 
 
 def decide_cast(
-    session: Session, model: TextModel, book: Book, names: dict[str, Name], pinned: list[list[str]]
+    model: TextModel, kind: str, book: Book, names: dict[str, Name], pinned: list[list[str]]
 ) -> Cast:
+    same = "being" if kind == KIND_CHARACTER else prompts.card_label(kind).lower()
     try:
         return model.invoke_json(
-            "cast_characters",
+            operation("cast", kind),
             [
-                SystemMessage(prompts.CAST_SYSTEM),
-                HumanMessage(cast_listing(book, names, pinned)),
+                SystemMessage(prompts.cast_system(kind)),
+                HumanMessage(cast_listing(book, names, pinned, same)),
             ],
             Cast,
         )
@@ -514,9 +534,11 @@ def dossier(book: Book, plan: Plan, limit: int = DOSSIER_CHARS) -> str:
     return "\n\n".join(b for _, b in blocks)
 
 
-def write_card(model: TextModel, book: Book, plan: Plan, known_ages: dict[str, str]) -> CardDraft:
+def write_card(
+    model: TextModel, kind: str, book: Book, plan: Plan, known_ages: dict[str, str]
+) -> CardDraft:
     others = "\n".join(f"- {name}: {age}" for name, age in known_ages.items() if name != plan.name)
-    head = [f"Character: {plan.name}"]
+    head = [f"{prompts.card_label(kind)}: {plan.name}"]
     if plan.aliases:
         head.append(f"Also called: {', '.join(plan.aliases)}")
     if plan.forms:
@@ -525,9 +547,9 @@ def write_card(model: TextModel, book: Book, plan: Plan, known_ages: dict[str, s
         head.append(f"Ages already worked out for others:\n{others}")
     try:
         return model.invoke_json(
-            "card_characters",
+            operation("card", kind),
             [
-                SystemMessage(prompts.DOSSIER_SYSTEM),
+                SystemMessage(prompts.dossier_system(kind)),
                 HumanMessage("\n".join(head) + "\n\n" + dossier(book, plan)),
             ],
             CardDraft,
@@ -593,23 +615,24 @@ def _fact(
     )
 
 
-# ---------- step D: does each quote speak of this character ----------
+# ---------- step D: does each quote speak of this card ----------
 
 
-def check_facts(model: TextModel, book: Book, plan: Plan, facts: list[Kept]) -> list[Kept]:
-    """The facts whose quote the model finds to be about this character."""
+def check_facts(
+    model: TextModel, kind: str, book: Book, plan: Plan, facts: list[Kept]
+) -> list[Kept]:
+    """The facts whose quote the model finds to be about this character, place or object."""
     if not facts:
         return facts
-    lines = [
-        f"Character: {plan.name}" + (f" (also: {', '.join(plan.aliases)})" if plan.aliases else "")
-    ]
+    also = f" (also: {', '.join(plan.aliases)})" if plan.aliases else ""
+    lines = [f"{prompts.card_label(kind)}: {plan.name}{also}"]
     for number, fact in enumerate(facts, 1):
         context = " ".join(book.paragraphs[fact.chapter][fact.paragraph].split())[:600]
         lines.append(f"[{number}] {fact.text}\n    quote: «{fact.quote}»\n    paragraph: {context}")
     try:
         answer = model.invoke_json(
-            "check_characters",
-            [SystemMessage(prompts.CHECK_SYSTEM), HumanMessage("\n".join(lines))],
+            operation("check", kind),
+            [SystemMessage(prompts.check_system(kind)), HumanMessage("\n".join(lines))],
             Wrong,
         )
     except BadModelOutput:
@@ -635,17 +658,17 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
             key=lambda c: c.position,
         )
     )
-    index: list[list[Mention] | None] = [stored_index(session, c) for c in book.chapters]
+    index: list[list[Mention] | None] = [stored_index(session, c, run.kind) for c in book.chapters]
     for number, mentions in enumerate(index):
         if mentions is not None:
             _done(run, book.chapters[number])
     session.commit()  # the chapters are read in other threads: nothing may stay open
     pending = [n for n, mentions in enumerate(index) if mentions is None]
     reading = parallel.each(
-        pending, lambda n: read_chapter(light, book.titles[n], book.paragraphs[n])
+        pending, lambda n: read_chapter(light, run.kind, book.titles[n], book.paragraphs[n])
     )
     for number, mentions in reading:
-        keep_index(session, run.project_id, book.chapters[number], mentions)
+        keep_index(session, run.project_id, book.chapters[number], run.kind, mentions)
         index[number] = mentions
         _done(run, book.chapters[number])
         session.commit()
@@ -662,7 +685,7 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
     show_stage(session, run, "reconcile", 0, 1)
     if _cancelled(session, run):
         return
-    cast = decide_cast(session, strong, book, names, pinned)
+    cast = decide_cast(strong, run.kind, book, names, pinned)
     plans = plan_cards(names, cast)
     main = pick_main(plans)
     entities = _bind(session, project.id, run.kind, existing, plans)
@@ -686,8 +709,9 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
 
         def card(plan: Plan, ages: dict[str, str] = ages) -> tuple[CardDraft, list[Kept]]:
             model = strong if norm(plan.name) in main else light
-            draft = write_card(model, book, plan, ages)
-            return draft, check_facts(light, book, plan, keep_facts(book, draft))
+            draft = write_card(model, run.kind, book, plan, ages)
+            kept = keep_facts(book, draft)
+            return draft, check_facts(light, run.kind, book, plan, kept)
 
         writing = parallel.each(group, card)
         for plan, (draft, kept) in writing:
