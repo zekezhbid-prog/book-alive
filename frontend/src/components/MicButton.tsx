@@ -16,22 +16,71 @@ export function MicButton({
   const { t } = useI18n()
   const [state, setState] = useState<'idle' | 'recording' | 'busy'>('idle')
   const recorder = useRef<MediaRecorder | null>(null)
+  const mounted = useRef(false)
+  const pending = useRef(false)
+  const started = useRef(0)
+  const [seconds, setSeconds] = useState(0)
+  const [levels, setLevels] = useState<number[]>([])
   // Recording stops with the component too: the microphone must not stay on.
-  useEffect(() => () => recorder.current?.stream.getTracks().forEach((track) => track.stop()), [])
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      const rec = recorder.current
+      if (rec) {
+        rec.onstop = null
+        if (rec.state === 'recording') rec.stop()
+        rec.stream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
+  useEffect(() => {
+    const stream = recorder.current?.stream
+    if (state !== 'recording' || !stream) return
+    let context: AudioContext | undefined
+    let meter: AnalyserNode | undefined
+    try {
+      context = new AudioContext()
+      meter = context.createAnalyser()
+      context.createMediaStreamSource(stream).connect(meter)
+      void context.resume().catch(() => {})
+    } catch { /* The timer also works without audio metering. */ }
+    const samples = new Uint8Array(256)
+    const tick = window.setInterval(() => {
+      setSeconds(Math.floor((performance.now() - started.current) / 1000))
+      if (!meter) return
+      meter.getByteTimeDomainData(samples)
+      let peak = 0
+      for (const sample of samples) peak = Math.max(peak, Math.abs(sample - 128))
+      setLevels(previous => [...previous.slice(1), Math.min(16, 2 + peak / 3)])
+    }, 100)
+    return () => {
+      clearInterval(tick)
+      if (context) void context.close().catch(() => {})
+    }
+  }, [state])
 
   const start = async () => {
-    let stream: MediaStream
+    if (pending.current || recorder.current) return
+    pending.current = true
+    let rec: MediaRecorder
+    let stream: MediaStream | undefined
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!mounted.current) {
+        stream.getTracks().forEach(track => track.stop())
+        return
+      }
+      rec = new MediaRecorder(stream)
     } catch {
-      onError(t('voice.denied'))
+      stream?.getTracks().forEach(track => track.stop())
+      if (mounted.current) onError(t('voice.denied'))
       return
-    }
+    } finally { pending.current = false }
     const chunks: Blob[] = []
-    const rec = new MediaRecorder(stream)
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
     rec.onstop = () => {
-      stream.getTracks().forEach((track) => track.stop())
+      rec.stream.getTracks().forEach((track) => track.stop())
       recorder.current = null
       const audio = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
       if (!audio.size) {
@@ -41,18 +90,28 @@ export function MicButton({
       setState('busy')
       api.transcribe(audio).then(
         ({ text }) => {
+          if (!mounted.current) return
           setState('idle')
           if (text.trim()) onText(text.trim())
           else onError(t('voice.empty'))
         },
         () => {
+          if (!mounted.current) return
           setState('idle')
           onError(t('voice.failed'))
         },
       )
     }
     recorder.current = rec
-    rec.start()
+    try { rec.start() } catch {
+      recorder.current = null
+      rec.stream.getTracks().forEach(track => track.stop())
+      onError(t('voice.failed'))
+      return
+    }
+    started.current = performance.now()
+    setSeconds(0)
+    setLevels(Array(12).fill(2))
     setState('recording')
   }
 
@@ -66,7 +125,11 @@ export function MicButton({
       disabled={disabled || state === 'busy' || !navigator.mediaDevices}
       onClick={() => (state === 'recording' ? recorder.current?.stop() : start())}
     >
-      {state === 'busy' ? '…' : <MicIcon />}
+      {state === 'recording' ? <>
+        <span aria-hidden="true">■</span>
+        <span className="mic-wave" aria-hidden="true">{levels.map((height, i) => <i key={i} style={{ height }} />)}</span>
+        <span className="mic-time">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>
+      </> : state === 'busy' ? '…' : <MicIcon />}
     </button>
   )
 }

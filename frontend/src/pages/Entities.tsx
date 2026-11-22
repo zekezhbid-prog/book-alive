@@ -121,12 +121,14 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   }, [find, loaded, setSearchParams, openFind])
   const aiReady = useTextModelReady()
 
-  const activeId = list?.some((e) => e.id === entityId) ? entityId : undefined
+  const activeId = list?.some((item) => item.id === entityId) ? entityId : undefined
   useEffect(() => {
     if (!activeId) return setEntity(null)
     // Another card's page must not show the previous one while it loads.
     setEntity((shown) => (shown?.id === activeId ? shown : (peek.entity(activeId) ?? null)))
-    api.entity(activeId).then(setEntity, fail)
+    let current = true
+    api.entity(activeId).then((next) => { if (current) setEntity(next) }, (e) => { if (current) fail(e) })
+    return () => { current = false }
     // Refetch when the list changes too: a run may have added facts to the open card.
   }, [activeId, list, fail])
 
@@ -301,7 +303,10 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 }
               />
             )}
-            {entity && entityId && (
+            {!error && ((!entityId && !list) || (entityId && entity?.id !== entityId)) && (
+              <p role="status" className="muted">{t('app.loading')}</p>
+            )}
+            {entity && entity.id === entityId && (
               <Card
                 onClose={() => navigate(`/projects/${projectId}/${section}`)}
                 entity={entity}
@@ -972,7 +977,8 @@ function AuthorNotes({ entity, onChanged, onError }: {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
-  if (!entity.author_notes.length && !editing) return null
+  const notes = entity.author_notes ?? []
+  if (!notes.length && !editing) return null
   const save = () =>
     api.saveEntityNotes(entity.id, text.split('\n')).then((next) => {
       setEditing(false)
@@ -984,7 +990,7 @@ function AuthorNotes({ entity, onChanged, onError }: {
         title={t('notes.title')}
         open={open || editing}
         onToggle={() => setOpen(!open)}
-        note={<span className="faint small">{entity.author_notes.length}</span>}
+        note={<span className="faint small">{notes.length}</span>}
       >
         {!editing && (
           <button
@@ -992,7 +998,7 @@ function AuthorNotes({ entity, onChanged, onError }: {
             title={t('notes.edit')}
             aria-label={t('notes.edit')}
             onClick={() => {
-              setText(entity.author_notes.join('\n'))
+              setText(notes.join('\n'))
               setOpen(true)
               setEditing(true)
             }}
@@ -1006,7 +1012,7 @@ function AuthorNotes({ entity, onChanged, onError }: {
         <>
           <textarea
             className="input"
-            rows={Math.max(3, entity.author_notes.length + 1)}
+            rows={Math.max(3, notes.length + 1)}
             value={text}
             placeholder={t('notes.placeholder')}
             onChange={(e) => setText(e.target.value)}
@@ -1023,7 +1029,7 @@ function AuthorNotes({ entity, onChanged, onError }: {
         </>
       ) : (
         <ul className="facts">
-          {entity.author_notes.map((note, i) => (
+          {notes.map((note, i) => (
             <li key={i}>{note}</li>
           ))}
         </ul>

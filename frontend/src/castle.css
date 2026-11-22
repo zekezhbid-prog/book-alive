@@ -374,3 +374,11 @@ article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
   h1 { font-size: 32px; }
   .entity-name { font-size: 32px; }
 }
+
+.btn.mic.recording { animation: none; width: auto; min-width: 6rem; color: var(--err); gap: 5px; }
+.mic-wave { display: inline-flex; align-items: center; gap: 1px; height: 18px; }
+.mic-wave i { width: 2px; background: currentColor; border-radius: 2px; }
+.mic-time { font: 600 13px/1 var(--sans); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  body::after { animation: none; opacity: .75; }
+}

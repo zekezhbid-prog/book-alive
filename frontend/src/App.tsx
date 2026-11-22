@@ -13,7 +13,7 @@ import Style from './pages/Style'
 import Usage from './pages/Usage'
 
 export default function App() {
-  const { lang, setLang } = useI18n()
+  const { t, lang, setLang } = useI18n()
   // A hosted instance has accounts (e-mail and password); locally there is no login.
   const [session, setSession] = useState<SessionInfo | null>(null)
   const { pathname } = useLocation()
@@ -39,7 +39,7 @@ export default function App() {
       ))}
     </select>
   )
-  if (!session) return null
+  if (!session) return <main className="page" role="status"><h1>Lorebook</h1><p>{t('app.loading')}</p></main>
   if (!session.authenticated) {
     return (
       <>
