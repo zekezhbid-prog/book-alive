@@ -19,6 +19,7 @@ export const by: Record<string, string> = {
   'app.projects': 'Праекты',
   'nav.my_projects': 'Мае праекты',
   'app.loading': 'Загрузка…',
+  'app.screenFailed': 'Не ўдалося паказаць старонку',
   'auth.email': 'Пошта',
   'auth.register': 'Рэгістрацыя',
   'auth.register.submit': 'Зарэгістравацца',

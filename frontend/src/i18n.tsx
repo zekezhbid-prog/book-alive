@@ -27,6 +27,7 @@ const ru = {
   'app.projects': 'Проекты',
   'nav.my_projects': 'Мои проекты',
   'app.loading': 'Загрузка…',
+  'app.screenFailed': 'Не удалось показать страницу',
   'auth.email': 'Почта',
   'auth.register': 'Регистрация',
   'auth.register.submit': 'Зарегистрироваться',
@@ -896,6 +897,7 @@ const en: Record<keyof typeof ru, string> = {
   'app.projects': 'Projects',
   'nav.my_projects': 'My projects',
   'app.loading': 'Loading…',
+  'app.screenFailed': 'This page could not be displayed',
   'auth.email': 'E-mail',
   'auth.register': 'Register',
   'auth.register.submit': 'Create account',
@@ -1763,11 +1765,19 @@ const hasMessage = (key: string): key is MessageKey => key in ru
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
-    const saved = localStorage.getItem('lang')
-    return saved === 'en' || saved === 'by' ? saved : 'ru'
+    try {
+      const saved = localStorage.getItem('lang')
+      return saved === 'en' || saved === 'by' ? saved : 'ru'
+    } catch {
+      return 'ru'
+    }
   })
   const setLang = useCallback((next: Lang) => {
-    localStorage.setItem('lang', next)
+    try {
+      localStorage.setItem('lang', next)
+    } catch {
+      // Keep the chosen language for this visit when storage is unavailable.
+    }
     document.documentElement.lang = next
     setLangState(next)
   }, [])

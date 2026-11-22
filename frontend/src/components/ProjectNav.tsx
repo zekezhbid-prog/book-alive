@@ -88,10 +88,20 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
       if (!next.delete(id)) next.add(id)
       return next
     })
-  const [showVivid, setShowVivid] = useState(() => localStorage.getItem('nav:vivid') !== '0')
+  const [showVivid, setShowVivid] = useState(() => {
+    try {
+      return localStorage.getItem('nav:vivid') !== '0'
+    } catch {
+      return true
+    }
+  })
   const toggleVivid = () => {
     setShowVivid(!showVivid)
-    localStorage.setItem('nav:vivid', showVivid ? '0' : '1')
+    try {
+      localStorage.setItem('nav:vivid', showVivid ? '0' : '1')
+    } catch {
+      // The filter still works for this visit.
+    }
   }
 
   // A card for someone the search has not reached yet, so pictures can be attached now.

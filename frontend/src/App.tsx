@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Component, type ReactNode, useEffect, useState, type FormEvent } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { api, type SessionInfo } from './api'
 import { errorText, LANGS, useI18n, type Lang } from './i18n'
@@ -11,6 +11,16 @@ import Scenes from './pages/Scenes'
 import Settings from './pages/Settings'
 import Style from './pages/Style'
 import Usage from './pages/Usage'
+
+/** Keep the navigation visible if a project screen fails to render. */
+class ScreenBoundary extends Component<{ children: ReactNode; fallback: ReactNode; path: string }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? this.props.fallback : this.props.children }
+  componentDidUpdate(previous: Readonly<typeof this.props>) {
+    if (this.state.failed && previous.path !== this.props.path) this.setState({ failed: false })
+  }
+}
 
 export default function App() {
   const { t, lang, setLang } = useI18n()
@@ -78,6 +88,10 @@ export default function App() {
           onLogout={() => void api.logout().then(setSession)}
         />
       </header>
+      <ScreenBoundary path={pathname} fallback={<main className="page stack" role="alert">
+        <h1>{t('app.screenFailed')}</h1>
+        <div><a className="btn" href="/">{t('projects.title')}</a></div>
+      </main>}>
       <Routes>
         <Route path="/" element={<Projects />} />
         <Route path="/projects/:projectId" element={<Book />} />
@@ -111,6 +125,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/about" element={<About signedIn />} />
       </Routes>
+      </ScreenBoundary>
     </>
   )
 }
