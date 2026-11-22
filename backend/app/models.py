@@ -199,6 +199,9 @@ class Entity(Base):
     # never touch it.
     appearance: Mapped[str] = mapped_column(Text, default="")
     appearance_own: Mapped[str] = mapped_column(Text, default="")
+    # What the author told about the card in "Improve" and the book does not say: true
+    # without a quote, heard by every later run. A note the text confirms becomes a fact.
+    author_notes: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     facts: Mapped[list["EntityFact"]] = relationship(
         back_populates="entity", cascade="all, delete-orphan"
@@ -267,6 +270,8 @@ class AnalysisRun(Base):
     # ("facts", "summary", "appearance").
     entity_id: Mapped[str | None] = mapped_column(String(32), default=None)
     parts: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # The author's wishes for one "Improve" run of a card.
+    wishes: Mapped[str] = mapped_column(Text, default="")
     # "deep": the deep search of characters (app.analysis.deep); empty: the ordinary one.
     mode: Mapped[str] = mapped_column(String(20), default="")
 

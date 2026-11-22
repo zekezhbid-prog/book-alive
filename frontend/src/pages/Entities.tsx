@@ -9,14 +9,15 @@ import {
   type EntityKind,
   type Estimate,
   type Fact,
+  type ImproveRequest,
   type Project,
-  type RebuildPart,
   type Run,
 } from '../api'
 import { AddCardDialog } from '../components/AddCardDialog'
 import CardGrid, { type Tile } from '../components/CardGrid'
 import FoldHead from '../components/FoldHead'
 import Gallery from '../components/Gallery'
+import { MicButton } from '../components/MicButton'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
@@ -25,7 +26,7 @@ import {
   GoldPlusSymbol,
   GoldSparklesSymbol,
   PencilIcon,
-  RefreshIcon,
+  SparklesIcon,
   TrashIcon,
 } from '../components/icons'
 import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
@@ -305,7 +306,6 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                 onClose={() => navigate(`/projects/${projectId}/${section}`)}
                 entity={entity}
                 projectId={projectId}
-                others={list?.filter((e) => e.id !== entity.id) ?? []}
                 onChanged={(next) => {
                   loadList()
                   navigate(`/projects/${projectId}/${section}/${next.id}`)
@@ -338,14 +338,18 @@ export default function Entities({ kind }: { kind: EntityKind }) {
         </section>
       </div>
       {rebuilding && entity && (
-        <RebuildDialog
-          name={entity.name}
+        <ImproveDialog
+          entity={entity}
+          others={list?.filter((e) => e.id !== entity.id) ?? []}
           onClose={() => setRebuilding(false)}
-          onStart={(parts) =>
-            api.rebuildEntity(entity.id, parts).then((started) => {
+          onStart={(body) =>
+            api.improveEntity(entity.id, body).then((started) => {
               setRebuilding(false)
               setError('')
-              setRun(started)
+              if (started.run) setRun(started.run)
+              loadList()
+              // After a merge the other card may be the one that stays.
+              navigate(`/projects/${projectId}/${section}/${started.entity_id}`)
             }, fail)
           }
         />
@@ -385,11 +389,10 @@ interface CardProps {
   onClose: () => void
   /** The bin beside "merge with": a card that is not needed. */
   onDelete: () => void
-  /** Read the book again for this card; missing while a run is going. */
+  /** Opens "Improve" (wishes, merge, the book read again); missing while a run is going. */
   onRebuild?: () => void
   entity: Entity
   projectId: string
-  others: EntityBrief[]
   onChanged: (shown: Entity) => void
   onError: (error: unknown) => void
   /** The card's references, shown between the name and the description. */
@@ -398,17 +401,11 @@ interface CardProps {
 
 /** Facts are read-only; who is who is the user's call, hence merge and split.
  *  Top to bottom: name, references, description, mentions by chapter. */
-function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChanged, onError, gallery }: CardProps) {
+function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onError, gallery }: CardProps) {
   const { t } = useI18n()
   // Only the description starts open; the rest is a click away.
   const [factsOpen, setFactsOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
-  const merge = async (otherId: string) => {
-    const other = others.find((e) => e.id === otherId)
-    if (!other || !(await ask(t('entities.merge.confirm', { other: other.name, name: entity.name }))))
-      return
-    api.mergeEntities(entity.id, other.id).then(onChanged, onError)
-  }
   const split = async (alias: string) => {
     if (!(await ask(t('entities.split.confirm', { alias })))) return
     api.splitEntity(entity.id, alias).then(onChanged, onError)
@@ -429,24 +426,14 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
       <div className="stack">
         <div className="row card-head">
           <h1 className="entity-name grow">{entity.name}</h1>
-          {others.length > 0 && (
-            <select className="input merge-select" value="" onChange={(e) => merge(e.target.value)}>
-              <option value="">{t('entities.merge')}</option>
-              {others.map((other) => (
-                <option key={other.id} value={other.id}>
-                  {other.name}
-                </option>
-              ))}
-            </select>
-          )}
           <button
             className="btn ghost icon"
-            title={t(onRebuild ? 'rebuild.button' : 'rebuild.busy')}
-            aria-label={t('rebuild.button')}
+            title={t(onRebuild ? 'improve.button' : 'improve.busy')}
+            aria-label={t('improve.button')}
             disabled={!onRebuild}
             onClick={onRebuild}
           >
-            <RefreshIcon />
+            <SparklesIcon />
           </button>
           <a
             className="btn ghost icon"
@@ -506,6 +493,7 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, others, onChang
         none={t('entities.appearance.none')}
         save={(text) => api.saveEntityAppearance(entity.id, text)}
       />
+      <AuthorNotes key={`notes-${entity.id}`} entity={entity} onChanged={onChanged} onError={onError} />
       {entity.profile.length + entity.permanent.length > 0 && (
         <div className="stack">
           <FoldHead title={t('entities.facts')} open={factsOpen} onToggle={() => setFactsOpen(!factsOpen)} />
@@ -883,55 +871,157 @@ function runText(run: Run, t: Translate): string {
   return t('run.progress', { done: run.done, total: run.total })
 }
 
-const REBUILD_PARTS: RebuildPart[] = ['facts', 'summary', 'appearance']
-
-/** What to write anew for one card: everything is ticked, the user takes off what to keep. */
-function RebuildDialog({
-  name,
+/** One way to make a card better: the author's wishes (typed or spoken), a merge, and the
+ *  book read again for what the card lacks. "From scratch" is there for the worst case. */
+function ImproveDialog({
+  entity,
+  others,
   onClose,
   onStart,
 }: {
-  name: string
+  entity: Entity
+  others: EntityBrief[]
   onClose: () => void
-  onStart: (parts: RebuildPart[]) => void
+  onStart: (body: ImproveRequest) => void
 }) {
   const { t } = useI18n()
-  const [parts, setParts] = useState<Set<RebuildPart>>(new Set(REBUILD_PARTS))
-  const toggle = (part: RebuildPart) => {
-    const next = new Set(parts)
-    if (!next.delete(part)) next.add(part)
-    setParts(next)
-  }
+  const [wishes, setWishes] = useState('')
+  const [mergeWith, setMergeWith] = useState('')
+  const [scratch, setScratch] = useState(false)
+  const [voiceError, setVoiceError] = useState('')
+  const body = (mergeOnly: boolean): ImproveRequest => ({
+    wishes: mergeOnly ? '' : wishes,
+    merge_with: mergeWith || null,
+    scratch,
+    merge_only: mergeOnly,
+  })
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog stack">
-        <h2>{t('rebuild.title', { name })}</h2>
-        <p className="muted">{t('rebuild.hint')}</p>
-        <div className="stack">
-          {REBUILD_PARTS.map((part) => (
-            <label key={part} className="row">
-              <input type="checkbox" checked={parts.has(part)} onChange={() => toggle(part)} />
-              <span className="grow">
-                {t(`rebuild.part.${part}` as MessageKey)}
-                <span className="faint small"> — {t(`rebuild.part.${part}.hint` as MessageKey)}</span>
-              </span>
-            </label>
-          ))}
-        </div>
+      <div className="dialog stack improve-dialog">
+        <h2>{t('improve.title', { name: entity.name })}</h2>
+        <p className="muted">{t('improve.hint')}</p>
+        <label className="stack">
+          <b>{t('improve.wishes')}</b>
+          <div className="row improve-wishes">
+            <textarea
+              className="input grow"
+              rows={4}
+              maxLength={4000}
+              value={wishes}
+              placeholder={t('improve.wishes.placeholder')}
+              onChange={(e) => setWishes(e.target.value)}
+            />
+            <MicButton
+              onText={(text) => {
+                setVoiceError('')
+                setWishes((now) => (now.trim() ? `${now.trim()} ${text}` : text))
+              }}
+              onError={setVoiceError}
+            />
+          </div>
+          <span className="faint small">{t('improve.wishes.hint')}</span>
+          {voiceError && <span className="error small">{voiceError}</span>}
+        </label>
+        {others.length > 0 && (
+          <label className="stack">
+            <b>{t('improve.merge')}</b>
+            <select className="input" value={mergeWith} onChange={(e) => setMergeWith(e.target.value)}>
+              <option value="">{t('improve.merge.none')}</option>
+              {others.map((other) => (
+                <option key={other.id} value={other.id}>
+                  {other.name}
+                </option>
+              ))}
+            </select>
+            <span className="faint small">{t('improve.merge.hint')}</span>
+          </label>
+        )}
+        <label className="row">
+          <input type="checkbox" checked={scratch} onChange={(e) => setScratch(e.target.checked)} />
+          <span className="grow">
+            {t('improve.scratch')}
+            <span className="faint small"> — {t('improve.scratch.hint')}</span>
+          </span>
+        </label>
         <div className="row">
           <span className="spacer" />
           <button className="btn" onClick={onClose}>
             {t('app.cancel')}
           </button>
-          <button
-            className="btn primary"
-            disabled={parts.size === 0}
-            onClick={() => onStart(REBUILD_PARTS.filter((p) => parts.has(p)))}
-          >
-            {t('rebuild.start')}
+          {mergeWith && (
+            <button className="btn" onClick={() => onStart(body(true))}>
+              {t('improve.merge_only')}
+            </button>
+          )}
+          <button className="btn primary" onClick={() => onStart(body(false))}>
+            {t('improve.start')}
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** The author's notes on a card: shown as a list, edited as lines of one text. */
+function AuthorNotes({ entity, onChanged, onError }: {
+  entity: Entity
+  onChanged: (shown: Entity) => void
+  onError: (error: unknown) => void
+}) {
+  const { t } = useI18n()
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState('')
+  if (!entity.author_notes.length && !editing) return null
+  const save = () =>
+    api.saveEntityNotes(entity.id, text.split('\n')).then((next) => {
+      setEditing(false)
+      onChanged(next)
+    }, onError)
+  return (
+    <div className="stack author-notes">
+      <div className="row">
+        <h3 className="grow">{t('notes.title')}</h3>
+        {!editing && (
+          <button
+            className="btn ghost icon"
+            title={t('notes.edit')}
+            aria-label={t('notes.edit')}
+            onClick={() => {
+              setText(entity.author_notes.join('\n'))
+              setEditing(true)
+            }}
+          >
+            <PencilIcon />
+          </button>
+        )}
+      </div>
+      <span className="faint small">{t('notes.hint')}</span>
+      {editing ? (
+        <>
+          <textarea
+            className="input"
+            rows={Math.max(3, entity.author_notes.length + 1)}
+            value={text}
+            placeholder={t('notes.placeholder')}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="row">
+            <span className="spacer" />
+            <button className="btn" onClick={() => setEditing(false)}>
+              {t('app.cancel')}
+            </button>
+            <button className="btn primary" onClick={save}>
+              {t('app.save')}
+            </button>
+          </div>
+        </>
+      ) : (
+        <ul className="facts">
+          {entity.author_notes.map((note, i) => (
+            <li key={i}>{note}</li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

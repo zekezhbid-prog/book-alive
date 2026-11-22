@@ -236,6 +236,15 @@ export interface Run {
 
 export type RebuildPart = 'facts' | 'summary' | 'appearance'
 
+export interface ImproveRequest {
+  wishes: string
+  merge_with: string | null
+  /** Read the chapters anew and replace the facts instead of adding. */
+  scratch: boolean
+  /** Only the merge, no model. */
+  merge_only: boolean
+}
+
 export interface EntityBrief {
   id: string
   name: string
@@ -277,6 +286,8 @@ export interface Entity {
   /** How it looks, written by the AI; the user's own version wins when set. */
   appearance: string
   appearance_own: string
+  /** What the author said in "Improve" and the book does not say. */
+  author_notes: string[]
   profile: Fact[]
   permanent: Fact[]
   timeline: ChapterFacts[]
@@ -677,6 +688,17 @@ export const api = {
     request<Run | null>('GET', `/projects/${projectId}/analysis?kind=${kind}`),
   rebuildEntity: (entityId: string, parts: RebuildPart[]) =>
     request<Run>('POST', `/entities/${entityId}/rebuild`, { parts }),
+  /** Improve one card; `entity_id` is the card that stays after a merge. */
+  improveEntity: (entityId: string, body: ImproveRequest) =>
+    request<{ run: Run | null; entity_id: string }>('POST', `/entities/${entityId}/improve`, body),
+  saveEntityNotes: (entityId: string, notes: string[]) =>
+    request<Entity>('PUT', `/entities/${entityId}/notes`, { notes }),
+  /** Speech to text on our own server. */
+  transcribe: (audio: Blob) => {
+    const form = new FormData()
+    form.set('file', audio, 'voice.webm')
+    return request<{ text: string }>('POST', '/transcribe', form)
+  },
   cancelRun: (runId: string) => request<Run>('POST', `/analysis/${runId}/cancel`),
   stale: (projectId: string, kind: EntityKind) =>
     request<{ chapter_ids: string[]; orphaned_facts: number }>(

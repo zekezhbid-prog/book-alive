@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Deep search: how many main characters the strong model writes. 0 leaves it only the
     # cast; every card, summary and look then comes from the light model.
     deep_main_limit: int = 8
+    # Voice input (the card's "Improve" and the book chat): a local Whisper model, so the
+    # author's voice never leaves the server. Downloaded into data_dir on first use.
+    whisper_model: str = "small"
     # The model provider. With a key here the "Hubris" connection is created (and its key
     # kept current) on every start, so the key never has to be typed into the interface.
     hubris_api_key: str = ""

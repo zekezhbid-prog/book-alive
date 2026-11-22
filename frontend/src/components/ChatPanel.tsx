@@ -13,6 +13,7 @@ import {
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from './AiNotice'
+import { MicButton } from './MicButton'
 import { BoldPlusIcon, CloseIcon, GearIcon, SaveIcon, TrashIcon } from './icons'
 
 interface Props {
@@ -345,6 +346,15 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, 
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) send(e)
           }}
+        />
+        <MicButton
+          disabled={waiting || !!resumed}
+          onText={(text) => {
+            setError('')
+            setQuestion((now) => (now.trim() ? `${now.trim()} ${text}` : text))
+            input.current?.focus()
+          }}
+          onError={setError}
         />
         {/* Stays bright with an empty field too: a dim button reads as broken. */}
         <button className="btn primary" disabled={waiting || !!resumed}>

@@ -199,7 +199,7 @@ habit, the way it speaks) belongs in the description whenever the facts show it.
 - The description is of the card as a whole, not of a moment: leave out moods, feelings \
 and actions of one scene ("he is displeased", "she smiles"), unless the facts show them as \
 a lasting trait.
-Use only the given facts. Never invent anything.
+{notes_rule}Use only the given facts and notes. Never invent anything.
 
 Reply with one JSON object and nothing else:
 {{"summaries": [{{"number": 1, "text": ""}}]}}"""
@@ -237,7 +237,7 @@ and body shape, and every described part of it - head, eyes, skin, scales, fur o
 colour, wings, tail, horns, claws, how many heads or limbs, what in it is human-like and \
 what is not, how it moves. A being that takes several forms gets each form apart, with the \
 chapter where it shows.
-Looks only: no role, plot or character traits. Use only the details below; never invent.
+{notes_rule}Looks only: no role, plot or character traits. Use only the details below; never invent.
 
 Reply with one JSON object and nothing else:
 {{"appearance": ""}}"""
@@ -289,7 +289,7 @@ _APPEARANCE = {
 
 
 def summary_system(kind: str) -> str:
-    return SUMMARY_SYSTEM.format(noun=_noun(kind))
+    return SUMMARY_SYSTEM.format(noun=_noun(kind), notes_rule=NOTES_RULE)
 
 
 CARD_FACTS_SYSTEM = """You read one chapter of a book and collect what it says about ONE entry \
@@ -334,9 +334,72 @@ def card_facts_system(kind: str, target: str) -> str:
     )
 
 
+IMPROVE_SYSTEM = """You read one chapter of a book to improve the card of ONE entry: \
+{target}. Ignore every other {noun_one}. The card already has facts from this chapter; \
+they are mostly right, so keep them and add only what is missing.
+
+Find it in the chapter also when it is called by another of its names, a common word or a \
+pronoun, as long as the text makes plain it is the same one. If it does not take part in \
+the chapter, reply with "present": false and nothing else.
+
+You get:
+- "Known facts": numbered facts the card already has from this chapter.
+- "Author's notes": numbered things the author of the book says about it. They are true \
+even when the book never says them.
+- "Wishes": what the author wants improved this time (may be empty).
+
+Do this:
+- "facts": only NEW facts the known ones do not already say, with what the wishes ask for \
+first. Never repeat a known fact in other words.
+- "wrong": numbers of known facts that are wrong: they contradict an author's note, or \
+their quote shows the detail belongs to someone or something else or to a moment only.
+- "confirmed": numbers of author's notes this chapter states itself; for each, also add \
+the fact with its quote to "facts" (unless a known fact already says it).
+
+Rules for new facts:
+- Use only what this chapter states. Never invent details and never guess beyond the text. \
+An author's note is no quote: a fact still needs the chapter's own words.
+- Looks facts ("permanent" and "state") are what an illustrator needs to draw it: looks, \
+not actions, speech or plot.
+- A "permanent" fact only when the text states a lasting feature, never from an action, a \
+gesture or a moment.
+- Never take a detail of someone or something else standing near it.
+{fact_rules}- Each fact:
+  - "category": "permanent" for what stays the same through the book ({permanent}); \
+"state" for what is true at this point of the story ({state}); \
+"profile" for the general description ({profile}).
+  - "text": the detail, written in the language of the chapter.
+  - "quote": the phrase from the chapter that supports it, copied character for character, \
+under 200 characters.
+
+Reply with one JSON object and nothing else:
+{{"present": true, "facts": [{{"category": "permanent", "text": "", "quote": ""}}], \
+"wrong": [], "confirmed": []}}"""
+
+
+def improve_system(kind: str, target: str) -> str:
+    subject = _SUBJECT[kind]
+    return IMPROVE_SYSTEM.format(
+        target=target,
+        fact_rules=_FACT_RULES,
+        noun_one={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(kind, "place"),
+        permanent=subject["permanent"],
+        state=subject["state"],
+        profile=subject["profile"],
+    )
+
+
+# The author's notes ride along with every description request; this tells how to read them.
+NOTES_RULE = """- "author's notes" are what the author of the book says about the card: they \
+are true even without a quote. Use them, and where a fact contradicts a note, the note wins.
+"""
+
+
 def looks_system(kind: str) -> str:
     age = _AGE if kind == KIND_CHARACTER else ""
-    return LOOKS_SYSTEM.format(noun=_noun(kind), appearance=_APPEARANCE[kind], age=age)
+    return LOOKS_SYSTEM.format(
+        noun=_noun(kind), appearance=_APPEARANCE[kind], age=age, notes_rule=NOTES_RULE
+    )
 
 
 def extract_system(kind: str) -> str:

@@ -623,6 +623,7 @@ def _card_text(session: Session, number: int, entity: Entity) -> str:
         lines.append(f"chapters ({len(chapters)}): " + ", ".join(titles[c] for c in chapters[:12]))
     if entity.summary.strip():
         lines.append(f"description so far: {entity.summary.strip()}")
+    lines.extend(notes_lines(entity))
     # Facts are taken chapter by chapter in turn, so a main character's description covers
     # the whole book and not only the chapters read first. Looks come with their quote: the
     # model can tell a lasting trait from a moment ("looked with one eye" is not one-eyed).
@@ -663,6 +664,7 @@ def _looks_text(session: Session, entity: Entity) -> str | None:
         {f.chapter_id for f in entity.facts if f.chapter_id in chapters}, key=positions.get
     )
     lines.append(f"chapters ({len(where)}): " + ", ".join(_title(chapters[c]) for c in where[:20]))
+    lines.extend(notes_lines(entity))
     lines.append(f"the book has {len(chapters)} chapters; details below in story order")
     picked = _spread(looks, positions, LOOKS_FACTS, set())
     picked += [f for f in ages if f not in picked]
@@ -679,6 +681,12 @@ def _looks_text(session: Session, entity: Entity) -> str | None:
             line += f" (text: «{quote[:200]}»)"
         lines.append(line)
     return "\n".join(lines)
+
+
+def notes_lines(entity: Entity) -> list[str]:
+    """The author's notes on a card, for any request that describes it."""
+    notes = [" ".join(n.split()) for n in entity.author_notes or [] if n.strip()]
+    return [f"author's notes: {'; '.join(notes)}"] if notes else []
 
 
 def _title(chapter: Chapter) -> str:

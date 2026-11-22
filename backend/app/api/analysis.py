@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
 from app.analysis import card as card_rebuild
-from app.analysis import deep, prompts, runner
+from app.analysis import card_rules, deep, prompts, runner
 from app.analysis import entities as analysis
 from app.db import SessionDep
 from app.images import angles
@@ -112,6 +112,8 @@ class EntityOut(BaseModel):
     # How it looks: the model's text and the user's own (which wins when set).
     appearance: str = ""
     appearance_own: str = ""
+    # What the author said about the card that the book does not say.
+    author_notes: list[str] = []
     profile: list[FactOut]
     permanent: list[FactOut]
     timeline: list[ChapterFacts]
@@ -119,6 +121,21 @@ class EntityOut(BaseModel):
 
 class MergeRequest(BaseModel):
     other_id: str
+
+
+class ImproveRequest(BaseModel):
+    # What the author wants improved; also kept on the card as a note.
+    wishes: str = Field("", max_length=4000)
+    # Another card of the same kind to fold in first (see `card_rules.merge_main`).
+    merge_with: str | None = None
+    # Read every chapter anew and replace the facts, instead of adding to them.
+    scratch: bool = False
+    # Only the merge, by the same rules: no model is called.
+    merge_only: bool = False
+
+
+class NotesPatch(BaseModel):
+    notes: list[str] = Field(default_factory=list, max_length=50)
 
 
 class DescriptionPatch(BaseModel):
@@ -258,6 +275,59 @@ def start_run(project_id: str, body: RunRequest, session: SessionDep) -> RunOut:
     session.commit()
     runner.start(run.id)
     return _run_out(run)
+
+
+class ImproveOut(BaseModel):
+    run: RunOut | None = None
+    # The card that stays: after a merge it may be the other one.
+    entity_id: str
+
+
+@router.post("/entities/{entity_id}/improve")
+def improve_entity(entity_id: str, body: ImproveRequest, session: SessionDep) -> ImproveOut:
+    """One card made better: the author's wishes, a merge, then the book read again
+    for what the card lacks (or anew, from scratch)."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    other = session.get(Entity, body.merge_with) if body.merge_with else None
+    if body.merge_with and (
+        other is None
+        or other.id == entity.id
+        or (other.project_id, other.kind) != (entity.project_id, entity.kind)
+    ):
+        raise HTTPException(422, "bad_merge")
+    if body.merge_only and other is None:
+        raise HTTPException(422, "bad_merge")
+    if not body.merge_only:
+        if runner.active_run(session, entity.project_id):
+            raise HTTPException(409, "analysis_already_running")
+        try:
+            TextModel(session, entity.project_id, "analysis")
+        except ModelNotConfigured as exc:
+            raise HTTPException(409, str(exc)) from exc
+    if other is not None:
+        main, folded = card_rules.merge_main(entity, other)
+        notes = [*(main.author_notes or []), *(folded.author_notes or [])]
+        analysis.merge_by_hand(session, main, folded)
+        main.author_notes = list(dict.fromkeys(notes))
+        entity = main
+    if body.merge_only:
+        session.commit()
+        return ImproveOut(entity_id=entity.id)
+    run = AnalysisRun(
+        project_id=entity.project_id,
+        kind=entity.kind,
+        chapter_ids=[],
+        entity_id=entity.id,
+        parts=list(card_rebuild.PARTS),
+        mode="" if body.scratch else card_rebuild.MODE_IMPROVE,
+        wishes=body.wishes.strip(),
+    )
+    session.add(run)
+    session.commit()
+    runner.start(run.id)
+    return ImproveOut(run=_run_out(run), entity_id=entity.id)
 
 
 @router.post("/entities/{entity_id}/rebuild")
@@ -472,6 +542,7 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         summary=entity.summary,
         appearance=entity.appearance,
         appearance_own=entity.appearance_own,
+        author_notes=entity.author_notes or [],
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
         timeline=list(timeline.values()),
@@ -485,6 +556,17 @@ def save_description(entity_id: str, body: DescriptionPatch, session: SessionDep
     if entity is None:
         raise HTTPException(404, "entity_not_found")
     entity.description = body.text.strip()
+    session.commit()
+    return get_entity(entity_id, session)
+
+
+@router.put("/entities/{entity_id}/notes")
+def save_notes(entity_id: str, body: NotesPatch, session: SessionDep) -> EntityOut:
+    """The author edits or removes notes left by "Improve"."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    entity.author_notes = [n.strip()[:4000] for n in body.notes if n.strip()]
     session.commit()
     return get_entity(entity_id, session)
 

@@ -6,7 +6,7 @@ import time
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.analysis import deep
+from app.analysis import card_rules, deep
 from app.analysis.card import rebuild_card
 from app.analysis.entities import GRAPH
 from app.db import get_engine
@@ -145,6 +145,10 @@ def _work(run_id: str) -> None:
             session.commit()
             return
         strong = None
+        if run.entity_id and card_rules.is_main(session, run.entity_id):
+            main_model = TextModel(session, run.project_id, "analysis_strong")
+            main_model.action_id = model.action_id
+            model = main_model
         if run.mode == deep.MODE_DEEP:
             strong = TextModel(session, run.project_id, "analysis_strong")
             strong.action_id = model.action_id  # one line on the usage page

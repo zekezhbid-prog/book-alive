@@ -720,3 +720,12 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .badge-btn:hover:not(:disabled) { color: var(--accent); text-shadow: 0 0 10px rgba(250, 204, 21, 0.45); }
 .badge-btn > .ai-mark { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
 .ai-mark { flex: none; width: 20px; height: 20px; filter: drop-shadow(0 0 4px rgba(246, 185, 59, 0.45)); }
+
+/* Voice input: the microphone beside a text field, red while it records. */
+.mic.recording { color: var(--err); animation: mic-pulse 1.2s ease-in-out infinite; }
+@keyframes mic-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .mic.recording { animation: none; } }
+.improve-dialog { width: min(620px, 94vw); }
+.improve-wishes { align-items: flex-start; }
+.chat-form .mic { align-self: center; }
+.author-notes h3 { margin: 0; }
