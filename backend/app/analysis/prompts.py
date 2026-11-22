@@ -188,6 +188,9 @@ For every card write "text", one general description in the language of the fact
 what it is, its role and occupation, its ties to others, the main line of what it does in \
 the story from beginning to end (not single episodes), and the traits it shows throughout. \
 Connected prose, not a list and not quotes.
+- Its origin (where it comes from, how it was born, found, saved, adopted or made) belongs \
+in the description whenever the facts tell it. A fact saying the text is silent on some \
+point is no claim: never turn it into "nothing is known" about what other facts do tell.
 - Use all the facts given. For a minor one with few facts, three to five sentences when the \
 facts allow; for a main one that appears in many chapters, a full paragraph of six to ten \
 sentences that covers the whole book, not just its first chapters. Never pad beyond the facts.
@@ -251,7 +254,9 @@ Check every description and remove what belongs to a single chapter or scene rat
 the card as a whole: one particular thing done or said once ("he reminds her to eat", "she \
 opens the gate for them"), one moment's mood, place or clothing, a detail of one episode. \
 Such things are kept chapter by chapter elsewhere; here they do not belong. A habit or a \
-duty the description presents as lasting stays.
+duty the description presents as lasting stays. Its origin (where it comes from, how it \
+was born, found, saved, adopted or made) and the turns that change its life for good stay \
+too, even when they happen in one scene.
 - Only remove, and mend the grammar where a removal breaks a sentence. Never add anything, \
 never reword what stays, keep the language.
 - When nothing needs removing, return the description unchanged.
@@ -387,6 +392,18 @@ def improve_system(kind: str, target: str) -> str:
         state=subject["state"],
         profile=subject["profile"],
     )
+
+
+WISH_NOTE_SYSTEM = """The author of a book asks to improve one card of their book. Below are \
+the card's name and the author's words.
+
+Keep only what the author states about the card itself: facts about it (age, origin, looks, \
+kin, role), in the author's own words. Drop everything that only asks for something or \
+names the card: "this is X", "merge them", "improve the description", "add the looks", \
+"check chapter 5". Do not add, explain or translate anything.
+
+Reply with one JSON object and nothing else; "note" is empty when nothing is stated:
+{"note": ""}"""
 
 
 # The author's notes ride along with every description request; this tells how to read them.

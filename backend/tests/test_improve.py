@@ -232,3 +232,52 @@ def test_merge_only_calls_no_model(client, session, project, monkeypatch):
     assert data == {"run": None, "entity_id": named_id}
     session.expire_all()
     assert session.get(Entity, word_id) is None
+
+
+class NoteReader(FakeModel):
+    """Answers the wish check with a given note, or breaks."""
+
+    def __init__(self, note: str | None):
+        super().__init__()
+        self.note = note
+
+    def invoke_json(self, operation, messages, schema):
+        if schema is card_rebuild.WishNote:
+            self.calls.append(operation)
+            assert "Это Найдачка" in messages[-1].content
+            if self.note is None:
+                raise analysis.BadModelOutput("broken")
+            return card_rebuild.WishNote(note=self.note)
+        if schema is card_rebuild.Improvement:
+            return card_rebuild.Improvement(present=False)
+        return super().invoke_json(operation, messages, schema)
+
+
+def test_only_what_the_author_says_about_the_card_becomes_a_note(session, project):
+    run(session, project, FakeModel())
+    rykhtash = cast(session, project)["Рыхташ"]
+    model = NoteReader("Ей 1 год.")
+    improve(session, rykhtash, model, wishes="Это Найдачка. Ей 1 год по контексту")
+    assert "wish_note" in model.calls
+    assert cast(session, project)["Рыхташ"].author_notes == ["Ей 1 год."]
+
+
+def test_a_wish_that_is_only_a_command_leaves_no_note(session, project):
+    run(session, project, FakeModel())
+    rykhtash = cast(session, project)["Рыхташ"]
+    improve(session, rykhtash, NoteReader(""), wishes="Это Найдачка")
+    assert cast(session, project)["Рыхташ"].author_notes == []
+
+
+def test_a_broken_wish_check_keeps_the_whole_wish(session, project):
+    run(session, project, FakeModel())
+    rykhtash = cast(session, project)["Рыхташ"]
+    improve(session, rykhtash, NoteReader(None), wishes="Это Найдачка. Ей 1 год")
+    assert cast(session, project)["Рыхташ"].author_notes == ["Это Найдачка. Ей 1 год"]
+
+
+def test_descriptions_keep_the_origin_of_a_card():
+    from app.analysis import prompts
+
+    for text in (prompts.general_system("character"), prompts.summary_system("character")):
+        assert "origin" in text

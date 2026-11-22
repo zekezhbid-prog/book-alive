@@ -969,6 +969,7 @@ function AuthorNotes({ entity, onChanged, onError }: {
   onError: (error: unknown) => void
 }) {
   const { t } = useI18n()
+  const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
   if (!entity.author_notes.length && !editing) return null
@@ -979,24 +980,29 @@ function AuthorNotes({ entity, onChanged, onError }: {
     }, onError)
   return (
     <div className="stack author-notes">
-      <div className="row">
-        <h3 className="grow">{t('notes.title')}</h3>
+      <FoldHead
+        title={t('notes.title')}
+        open={open || editing}
+        onToggle={() => setOpen(!open)}
+        note={<span className="faint small">{entity.author_notes.length}</span>}
+      >
         {!editing && (
           <button
-            className="btn ghost icon"
+            className="btn primary nav-action"
             title={t('notes.edit')}
             aria-label={t('notes.edit')}
             onClick={() => {
               setText(entity.author_notes.join('\n'))
+              setOpen(true)
               setEditing(true)
             }}
           >
             <PencilIcon />
           </button>
         )}
-      </div>
-      <span className="faint small">{t('notes.hint')}</span>
-      {editing ? (
+      </FoldHead>
+      {(open || editing) && <span className="faint small">{t('notes.hint')}</span>}
+      {!open && !editing ? null : editing ? (
         <>
           <textarea
             className="input"

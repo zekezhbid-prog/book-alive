@@ -44,6 +44,29 @@ class Improvement(CardFacts):
     confirmed: list[int] = Field(default_factory=list)
 
 
+class WishNote(BaseModel):
+    # What the author states about the card itself; empty when the wish only asks for something.
+    note: str = ""
+
+
+def wish_note(model: TextModel, entity: Entity, wishes: str) -> str:
+    """The part of the wishes worth keeping as a note: what the author says about the card
+    ("she is one year old"), not what they ask for ("this is Naydachka", "add her looks").
+    A broken answer keeps the whole wish: better a long note than a lost one."""
+    try:
+        answer = model.invoke_json(
+            "wish_note",
+            [
+                SystemMessage(prompts.WISH_NOTE_SYSTEM),
+                HumanMessage(f'Card: "{entity.name}"\n\nWishes: {wishes}'),
+            ],
+            WishNote,
+        )
+    except BadModelOutput:
+        return wishes
+    return answer.note.strip()
+
+
 def _stems(name: str) -> list[str]:
     """The words of a name cut to a stem, so "Рыхташа" and "Рыхташу" match "Рыхташ"."""
     words = [w for w in re.findall(r"\w+", name.casefold()) if len(w) >= 3]
@@ -95,9 +118,10 @@ def rebuild_card(session: Session, model: TextModel, run: AnalysisRun) -> None:
     if entity is None:
         return
     improve = run.mode == MODE_IMPROVE
-    if run.wishes.strip():
+    note = wish_note(model, entity, run.wishes.strip()) if run.wishes.strip() else ""
+    if note:
         # Kept as a note on the card: every later run hears it, until the text confirms it.
-        entity.author_notes = [*(entity.author_notes or []), run.wishes.strip()]
+        entity.author_notes = [*(entity.author_notes or []), note]
         session.commit()
     parts = set(run.parts) or set(PARTS)
     if PART_FACTS in parts:

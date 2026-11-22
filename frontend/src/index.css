@@ -728,4 +728,3 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .improve-dialog { width: min(620px, 94vw); }
 .improve-wishes { align-items: flex-start; }
 .chat-form .mic { align-self: center; }
-.author-notes h3 { margin: 0; }

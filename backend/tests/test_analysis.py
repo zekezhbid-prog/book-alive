@@ -77,6 +77,9 @@ class FakeModel:
                     for n in numbers
                 ]
             )
+        if schema.__name__ == "WishNote":
+            # The whole wish is about the card.
+            return schema(note=messages[-1].content.split("Wishes: ", 1)[1])
         if schema is analysis.Looks:
             return analysis.Looks(appearance="Облик: " + messages[-1].content.split("\n")[0])
         if schema is analysis.GeneralTexts:
