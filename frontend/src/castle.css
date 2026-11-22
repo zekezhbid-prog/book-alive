@@ -382,3 +382,20 @@ article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
 @media (max-width: 900px) {
   body::after { animation: none; opacity: .75; }
 }
+
+/* The mobile entity index can be hundreds of rows tall. Keep its stone
+   background tiled and paint the fixed-height cards near the viewport. */
+@media (max-width: 900px) {
+  body:has(.entity-index) {
+    min-height: 100vh;
+    background: #211f1c var(--tex-wall) center top / 560px repeat;
+  }
+  body:has(.entity-index)::before, body:has(.entity-index)::after,
+  #root:has(.entity-index)::before, #root:has(.entity-index)::after { content: none; }
+  .entity-index .reading > .chapter {
+    background: #242321 var(--tex-stone) center top / 320px repeat;
+    box-shadow: var(--trim);
+  }
+  .entity-index .card-grid > * { content-visibility: auto; contain-intrinsic-size: auto 210px; }
+  .entity-index .tile-cover { filter: none; }
+}

@@ -174,7 +174,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
   return (
     <>
       <ProjectHeader project={project} />
-      <div className="workspace">
+      <div className={entityId ? 'workspace' : 'workspace entity-index'}>
         <ProjectNav project={project} {...{ [section]: list }} />
 
         <section className="reading">
