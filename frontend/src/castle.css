@@ -405,3 +405,16 @@ article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
     filter: none; transform: translateY(-50%); transition: none;
   }
 }
+
+/* ---------- 23.11: selection and the floating "make a scene" button ---------- */
+/* The old selection was nearly the colour of the text: now a bright amber with dark text. */
+::selection { background: rgba(255, 176, 46, 0.85); color: #1a0f04; text-shadow: none; }
+/* Centred without a transform: the hover and press styles of .btn set `transform` and
+   used to throw the button off the centre. Looks like the chat button. */
+.floating { left: 0; right: 0; margin: 0 auto; width: fit-content; transform: none; }
+.floating:hover, .floating:active { transform: none; }
+article.chapter .btn.primary.floating, .btn.primary.floating:hover {
+  color: #1a0f04; font-family: var(--book); font-size: 17px; letter-spacing: 0.3px;
+  border-radius: var(--radius);
+}
+.settings-tabs { align-self: flex-start; }

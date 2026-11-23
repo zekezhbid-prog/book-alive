@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   api,
   type Connection,
@@ -8,9 +8,14 @@ import {
 } from "../api";
 import { errorText, LANGS, useI18n, type Lang, type MessageKey } from "../i18n";
 import { ask } from "../dialogs";
+import PageClose from "../components/PageClose";
 
 // Each language by its own name, so the reader finds theirs whatever is chosen now.
-const LANG_NAMES: Record<Lang, string> = { ru: "Русский", by: "Беларуская", en: "English" };
+const LANG_NAMES: Record<Lang, string> = {
+  ru: "Русский",
+  by: "Беларуская",
+  en: "English",
+};
 
 const PRESETS = [{ name: "Hubris", url: "https://api.hubris.pw/v1" }];
 
@@ -21,9 +26,16 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [accounts, setAccounts] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const navigate = useNavigate();
   // Opened from inside a project (the account menu adds ?project=<id>).
-  const projectId = useSearchParams()[0].get("project");
+  const [params, setParams] = useSearchParams();
+  const projectId = params.get("project");
+  // Two tabs: the general ones (name, language, password) and the connections with models.
+  const tab = params.get("tab") === "connections" ? "connections" : "general";
+  const setTab = (name: "general" | "connections") => {
+    const next = new URLSearchParams(params);
+    next.set("tab", name);
+    setParams(next, { replace: true });
+  };
 
   const fail = useCallback((e: unknown) => setError(errorText(t, e)), [t]);
   const loadConnections = useCallback(
@@ -57,38 +69,46 @@ export default function Settings() {
     <main className="page narrow stack">
       <div className="row">
         <h1 className="grow">{t("settings.title")}</h1>
-        <button
-          className="btn ghost"
-          title={t("settings.close")}
-          aria-label={t("settings.close")}
-          onClick={() =>
-            window.history.length > 1 ? navigate(-1) : navigate("/")
-          }
-        >
-          ✕
-        </button>
+        <PageClose fallback={projectId ? `/projects/${projectId}` : "/"} />
+      </div>
+      <div className="segmented settings-tabs" role="tablist">
+        {(["general", "connections"] as const).map((name) => (
+          <button
+            key={name}
+            role="tab"
+            aria-selected={tab === name}
+            className={tab === name ? "active" : ""}
+            onClick={() => setTab(name)}
+          >
+            {t(`settings.tab.${name}`)}
+          </button>
+        ))}
       </div>
       {error && <p className="error">{error}</p>}
 
-      {projectId && <ProjectTitle projectId={projectId} onError={fail} />}
+      {tab === "general" && projectId && (
+        <ProjectTitle projectId={projectId} onError={fail} />
+      )}
 
-      <section className="panel pad row">
-        <h2 className="grow">{t("settings.language")}</h2>
-        <select
-          className="input lang-select"
-          value={lang}
-          onChange={(e) => setLang(e.target.value as Lang)}
-          aria-label={t("settings.language")}
-        >
-          {LANGS.map((code) => (
-            <option key={code} value={code}>
-              {LANG_NAMES[code]}
-            </option>
-          ))}
-        </select>
-      </section>
+      {tab === "general" && (
+        <section className="panel pad row">
+          <h2 className="grow">{t("settings.language")}</h2>
+          <select
+            className="input lang-select"
+            value={lang}
+            onChange={(e) => setLang(e.target.value as Lang)}
+            aria-label={t("settings.language")}
+          >
+            {LANGS.map((code) => (
+              <option key={code} value={code}>
+                {LANG_NAMES[code]}
+              </option>
+            ))}
+          </select>
+        </section>
+      )}
 
-      {isAdmin && (
+      {tab === "connections" && isAdmin && (
         <section className="panel pad stack">
           <div>
             <h2>{t("settings.connections")}</h2>
@@ -123,7 +143,7 @@ export default function Settings() {
         </section>
       )}
 
-      {settings && (
+      {tab === "connections" && settings && (
         <section className="panel pad stack">
           <div>
             <h2>{t("settings.models")}</h2>
@@ -171,7 +191,7 @@ export default function Settings() {
           />
         </section>
       )}
-      {accounts && <ChangePassword />}
+      {tab === "general" && accounts && <ChangePassword />}
     </main>
   );
 }
@@ -408,7 +428,9 @@ function ModelPicker({
             value={known ? connectionId : ""}
             onChange={(e) => onChange(e.target.value, "")}
           >
-            <option value="">{noneLabel ?? t("settings.connection.none")}</option>
+            <option value="">
+              {noneLabel ?? t("settings.connection.none")}
+            </option>
             {connections.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

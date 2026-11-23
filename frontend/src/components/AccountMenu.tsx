@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useI18n } from '../i18n'
 import { UserIcon } from './icons'
+import { isWindowPage } from '../windows'
 
 interface Props {
   accounts: boolean
@@ -14,6 +15,7 @@ interface Props {
 export default function AccountMenu({ accounts, email, onLogout }: Props) {
   const { t } = useI18n()
   const { pathname } = useLocation()
+  const overWindow = isWindowPage(pathname)
   // Open on the page where it was opened: following one of its links closes it.
   const [openOn, setOpenOn] = useState<string | null>(null)
   const open = openOn === pathname
@@ -49,9 +51,9 @@ export default function AccountMenu({ accounts, email, onLogout }: Props) {
         <nav className="account-menu">
           {email && <p className="faint small account-email">{email}</p>}
           <Link to="/">{t('nav.my_projects')}</Link>
-          {projectId && <Link to={`/projects/${projectId}/usage`}>{t('tabs.usage')}</Link>}
+          {projectId && <Link replace={overWindow} to={`/projects/${projectId}/usage`}>{t('tabs.usage')}</Link>}
           {/* From inside a project the settings also show its name, to edit in place. */}
-          <Link to={projectId ? `/settings?project=${projectId}` : '/settings'}>{t('app.settings')}</Link>
+          <Link replace={overWindow} to={projectId ? `/settings?project=${projectId}` : '/settings'}>{t('app.settings')}</Link>
           {accounts && <button onClick={onLogout}>{t('login.logout')}</button>}
         </nav>
       )}
