@@ -475,6 +475,18 @@ export interface SceneBrief {
   cover?: string
 }
 
+/** Asked before a scene export; everything else comes from the cards. */
+export interface SceneExportOptions {
+  aspect: '16:9' | '9:16' | '1:1'
+  duration: number
+  dialogue: boolean
+  narration: boolean
+  effects: string
+  palette: string
+  note: string
+  images_per_clip: number
+}
+
 export interface Scene extends SceneBrief {
   text: string
   prompt: string
@@ -837,6 +849,20 @@ export const api = {
     return request<Scene>('POST', `/scenes/${id}/frame/upload`, form)
   },
   sceneArchiveUrl: (id: string) => `/api/scenes/${id}/archive`,
+  /** The scene for video in one archive; the text model writes the shot plan first. */
+  exportScene: async (id: string, options: SceneExportOptions): Promise<Blob> => {
+    const response = await fetch(`/api/scenes/${id}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    })
+    if (response.status === 401) window.dispatchEvent(new Event('login-required'))
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new ApiError(response.status, typeof payload?.detail === 'string' ? payload.detail : '')
+    }
+    return response.blob()
+  },
   usage: (projectId: string, offset = 0, period: Period = {}) => {
     const query = new URLSearchParams({ offset: String(offset) })
     if (period.since) query.set('since', period.since)

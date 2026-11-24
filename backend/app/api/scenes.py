@@ -13,7 +13,7 @@ from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNot
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel, estimate_tokens
 from app.models import Chapter, Entity, Image, Project, Scene
-from app.scenes import service
+from app.scenes import export, service
 
 router = APIRouter(prefix="/api", tags=["scenes"])
 
@@ -374,6 +374,32 @@ def download(scene_id: str, session: SessionDep) -> Response:
     name = f"{service.slug(project.title)}_{service.slug(scene.title)}.zip"
     return Response(
         service.archive(session, project, scene),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.post("/scenes/{scene_id}/export")
+def export_scene(scene_id: str, body: export.ExportOptions, session: SessionDep) -> Response:
+    """Everything to make the scene into a video, in one archive: a shot plan by the text
+    model, a prompt per generation, the reference pictures, the lines to voice."""
+    scene, chapter, project = _scene(session, scene_id)
+    if chapter is None:
+        raise HTTPException(409, "chapter_not_found")
+    if chapter.private:
+        raise HTTPException(403, "chapter_private")
+    model = _text_model(session, project.id, "prompts")
+    try:
+        plan, pool = export.plan_scene(session, model, project, scene, chapter, body)
+    except BadModelOutput as exc:
+        raise HTTPException(502, "bad_model_output") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    if not plan.shots:
+        raise HTTPException(502, "bad_model_output")
+    name = f"{service.slug(project.title)}_{service.slug(scene.title)}_video.zip"
+    return Response(
+        export.export_archive(session, project, scene, chapter, plan, pool, body),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )

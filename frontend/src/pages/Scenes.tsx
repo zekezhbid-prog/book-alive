@@ -14,6 +14,7 @@ import {
 } from '../api'
 import CardGrid from '../components/CardGrid'
 import { ImageDialog } from '../components/Gallery'
+import SceneExport from '../components/SceneExport'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import DescriptionEditor from '../components/DescriptionEditor'
@@ -252,6 +253,8 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
     null,
   )
   const closeAdding = useCallback(() => setAdding(null), [])
+  const [exporting, setExporting] = useState(false)
+  const closeExport = useCallback(() => setExporting(false), [])
   const addFor = async (who: Participant) => {
     try {
       const images = await api.images(projectId, who.id)
@@ -499,6 +502,14 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
       )}
         </>
       )}
+      {/* The end result of the whole artist mode: the scene packed for a video tool. */}
+      <div className="row wrap scene-export-row">
+        <button className="btn primary" disabled={aiReady === false} onClick={() => setExporting(true)}>
+          <DownloadIcon />
+          {t('export.button')}
+        </button>
+      </div>
+      {exporting && <SceneExport scene={scene} onClose={closeExport} />}
       {error && <p className="error">{error}</p>}
     </>
   )

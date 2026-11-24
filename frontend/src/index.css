@@ -762,3 +762,10 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
   .ref-shot, .ref-add-frame { flex-basis: 110px; }
   .ref-row { flex-wrap: wrap; }
 }
+
+/* ---------- 24.11: export of a scene for video ---------- */
+.dialog.scene-export { width: min(620px, 100%); max-height: 94vh; overflow-y: auto; gap: 14px; }
+.dialog.scene-export h2 { margin: 0; }
+.scene-export .row.small { gap: 8px; align-items: center; cursor: pointer; }
+.export-pair { gap: 14px; }
+.scene-export-row { margin-top: 18px; }

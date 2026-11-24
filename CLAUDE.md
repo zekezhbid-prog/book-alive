@@ -42,7 +42,8 @@ backend/app/
   llm/provision.py   the Hubris connection created from HUBRIS_API_KEY at startup
   rag/               local embeddings, chunk index and hybrid search, chat with citations
   images/            project style, image prompt from a card, image generation client
-  scenes/            scene split, references for a scene, video prompt, archive
+  scenes/            scene split, references for a scene, video prompt, archive,
+                     export.py: the scene for video in one zip (shot plan, clip prompts)
   api/               REST routes
 frontend/src/
   api.ts             typed client
