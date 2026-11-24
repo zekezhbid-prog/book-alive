@@ -190,7 +190,8 @@ export default function Entities({ kind }: { kind: EntityKind }) {
         <ProjectNav project={project} {...{ [section]: list }} />
 
         <section className="reading">
-          <div className="chapter stack">
+          {/* An open card keeps one size, however little text it has yet. */}
+          <div className={entityId ? 'chapter stack entity-open' : 'chapter stack'}>
             {error && <p className="error">{error}</p>}
             {/* Stays on top while the cards below change: the run is never out of sight. */}
             {running && run && (
@@ -487,6 +488,8 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onEr
           </div>
         )}
       </div>
+      {/* The pictures in one row between the names and the description. */}
+      {gallery}
       {/* Their own keys: the gallery beside them is keyed by the card id too. */}
       <EditableText
         key={`description-${entity.id}`}
@@ -526,7 +529,6 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onEr
           )}
         </div>
       )}
-      {gallery}
       <FoldHead
         title={t(`entities.timeline.${entity.kind}`)}
         open={timelineOpen}

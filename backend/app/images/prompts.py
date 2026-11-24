@@ -118,3 +118,34 @@ def build_image_prompt(
         style=style_prompt(project) or "(no style chosen: omit this part)",
     )
     return model.invoke("image_prompt", [SystemMessage(system), HumanMessage(facts)]).strip()
+
+
+# ---------- the prompt in the user's language, and changes asked in words ----------
+
+LANGUAGES = {"en": "English", "ru": "Russian", "by": "Belarusian"}
+
+TRANSLATE_SYSTEM = """Translate this prompt for an AI image generator into {language}. \
+Keep its meaning, order and every detail; do not add, drop or explain anything. Names of \
+styles and technical words that have no good {language} equivalent stay as they are.
+
+Reply with the translation only."""
+
+REFINE_SYSTEM = """Below is a prompt for an AI image generator and a change the author \
+wants, in any language. Rewrite the prompt in English with that change and keep everything \
+else as it is, including the style at the end.
+
+Reply with the prompt only."""
+
+
+def translate_prompt(model: TextModel, text: str, language: str) -> str:
+    """The prompt in another language: the user reads and edits it in theirs, the image
+    model gets the English one."""
+    system = TRANSLATE_SYSTEM.format(language=LANGUAGES[language])
+    return model.invoke("translate_prompt", [SystemMessage(system), HumanMessage(text)]).strip()
+
+
+def refine_image_prompt(model: TextModel, prompt: str, change: str) -> str:
+    request = f"Prompt:\n{prompt}\n\nChange wanted:\n{change}"
+    return model.invoke(
+        "refine_image_prompt", [SystemMessage(REFINE_SYSTEM), HumanMessage(request)]
+    ).strip()

@@ -639,9 +639,19 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 
 .sample.odd { outline: 2px solid var(--err); outline-offset: 1px; }
 .face-check-overlay { z-index: 60; }
-.dialog.face-check { width: min(560px, 100%); display: flex; flex-direction: column; gap: 16px; align-items: center; padding: 24px; }
-.dialog.face-check img { display: block; max-width: 100%; max-height: 64vh; border-radius: var(--radius); border: 1px solid var(--accent-line); }
+.dialog.face-check { width: min(720px, 100%); max-height: 94vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; align-items: stretch; padding: 24px; }
+.dialog.face-check h3 { margin: 0; }
+.dialog.face-check img { display: block; align-self: center; max-width: 100%; max-height: 40vh; border-radius: var(--radius); border: 1px solid var(--accent-line); }
+.face-check-prompt .two-lang { height: 220px; }
 .face-check-buttons { gap: 10px; justify-content: center; }
+/* The image prompt, English over its translation; the halves share the height they are given. */
+.two-lang { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.two-lang-half { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
+.two-lang-half textarea { flex: 1; min-height: 0; resize: none; }
+/* The prompt place in the references window keeps one height with "Auto" on or off. */
+.prompt-box { height: 150px; }
+.prompt-box.both { height: 250px; }
+.prompt-auto { height: 100%; overflow-y: auto; }
 .select-all { cursor: pointer; gap: 8px; }
 .history li .beta-text { white-space: pre-wrap; line-height: 1.5; }
 /* Check dialogs with many ticks: the dialog scrolls instead of running off the screen. */
@@ -728,3 +738,27 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .improve-dialog { width: min(620px, 94vw); }
 .improve-wishes { align-items: flex-start; }
 .chat-form .mic { align-self: center; }
+
+/* ---------- 24.11: a card's references as one row under the name ---------- */
+.ref-row { display: flex; align-items: center; gap: 14px; }
+.ref-strip { position: relative; flex: 1; min-width: 0; }
+.ref-strip-track { display: flex; gap: 12px; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; padding: 2px; }
+.ref-strip-track::-webkit-scrollbar { display: none; }
+.ref-shot { flex: 0 0 140px; }
+.ref-strip-arrow { position: absolute; z-index: 3; top: 50%; transform: translateY(-50%); width: 34px; height: 64px; padding: 0; border: 1px solid var(--accent-line); border-radius: 10px; background: rgba(10, 9, 6, 0.85); color: var(--accent); font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6); }
+.ref-strip-arrow:hover { background: rgba(30, 24, 12, 0.95); }
+.ref-strip-arrow.left { left: -6px; }
+.ref-strip-arrow.right { right: -6px; }
+.ref-strip-arrow[hidden] { display: none; }
+.ref-edit { flex: none; align-self: center; }
+/* No pictures yet: an empty frame the size of a picture, so the card looks the same either way. */
+.ref-add { display: flex; align-items: center; gap: 18px; width: 100%; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.ref-add-frame { flex: 0 0 140px; aspect-ratio: 3 / 4; display: grid; place-items: center; border: 1px dashed var(--accent-line); border-radius: var(--radius); background: rgba(14, 12, 8, 0.45); color: var(--accent); opacity: 0.7; transition: opacity 0.2s, box-shadow 0.2s; }
+.ref-add-frame svg { width: 44px; height: 44px; }
+.ref-add:hover .ref-add-frame { opacity: 1; box-shadow: 0 0 18px rgba(250, 190, 40, 0.25); }
+.ref-add-text { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.ref-add-title { font-weight: 700; color: var(--accent); }
+@media (max-width: 640px) {
+  .ref-shot, .ref-add-frame { flex-basis: 110px; }
+  .ref-row { flex-wrap: wrap; }
+}

@@ -771,6 +771,12 @@ export const api = {
     >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
+  /** The prompt in another language (`ru`, `by` or `en`): the other half of the two-language field. */
+  translateImagePrompt: (entityId: string, text: string, language: string) =>
+    request<{ text: string }>('POST', `/entities/${entityId}/image-prompt/translate`, { text, language }),
+  /** The English prompt with the author's remark worked in. */
+  refineImagePrompt: (entityId: string, prompt: string, change: string) =>
+    request<{ text: string }>('POST', `/entities/${entityId}/image-prompt/refine`, { prompt, change }),
   imagePrompt: (entityId: string, look: LookRequest & { view_free?: boolean; note?: string }) =>
     request<{ prompt: string; angle: Angle | '' }>(
       'POST',

@@ -22,7 +22,13 @@ from app.images.generate import (
     ImageModel,
     ImageModelNotConfigured,
 )
-from app.images.prompts import build_image_prompt, chapters_between
+from app.images.prompts import (
+    LANGUAGES,
+    build_image_prompt,
+    chapters_between,
+    refine_image_prompt,
+    translate_prompt,
+)
 from app.images.reference_sort import SortResult, ask_model, decide
 from app.images.style_check import StyleVerdict, check_style
 from app.images.styles import CUSTOM, PRESETS, style_key, style_prompt
@@ -434,6 +440,55 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
     return PromptOut(prompt=prompt, angle="" if view_free else drawing.angle)
+
+
+class TranslateRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    language: str
+
+    @field_validator("language")
+    @classmethod
+    def known_language(cls, value: str) -> str:
+        if value not in LANGUAGES:
+            raise ValueError("unknown language")
+        return value
+
+
+class RefineRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    change: str = Field(min_length=1, max_length=1000)
+
+
+class TextOut(BaseModel):
+    text: str
+
+
+def _prompt_model(session: SessionDep, entity_id: str) -> TextModel:
+    entity = _entity(session, entity_id)
+    try:
+        return TextModel(session, entity.project_id, "prompts")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/entities/{entity_id}/image-prompt/translate")
+def translate_image_prompt(entity_id: str, body: TranslateRequest, session: SessionDep) -> TextOut:
+    """One half of the two-language prompt was edited: the other half follows it."""
+    model = _prompt_model(session, entity_id)
+    try:
+        return TextOut(text=translate_prompt(model, body.text, body.language))
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+
+
+@router.post("/entities/{entity_id}/image-prompt/refine")
+def refine_image(entity_id: str, body: RefineRequest, session: SessionDep) -> TextOut:
+    """The author's remark before a redraw, typed or spoken: the English prompt with it."""
+    model = _prompt_model(session, entity_id)
+    try:
+        return TextOut(text=refine_image_prompt(model, body.prompt, body.change))
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
 
 
 @router.post("/entities/{entity_id}/images/generate")

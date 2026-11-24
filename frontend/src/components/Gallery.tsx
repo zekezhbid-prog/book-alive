@@ -9,9 +9,11 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import FoldHead from './FoldHead'
 import { CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
+import { MicButton } from './MicButton'
+import { TwoLangPrompt } from './TwoLangPrompt'
+import { useTwoLang } from '../twoLang'
 
 interface Props {
   projectId: string
@@ -54,81 +56,79 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle,
     setError('')
     await api.uploadImages(projectId, [...files], entityId).then(changed, fail)
     setBusy(false)
-    setOpen(true) // show what was just added
     if (picker.current) picker.current.value = ''
   }
   const remove = async (image: ImageInfo) => {
     if (await ask(t('gallery.delete.confirm'))) api.deleteImage(image.id).then(changed, fail)
   }
-  // A card's references start folded so the description is in view; the project's
-  // general gallery is the whole point of its page and stays open.
-  const [open, setOpen] = useState(!entityId)
   // The references window: every base view and picture in context, drawn or put in there.
   const [dialog, setDialog] = useState(false)
   const closeDialog = useCallback(() => setDialog(false), [])
 
+  // On a card: the pictures in one row right under the name, nothing to unfold; drawing and
+  // putting in happen in the references window behind "Edit" (owner's notes, 24.11.2026).
+  if (entityId) {
+    return (
+      <div className="stack">
+        <div className="ref-row">
+          {images?.length === 0 ? (
+            <button className="ref-add" onClick={() => setDialog(true)}>
+              <span className="ref-add-frame" aria-hidden>
+                <ThinPlus />
+              </span>
+              <span className="ref-add-text">
+                <span className="ref-add-title">{t('gallery.add.reference')}</span>
+                <span className="faint small">{t(`gallery.add.hint.${kind ?? 'location'}`)}</span>
+              </span>
+            </button>
+          ) : (
+            <RefStrip images={images ?? []} onRemove={remove} />
+          )}
+          {!!images?.length && (
+            <button className="btn ref-edit" onClick={() => setDialog(true)}>
+              <PencilIcon />
+              {t('gallery.edit')}
+            </button>
+          )}
+        </div>
+        {error && <p className="error">{error}</p>}
+        {dialog && (
+          <ImageDialog
+            projectId={projectId}
+            entityId={entityId}
+            bases={(images ?? []).filter((i) => i.is_main && i.current_style)}
+            looks={(images ?? []).filter((i) => !i.is_main && (i.look_label || i.chapter_from_id))}
+            withAngles={kind === 'character'}
+            chapters={chapters}
+            hasStyle={hasStyle}
+            onChanged={changed}
+            onClose={closeDialog}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="stack">
-      {/* On a card everything happens in one window: drawing, putting in, viewing; its
-          button is the pencil, like the other sections of the card. */}
-      {entityId ? (
-        <FoldHead
-          title={t('gallery.title')}
-          open={open}
-          onToggle={() => setOpen(!open)}
-          note={images && <span className="faint small">{images.length}</span>}
-        >
-          <button
-            className="btn primary nav-action"
-            title={t('gallery.settings')}
-            aria-label={t('gallery.settings')}
-            onClick={() => setDialog(true)}
-          >
-            <PencilIcon />
-          </button>
-        </FoldHead>
-      ) : (
-        <div className="row">
-          <h4>{t('gallery.general')}</h4>
-          <span className="spacer" />
-          <input
-            ref={picker}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            multiple
-            hidden
-            onChange={(e) => upload(e.target.files)}
-          />
-          <button className="btn small" disabled={busy} onClick={() => picker.current?.click()}>
-            {busy ? t('gallery.uploading') : t('gallery.upload')}
-          </button>
-        </div>
-      )}
-      {error && <p className="error">{error}</p>}
-      {entityId && dialog && (
-        <ImageDialog
-          projectId={projectId}
-          entityId={entityId}
-          bases={(images ?? []).filter((i) => i.is_main && i.current_style)}
-          looks={(images ?? []).filter((i) => !i.is_main && (i.look_label || i.chapter_from_id))}
-          withAngles={kind === 'character'}
-          chapters={chapters}
-          hasStyle={hasStyle}
-          onChanged={() => {
-            changed()
-            setOpen(true) // a new picture is in view once the window closes
-          }}
-          onClose={closeDialog}
+      <div className="row">
+        <h4>{t('gallery.general')}</h4>
+        <span className="spacer" />
+        <input
+          ref={picker}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          hidden
+          onChange={(e) => upload(e.target.files)}
         />
-      )}
-      {open && images?.length === 0 && (
-        <p className="faint small">{t(entityId ? 'gallery.empty' : 'gallery.general.empty')}</p>
-      )}
-      {open && entityId && !!images?.length && (
-        <p className="muted small">{t('gallery.main.hint')}</p>
-      )}
-      {/* Rendered only when open: `hidden` would lose to the grid's own `display`. */}
-      {open && (
+        <button className="btn small" disabled={busy} onClick={() => picker.current?.click()}>
+          {busy ? t('gallery.uploading') : t('gallery.upload')}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {images?.length === 0 && <p className="faint small">{t('gallery.general.empty')}</p>}
+      {(
         <div className="gallery">
           {images?.map((image) => (
             <figure key={image.id} className={`shot ${image.current_style ? '' : 'other-style'}`}>
@@ -162,6 +162,70 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle,
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** A card's pictures in one row of fixed height. When they do not fit, arrows at the ends
+ *  scroll the row; it never grows into a second line. */
+function RefStrip({ images, onRemove }: { images: ImageInfo[]; onRemove: (image: ImageInfo) => void }) {
+  const { t } = useI18n()
+  const track = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ left: false, right: false })
+  const measure = useCallback(() => {
+    const el = track.current
+    if (!el) return
+    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 })
+  }, [])
+  useEffect(() => {
+    measure()
+    const el = track.current
+    if (!el) return
+    const watcher = new ResizeObserver(measure)
+    watcher.observe(el)
+    return () => watcher.disconnect()
+  }, [measure, images.length])
+  const go = (direction: number) => {
+    const el = track.current
+    el?.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' })
+  }
+  return (
+    <div className="ref-strip">
+      <button
+        className="ref-strip-arrow left"
+        hidden={!edges.left}
+        title={t('gallery.prev')}
+        aria-label={t('gallery.prev')}
+        onClick={() => go(-1)}
+      >
+        ‹
+      </button>
+      <div className="ref-strip-track" ref={track} onScroll={measure}>
+        {images.map((image) => (
+          <figure key={image.id} className={`shot ref-shot ${image.current_style ? '' : 'other-style'}`}>
+            <a href={image.url} target="_blank" rel="noreferrer">
+              <img src={image.url} alt="" loading="lazy" />
+            </a>
+            <button
+              className="btn ghost small icon gold slot-drop"
+              title={t('app.delete')}
+              aria-label={t('app.delete')}
+              onClick={() => onRemove(image)}
+            >
+              <TrashIcon />
+            </button>
+          </figure>
+        ))}
+      </div>
+      <button
+        className="ref-strip-arrow right"
+        hidden={!edges.right}
+        title={t('gallery.next')}
+        aria-label={t('gallery.next')}
+        onClick={() => go(1)}
+      >
+        ›
+      </button>
     </div>
   )
 }
@@ -345,6 +409,10 @@ export function ImageDialog({
   const [drawing, setDrawing] = useState<Angle | ''>('')
   const [error, setError] = useState('')
   const picker = useRef<HTMLInputElement>(null)
+  // What the user wants changed in the redraw of the face, typed or spoken.
+  const [remark, setRemark] = useState('')
+  // The prompt in English and in the interface language, wherever it can be edited.
+  const twoLang = useTwoLang(entityId, prompt, setPrompt, !autoPrompt || !!faceCheck, setError)
 
   const isMain = mode === 'base'
   // A character's base pictures are a set of views drawn from one prompt.
@@ -497,7 +565,8 @@ export function ImageDialog({
     }
     if (asSet && !order.length) return setBusy('')
     // Automatic prompt: written quietly right before drawing, nothing to check in between.
-    let text = prompt
+    // By hand: the English half takes in the last edit of the translation first.
+    let text = autoPrompt ? prompt : await twoLang.flush()
     if (autoPrompt) {
       setBusy('prompt')
       const written = await collect(reference_ids)
@@ -532,11 +601,13 @@ export function ImageDialog({
   // The face is liked: the remaining views are drawn from it with the prompt as it is now.
   const goOn = async () => {
     if (!pending) return
+    const text = await twoLang.flush()
     setFaceCheck(null)
+    setRemark('')
     setError('')
     setBusy('image')
     try {
-      await drawViews(pending.views, prompt, pending.references)
+      await drawViews(pending.views, text, pending.references)
       setProgress(t('generate.set.done', { n: pending.views.length + 1 }))
     } catch (e) {
       setProgress('')
@@ -551,15 +622,28 @@ export function ImageDialog({
   // prompt as it is now (it may have been changed in the meantime).
   const redrawFace = async () => {
     if (!pending) return
+    setError('')
+    let text = await twoLang.flush()
+    // The remark goes into the English prompt first; on a failure the face stays in view.
+    if (remark.trim()) {
+      setBusy('prompt')
+      try {
+        text = (await api.refineImagePrompt(entityId, text, remark.trim())).text
+        setPrompt(text)
+        setRemark('')
+      } catch (e) {
+        setError(errorText(t, e))
+        return setBusy('')
+      }
+    }
     const face = faceCheck
     setFaceCheck(null)
-    setError('')
     setBusy('image')
     try {
       if (face) await api.deleteImage(face.id)
       setCurrent(null)
       onChanged()
-      const made = await drawViews(['face_front'], prompt, pending.references)
+      const made = await drawViews(['face_front'], text, pending.references)
       setFaceCheck(made)
       setProgress('')
     } catch (e) {
@@ -569,6 +653,15 @@ export function ImageDialog({
     }
     setDrawing('')
     setBusy('')
+  }
+
+  // Neither "go on" nor "redraw": the set stops here. The face stays in its slot; the user
+  // deletes it there if it is not wanted (pictures are never deleted as a side effect).
+  const cancelFace = () => {
+    setFaceCheck(null)
+    setPending(null)
+    setRemark('')
+    setProgress('')
   }
 
   // A new picture in context put in as it is: checked against the project style first (a picture in
@@ -1036,12 +1129,16 @@ export function ImageDialog({
                   {t('generate.prompt.auto')}
                 </label>
                 <span className="spacer" />
-                {!autoPrompt && (
-                  <button className="btn ghost small" disabled={busy !== '' || !ready} onClick={writePrompt}>
-                    <SparklesIcon />
-                    {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
-                  </button>
-                )}
+                {/* Hidden, not removed, under "Auto": the row keeps its height. */}
+                <button
+                  className="btn ghost small"
+                  disabled={busy !== '' || !ready || autoPrompt}
+                  style={{ visibility: autoPrompt ? 'hidden' : 'visible' }}
+                  onClick={writePrompt}
+                >
+                  <SparklesIcon />
+                  {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
+                </button>
                 <button
                   className="btn ghost small icon"
                   disabled={!prompt}
@@ -1052,23 +1149,30 @@ export function ImageDialog({
                   <CopyIcon />
                 </button>
               </div>
-              {autoPrompt ? (
-                prompt && (
-                  <details>
-                    <summary className="muted small">{t('generate.prompt.last')}</summary>
-                    <p className="small prompt-last">{prompt}</p>
-                  </details>
-                )
-              ) : (
-                <textarea
-                  className="input prompt"
-                  rows={6}
-                  value={prompt}
-                  maxLength={4000}
-                  placeholder={t('generate.prompt.placeholder')}
-                  onChange={(e) => setPrompt(e.target.value)}
-                />
-              )}
+              {/* One box of fixed height either way: ticking "Auto" moves nothing in the form. */}
+              <div className={`prompt-box ${twoLang.both ? 'both' : ''}`}>
+                {autoPrompt ? (
+                  <div className="stack prompt-auto">
+                    <p className="faint small">{t('generate.prompt.auto.note')}</p>
+                    {prompt && (
+                      <details>
+                        <summary className="muted small">{t('generate.prompt.last')}</summary>
+                        <p className="small prompt-last">{prompt}</p>
+                      </details>
+                    )}
+                  </div>
+                ) : (
+                  <TwoLangPrompt
+                    english={prompt}
+                    onEnglish={setPrompt}
+                    local={twoLang.local}
+                    onLocal={twoLang.setLocal}
+                    both={twoLang.both}
+                    busy={twoLang.busy}
+                    placeholder={t('generate.prompt.placeholder')}
+                  />
+                )}
+              </div>
             </div>
             <select
               className="input small"
@@ -1116,15 +1220,59 @@ export function ImageDialog({
       {faceCheck && pending && (
         <div className="overlay face-check-overlay">
           <div className="dialog face-check">
-            <h3>{t('generate.face.title')}</h3>
+            <div className="row">
+              <h3 className="grow">{t('generate.face.title')}</h3>
+              <button
+                className="btn ghost small icon"
+                title={t('app.cancel')}
+                aria-label={t('app.cancel')}
+                disabled={busy !== ''}
+                onClick={cancelFace}
+              >
+                ✕
+              </button>
+            </div>
             <img src={faceCheck.url} alt="" />
+            <div className="face-check-prompt">
+              <TwoLangPrompt
+                english={prompt}
+                onEnglish={setPrompt}
+                local={twoLang.local}
+                onLocal={twoLang.setLocal}
+                both={twoLang.both}
+                busy={twoLang.busy}
+                disabled={busy !== ''}
+              />
+            </div>
+            <label className="stack field">
+              <span className="small muted">{t('generate.face.remark')}</span>
+              <div className="row">
+                <input
+                  className="input small grow"
+                  value={remark}
+                  maxLength={1000}
+                  placeholder={t('generate.face.remark.placeholder')}
+                  disabled={busy !== ''}
+                  onChange={(e) => setRemark(e.target.value)}
+                />
+                <MicButton
+                  disabled={busy !== ''}
+                  onText={(text) => setRemark((now) => (now.trim() ? `${now.trim()} ${text}` : text))}
+                  onError={setError}
+                />
+              </div>
+            </label>
+            {error && <p className="error small">{error}</p>}
             <div className="row wrap face-check-buttons">
-              <button className="btn primary" onClick={goOn}>
+              <button className="btn primary" disabled={busy !== ''} onClick={goOn}>
                 <SparklesIcon />
                 {t('generate.face.go_on', { n: pending.views.length })}
               </button>
-              <button className="btn" onClick={redrawFace}>
-                {t('generate.face.redraw')}
+              <button className="btn" disabled={busy !== ''} onClick={redrawFace}>
+                {busy === 'prompt' ? t('generate.face.refining') : t('generate.face.redraw')}
+              </button>
+              <button className="btn ghost" disabled={busy !== ''} onClick={cancelFace}>
+                {t('app.cancel')}
               </button>
             </div>
           </div>

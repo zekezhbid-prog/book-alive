@@ -55,7 +55,9 @@ demo/                a short original story used for demos and end-to-end checks
 
 ## Rules that hold everywhere
 
-- Nothing calls an AI model unless the user pressed a button for it. Import only splits
+- Nothing calls an AI model unless the user pressed a button for it (one exception: the
+  two-language image prompt translates the edited half after a pause, see decisions.md
+  24.11). Import only splits
   the book into chapters, deterministically.
 - All model access goes through `llm/registry.py`. No provider SDK calls elsewhere.
 - A `private` chapter (the author's personal data, split off on import by

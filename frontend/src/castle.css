@@ -357,6 +357,8 @@ article.chapter mark { background: rgba(200, 140, 40, 0.45); color: #1e1407; }
   background: var(--corners), var(--surface-stone); border: 1px solid #050505; border-radius: var(--radius);
   box-shadow: var(--trim), var(--bevel), var(--shade-in), var(--drop);
 }
+/* An open card fills the work area down to the bottom: an empty card is not a smaller slab. */
+.reading > div.chapter.entity-open { min-height: calc(100vh - var(--topbar) - 64px); }
 /* The two action tiles carry their own + and ✨: no sigil behind the words. */
 .tile.tile-action, .tile.tile-action:hover { background: var(--corners), var(--surface-stone-deep); }
 /* Style choices and other option tiles: solid stone, never the bare wall under the words. */

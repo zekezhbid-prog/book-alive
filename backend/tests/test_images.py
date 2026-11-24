@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.images.generate import ImageGenerationFailed, ImageModel
-from app.images.prompts import build_image_prompt, chapters_between
+from app.images.prompts import (
+    build_image_prompt,
+    chapters_between,
+    refine_image_prompt,
+    translate_prompt,
+)
 from app.images.reference_sort import PictureVerdict, SortVerdict, decide
 from app.images.style_check import StyleVerdict
 from app.models import AppSetting, Chapter, Connection, Entity, EntityFact, Project, text_hash
@@ -427,6 +432,30 @@ def test_the_image_prompt_is_told_the_age(session, project):
     build_image_prompt(model, project, hero, None, "", has_reference=False)
     assert "Who it is: Мальчик четырнадцати лет" in model.facts
     assert "never with a beard" in model.system
+
+
+def test_the_prompt_is_translated_and_changed_by_a_remark():
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.operation = operation
+            self.system, self.text = messages[0].content, messages[1].content
+            return "  done \n"
+
+    model = Recorder()
+    assert translate_prompt(model, "a red cloak", "ru") == "done"
+    assert (model.operation, model.text) == ("translate_prompt", "a red cloak")
+    assert "into Russian" in model.system
+    assert refine_image_prompt(model, "a red cloak", "сделай плащ синим") == "done"
+    assert model.operation == "refine_image_prompt"
+    assert "a red cloak" in model.text and "сделай плащ синим" in model.text
+    assert "in English" in model.system
+
+
+def test_an_unknown_language_is_refused(client, project):
+    url = f"/api/entities/{project.hero_id}/image-prompt/translate"
+    assert client.post(url, json={"text": "x", "language": "de"}).status_code == 422
+    # A known language without a text model: the usual "choose a model" answer.
+    assert client.post(url, json={"text": "x", "language": "ru"}).status_code == 409
 
 
 # ---------- a card carried to another project ----------
