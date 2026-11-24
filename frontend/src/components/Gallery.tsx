@@ -314,6 +314,8 @@ export function ImageDialog({
   // Ticked views; only empty slots are drawn, so a filled one counts only once deleted.
   const [views, setViews] = useState<Angle[]>(SET_ORDER)
   const [look, setLook] = useState('')
+  // A place or object: the user's wish for the next picture ("a view from above").
+  const [note, setNote] = useState('')
   const [chapter, setChapter] = useState('')
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageSize | ''>('')
@@ -356,7 +358,12 @@ export function ImageDialog({
   const contextLocked = bases.length === 0 && !current?.is_main
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
-  const firstView = asSet ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null) : null
+  // A place or object: the newest base picture (the list comes oldest first).
+  const firstView = asSet
+    ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null)
+    : isMain && !withAngles
+      ? (bases[bases.length - 1] ?? null)
+      : null
   const shown = current ?? firstView ?? (!isMain ? pickedLook : null)
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
@@ -375,7 +382,12 @@ export function ImageDialog({
   // The text model writes the prompt; null when it failed (the error is shown).
   const collect = async (reference_ids: string[] = []) => {
     try {
-      const written = await api.imagePrompt(entityId, { ...request, view_free: asSet, reference_ids })
+      const written = await api.imagePrompt(entityId, {
+        ...request,
+        view_free: asSet,
+        reference_ids,
+        note: withAngles ? '' : note.trim(),
+      })
       setPrompt(written.prompt)
       return written
     } catch (e) {
@@ -771,6 +783,37 @@ export function ImageDialog({
               })}
             </div>
           )}
+          {/* A place or object: every base picture in a row, the one in view lit; each press
+              of "Generate" adds one more here. */}
+          {isMain && !withAngles && (
+            <div className="look-strip base-strip">
+              {bases.length === 0 && <span className="faint small">{t('generate.bases.empty')}</span>}
+              {[...bases].reverse().map((item) => (
+                <div key={item.id} className="look-tile-wrap">
+                  <button
+                    className={`look-tile ${shown?.id === item.id ? 'shown' : ''}`}
+                    disabled={busy !== ''}
+                    title={t('generate.slot.show')}
+                    onClick={() => {
+                      setPeek('')
+                      setCurrent(item)
+                    }}
+                  >
+                    <img src={item.url} alt="" loading="lazy" />
+                  </button>
+                  <button
+                    className="btn ghost small icon gold slot-drop"
+                    disabled={busy !== ''}
+                    title={t('app.delete')}
+                    aria-label={t('app.delete')}
+                    onClick={() => remove(item)}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {/* In context: the new picture first, then every earlier one; a click takes its settings. */}
           {!isMain && (
             <div className="look-strip">
@@ -838,7 +881,7 @@ export function ImageDialog({
           <div className="stack">
             {/* One of the two is always pressed. Pictures in context are drawn from base ones,
                 so before the first base picture there is nothing to choose. */}
-            {!contextLocked && (
+            {!contextLocked && withAngles && (
             <div className="segmented mode-switch" role="radiogroup">
               {(['base', 'context'] as const).map((option) => (
                 <button
@@ -865,8 +908,23 @@ export function ImageDialog({
                 switching never changes the window's size or moves the buttons. */}
             <div className="mode-fields">
               <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
-                <p className="muted small">{t(asSet ? 'generate.hint.base_set' : 'generate.hint.main')}</p>
+                <p className="muted small">
+                  {t(asSet ? 'generate.hint.base_set' : withAngles ? 'generate.hint.main' : 'generate.hint.place')}
+                </p>
                 {asSet && <p className="muted small">{t('generate.views.hint')}</p>}
+                {!withAngles && (
+                  <label className="stack field">
+                    <span className="small muted">{t('generate.note')}</span>
+                    <input
+                      className="input small"
+                      value={note}
+                      maxLength={300}
+                      placeholder={t('generate.note.placeholder')}
+                      disabled={busy !== ''}
+                      onChange={(e) => setNote(e.target.value)}
+                    />
+                  </label>
+                )}
               </div>
               <div className="stack" inert={isMain} style={{ visibility: isMain ? 'hidden' : 'visible' }}>
                 <p className="muted small">{t('generate.hint.look')}</p>

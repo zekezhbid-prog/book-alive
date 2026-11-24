@@ -4,6 +4,14 @@ from app.models import KIND_CHARACTER, KIND_ITEM
 
 # Bump when EXTRACT_SYSTEM changes: stored chapter answers from older prompts are re-read.
 PROMPT_VERSION = 9
+# A kind whose prompt changed alone: only its stored answers are re-read, the rest stay.
+# Places got a strict filter on 23.11.2026 (no vague spots, a part says what it is part of).
+KIND_VERSIONS = {"location": 10}
+
+
+def prompt_version(kind: str) -> int:
+    return KIND_VERSIONS.get(kind, PROMPT_VERSION)
+
 
 _SUBJECT = {
     "character": {
@@ -24,10 +32,17 @@ the story makes it alive (it speaks or acts by itself)",
         "occupation",
     },
     "location": {
-        "what": "locations: places where the action happens or that are described (lands, \
+        "what": 'locations: places where the action happens or that are described (lands, \
 towns, villages, forests, rivers, roads, houses, rooms, and buildings or landmarks such as a \
 bridge, a tower or a mill). Never list movable objects (weapons, tools, jewels, books, \
-vehicles): they are items. Skip living beings: they are characters",
+vehicles): they are items. Skip living beings: they are characters. A place gets an entry \
+only when it is a specific place someone could paint: it has a proper name, or the text shows \
+what it looks like (its kind of building, materials, shape, colours, a feature that sets it \
+apart). Skip vague and generic spots described with no look of their own, whatever word names \
+them (a forest, a swamp, a road, a river bank, the border, the land, "some tower", "a \
+town"), places only passed through or spoken of, and anything that is just a direction. A \
+part of a building (a room, a chamber, a hall, a courtyard) is named with what it is part \
+of: "the chamber (Vavel castle)", never just "the chamber"',
         "permanent": "what kind of place it is, architecture, layout, shape, materials, "
         "size, ornament, surroundings, landmarks",
         "state": "time of day, weather, season, light, damage, crowds or emptiness, "
@@ -581,11 +596,14 @@ _INDEX_PARTS = {
         "what": "Places are lands, towns, villages, forests, rivers, lakes, roads, houses, "
         "rooms, and buildings or landmarks such as a bridge, a tower or a mill.",
         "extra": "- A part of a place (a room, a tower, a courtyard, a cellar) is an entry of "
-        "its own when the chapter names it or the action happens in it.\n",
-        "unnamed": "the action happens there or the chapter describes it",
+        "its own when the chapter names it or shows how it looks; its name says what it is "
+        'part of: "the chamber (Vavel castle)", not "the chamber".\n',
+        "unnamed": "the chapter shows what it looks like (its kind of building, materials, "
+        "shape, colours, a feature of its own)",
         "skip": "places only mentioned in passing that the chapter neither names nor shows, "
-        "vague spots and directions (somewhere, the ground, home as a direction), living "
-        "beings and movable objects",
+        "vague and generic spots with no look of their own (a forest, a swamp, a road, a river "
+        "bank, the border, the land, some tower, a town), directions (somewhere, the ground, "
+        "home as a direction), living beings and movable objects",
     },
     "item": {
         "noun": "objects",
@@ -644,10 +662,15 @@ _CAST_PARTS = {
         "two": "two villages of one name, the forest of one chapter and another forest",
         "common": '"the forest", "the house", "the road", "the hut"',
         "extra": "- A part of a place (a room, a tower, a courtyard) stays an entry of its "
-        "own when the book names it or the action happens in it; do not fold it into the "
-        "whole.\n",
-        "dropped": "a living being, a movable object, a time, an idea, a vague spot or a "
-        "direction that only passes by (somewhere, the ground, home as a direction)",
+        "own when the book names it or shows how it looks; do not fold it into the whole, "
+        'but name it with what it is part of: "the chamber (Vavel castle)". The same word '
+        "for rooms of different buildings is different entries.\n"
+        "- The cards are for pictures and video: a generic spot with no look of its own (a "
+        "forest, a swamp, a road, a river bank, the border, the land, some tower, a town) "
+        "goes to dropped, however often it appears.\n",
+        "dropped": "a living being, a movable object, a time, an idea, a vague or generic "
+        "spot with no look of its own, a direction that only passes by (somewhere, the "
+        "ground, home as a direction)",
     },
     "item": {
         "noun_one": "object",

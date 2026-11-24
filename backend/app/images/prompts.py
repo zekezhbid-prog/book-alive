@@ -63,10 +63,12 @@ def build_image_prompt(
     has_reference: bool,
     angle: str = "",
     view_free: bool = False,
+    note: str = "",
 ) -> str:
     """`chapters` given: a look at that point of the story (its state facts are used).
     None: a main picture, from permanent traits only, in the given view, or with
-    `view_free` in none, for a set of views drawn from one prompt."""
+    `view_free` in none, for a set of views drawn from one prompt. `note` is the user's
+    own wish for this picture ("a view from above")."""
     permanent = [f.text for f in entity.facts if f.category == FACT_PERMANENT]
     state: list[str] = []
     if chapters is not None:
@@ -87,11 +89,17 @@ def build_image_prompt(
             *(f"- {t}" for t in permanent or ["(none described)"]),
             *(["At this point of the story:", *(f"- {t}" for t in state)] if state else []),
             *([f"The look to show: {look_label}"] if look_label else []),
+            *([f"The user asks for: {note.strip()}"] if note.strip() else []),
         ]
     )
+    same = (
+        "the face, build and identity"
+        if entity.kind == KIND_CHARACTER
+        else "its shape, materials, colours and details"
+    )
     continuity = (
-        "Reference pictures of the same one are supplied with the prompt: say that the face, "
-        "build and identity must match the references exactly, and describe only what differs."
+        f"Reference pictures of the same one are supplied with the prompt: say that {same} "
+        "must match the references exactly, and describe only what differs."
         if has_reference
         else "No reference picture exists yet: describe the appearance completely."
     )

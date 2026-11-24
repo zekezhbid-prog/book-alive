@@ -28,6 +28,8 @@ import {
   PencilIcon,
   SparklesIcon,
   TrashIcon,
+  CheckIcon,
+  QuestionIcon,
 } from '../components/icons'
 import { errorText, useI18n, type MessageKey, type Translate } from '../i18n'
 import { useView } from '../view'
@@ -148,7 +150,17 @@ export default function Entities({ kind }: { kind: EntityKind }) {
     mark: item.uncertain ? <span className="uncertain-mark">? </span> : undefined,
     extra: item.stale ? <span className="dot" title={t('entities.stale.hint')} /> : undefined,
     faded: item.uncertain,
+    corner: item.uncertain
+      ? { icon: <CheckIcon />, label: t('entities.confirm'), onClick: () => setUncertain(item.id, false) }
+      : { icon: <QuestionIcon />, label: t('entities.doubt'), onClick: () => setUncertain(item.id, true) },
   })
+  const setUncertain = (id: string, uncertain: boolean) => {
+    setList((had) => had && had.map((e) => (e.id === id ? { ...e, uncertain } : e)))
+    api.setEntityUncertain(id, uncertain).catch((e) => {
+      fail(e)
+      loadList()
+    })
+  }
 
   const cancel = () =>
     run && api.cancelRun(run.id).then(() => setRun({ ...run, status: 'running' }), fail)

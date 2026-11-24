@@ -187,6 +187,8 @@ class Entity(Base):
     # Found without a proper name (an old man, the merchants) or as a group: probably someone
     # already known, shown apart "in question" until the user merges it or a chapter names it.
     uncertain: Mapped[bool] = mapped_column(default=False)
+    # The user's own call (confirmed: False, sent back into question: True); runs keep it.
+    uncertain_own: Mapped[bool | None] = mapped_column(default=None)
     # The author's own words about the card (a writer describes people and places in text
     # only); the facts below are what a search read out of the chapters.
     description: Mapped[str] = mapped_column(Text, default="")
@@ -424,6 +426,9 @@ class BetaReview(Base):
     asks: Mapped[list[str]] = mapped_column(JSON, default=list)
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=now)
+    # One review of several chapters (the whole book): `chapter_id` is empty, these are the
+    # chapters read and `chapter_hash` is `beta.chapters_hash` of them.
+    chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
 class ReviewRun(Base):

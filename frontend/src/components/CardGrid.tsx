@@ -15,6 +15,8 @@ export interface Tile {
   /** After the meta line: a stale dot, a "has prompt" tick. */
   extra?: ReactNode
   faded?: boolean
+  /** A small icon button in the corner (confirm a card in question, or send it back). */
+  corner?: { icon: ReactNode; label: string; onClick: () => void }
 }
 
 export interface TileAction {
@@ -90,7 +92,19 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
       </span>
     </button>
     )
-    if (!active) return body
+    if (!active) {
+      if (!item.corner) return body
+      const { icon, label, onClick } = item.corner
+      // Beside the button, not inside it: a control inside a button is not allowed.
+      return (
+        <div key={item.id} className="tile-wrap">
+          {body}
+          <button className="btn ghost icon tile-corner" title={label} aria-label={`${label}: ${item.title}`} onClick={onClick}>
+            {icon}
+          </button>
+        </div>
+      )
+    }
     // The box sits beside the button, not inside it: a control inside a button is not allowed.
     return (
       <div key={item.id} className="tile-wrap">

@@ -379,6 +379,45 @@ def test_beta_review_is_kept_with_the_chapter(client, session, book, monkeypatch
     assert client.get(f"/api/projects/{book.id}/beta").json() == []
 
 
+def test_several_chapters_get_one_review_of_the_whole_book(client, session, book, monkeypatch):
+    fake = FakeTextModel("Заметки: платок, дорога.")
+    monkeypatch.setattr("app.api.review.TextModel", lambda *a, **k: fake)
+    ids = [c.id for c in book.chapters]
+    notes = []
+    for chapter_id in ids:  # one request per chapter: private notes, nothing is kept
+        answer = client.post(
+            f"/api/projects/{book.id}/beta/notes",
+            json={"chapter_id": chapter_id, "reader": "fan"},
+        )
+        assert answer.status_code == 200
+        notes.append(answer.json()["notes"])
+    assert client.get(f"/api/projects/{book.id}/beta").json() == []
+
+    fake.reply = "## Общее впечатление\nВ главе 2 платок сработал."
+    answer = client.post(
+        f"/api/projects/{book.id}/beta/book",
+        json={"chapter_ids": ids, "notes": notes, "reader": "fan", "tone": "soft"},
+    )
+    assert answer.status_code == 200
+    data = answer.json()
+    assert data["text"] == "Общее впечатление\nВ главе 2 платок сработал."
+    assert data["chapter_id"] == "" and data["chapter_ids"] == ids and not data["outdated"]
+    system, human = fake.messages[-1]
+    assert "whole" in system.content and "Дорога" in human.content and "Дом" in human.content
+    assert human.content.count("Заметки: платок") == 2
+
+    book.chapters[0].text += "\n\nНовое."
+    book.chapters[0].content_hash = text_hash(book.chapters[0].text)
+    session.commit()
+    listed = client.get(f"/api/projects/{book.id}/beta").json()
+    assert [(r["id"], r["outdated"]) for r in listed] == [(data["id"], True)]
+    bad = client.post(
+        f"/api/projects/{book.id}/beta/book",
+        json={"chapter_ids": ids, "notes": notes[:1]},
+    )
+    assert bad.status_code == 422
+
+
 # ---------------------------------------------------------------- numbers by chapter
 
 from app.review import stats

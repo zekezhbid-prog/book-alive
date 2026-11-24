@@ -418,3 +418,6 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   border-radius: var(--radius);
 }
 .settings-tabs { align-self: flex-start; }
+/* The confirm / doubt icon in a card tile's corner. */
+.tile-corner { position: absolute; z-index: 2; top: 8px; right: 8px; padding: 5px; opacity: 0.55; }
+.tile-wrap:hover .tile-corner, .tile-corner:focus-visible { opacity: 1; }

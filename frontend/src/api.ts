@@ -62,7 +62,10 @@ export interface BookNumbers {
 
 export interface BetaReview {
   id: string
+  /** Empty for one review of several chapters (the whole book). */
   chapter_id: string
+  /** The chapters of such a review. */
+  chapter_ids: string[]
   reader: string
   tone: string
   asks: string[]
@@ -656,6 +659,16 @@ export const api = {
   betaReviews: (projectId: string) => request<BetaReview[]>('GET', `/projects/${projectId}/beta`),
   betaReview: (projectId: string, chapterId: string, choice: { asks: string[]; reader: string; tone: string }) =>
     request<BetaReview>('POST', `/projects/${projectId}/beta`, { chapter_id: chapterId, ...choice }),
+  /** The reader's private notes on one chapter: the first step of a review of several. */
+  betaNotes: (projectId: string, chapterId: string, reader: string) =>
+    request<{ notes: string }>('POST', `/projects/${projectId}/beta/notes`, { chapter_id: chapterId, reader }),
+  /** One review of several chapters, written from the notes on each of them. */
+  betaBookReview: (
+    projectId: string,
+    chapterIds: string[],
+    notes: string[],
+    choice: { asks: string[]; reader: string; tone: string },
+  ) => request<BetaReview>('POST', `/projects/${projectId}/beta/book`, { chapter_ids: chapterIds, notes, ...choice }),
   deleteBetaReview: (projectId: string, id: string) => request<void>('DELETE', `/projects/${projectId}/beta/${id}`),
   /** Typesetting fixed in the chosen chapters; unsaved work is saved as a version first. */
   fixTypography: (projectId: string, chapterIds: string[]) =>
@@ -758,7 +771,7 @@ export const api = {
     >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
-  imagePrompt: (entityId: string, look: LookRequest & { view_free?: boolean }) =>
+  imagePrompt: (entityId: string, look: LookRequest & { view_free?: boolean; note?: string }) =>
     request<{ prompt: string; angle: Angle | '' }>(
       'POST',
       `/entities/${entityId}/image-prompt`,
@@ -846,6 +859,8 @@ export const api = {
     request<Entity>('POST', `/entities/${entityId}/move`, { kind }),
   saveEntityAppearance: (entityId: string, text: string) =>
     request<Entity>('PUT', `/entities/${entityId}/appearance`, { text }),
+  setEntityUncertain: (entityId: string, uncertain: boolean) =>
+    request<Entity>('PUT', `/entities/${entityId}/uncertain`, { uncertain }),
   saveSceneSummary: (sceneId: string, text: string) =>
     request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),

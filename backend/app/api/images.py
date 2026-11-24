@@ -97,6 +97,8 @@ class LookRequest(BaseModel):
 class PromptRequest(LookRequest):
     # A prompt for a set of base pictures: the appearance only, no view.
     view_free: bool = False
+    # The user's wish for this one picture of a place or object ("a view from above").
+    note: str = Field(default="", max_length=300)
 
 
 class GenerateRequest(LookRequest):
@@ -427,6 +429,7 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
             bool(drawing.references),
             "" if view_free else drawing.angle,
             view_free,
+            body.note,
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc

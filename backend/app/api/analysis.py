@@ -112,6 +112,7 @@ class EntityOut(BaseModel):
     # How it looks: the model's text and the user's own (which wins when set).
     appearance: str = ""
     appearance_own: str = ""
+    uncertain: bool = False
     # What the author said about the card that the book does not say.
     author_notes: list[str] = []
     profile: list[FactOut]
@@ -461,7 +462,7 @@ def chapter_status(project_id: str, kind: str, session: SessionDep) -> ChapterSt
             continue
         if row.chapter_hash != chapter.content_hash:
             changed.append(chapter.id)
-        elif row.payload.get("version") == prompts.PROMPT_VERSION:
+        elif row.payload.get("version") == prompts.prompt_version(kind):
             read.append(chapter.id)
     return ChapterStatus(read=read, changed=changed)
 
@@ -542,6 +543,7 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         summary=entity.summary,
         appearance=entity.appearance,
         appearance_own=entity.appearance_own,
+        uncertain=entity.uncertain,
         author_notes=entity.author_notes or [],
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],
         permanent=[out(f) for f in facts if f.category == FACT_PERMANENT],
@@ -579,6 +581,22 @@ def save_appearance(entity_id: str, body: DescriptionPatch, session: SessionDep)
     if entity is None:
         raise HTTPException(404, "entity_not_found")
     entity.appearance_own = body.text.strip()
+    session.commit()
+    return get_entity(entity_id, session)
+
+
+class UncertainPatch(BaseModel):
+    uncertain: bool
+
+
+@router.put("/entities/{entity_id}/uncertain")
+def save_uncertain(entity_id: str, body: UncertainPatch, session: SessionDep) -> EntityOut:
+    """The user confirms a card in question, or sends a confirmed one back. Later runs keep
+    that call."""
+    entity = session.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(404, "entity_not_found")
+    entity.uncertain = entity.uncertain_own = body.uncertain
     session.commit()
     return get_entity(entity_id, session)
 

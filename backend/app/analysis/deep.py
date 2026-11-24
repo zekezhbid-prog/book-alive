@@ -26,6 +26,7 @@ from app.analysis.entities import (
     FACT_MENTION,
     _is_proper,
     describe_looks,
+    drop_faceless_places,
     keep_general,
     locate_quote,
     norm,
@@ -53,6 +54,8 @@ from app.models import (
 MODE_DEEP = "deep"
 # Bump when `prompts.INDEX_SYSTEM` changes: chapters indexed by an older prompt are read again.
 INDEX_VERSION = 3
+# A kind whose index prompt changed alone; the other kinds keep what they have read.
+INDEX_KIND_VERSIONS = {KIND_LOCATION: 4}
 # A main character is written by the strong model: seen in this many chapters at least,
 # and no more than `settings.deep_main_limit` of them (the strong model costs several
 # times more).
@@ -176,6 +179,10 @@ def index_kind(kind: str) -> str:
     return f"{kind}_index"
 
 
+def index_version(kind: str) -> int:
+    return INDEX_KIND_VERSIONS.get(kind, INDEX_VERSION)
+
+
 def stored_index(session: Session, chapter: Chapter, kind: str) -> list[Mention] | None:
     """The mentions read before from this very text, or None."""
     stored = session.scalars(
@@ -187,7 +194,7 @@ def stored_index(session: Session, chapter: Chapter, kind: str) -> list[Mention]
     if (
         stored is not None
         and stored.chapter_hash == chapter.content_hash
-        and stored.payload.get("version") == INDEX_VERSION
+        and stored.payload.get("version") == index_version(kind)
     ):
         return ChapterMentions.model_validate(stored.payload).mentions
     return None
@@ -226,7 +233,7 @@ def keep_index(
             kind=index_kind(kind),
             chapter_hash=chapter.content_hash,
             payload={
-                "version": INDEX_VERSION,
+                "version": index_version(kind),
                 "mentions": [m.model_dump() for m in mentions],
             },
         )
@@ -723,11 +730,8 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
             if _cancelled(session, run):
                 writing.close()
                 return
-    cards = [
-        entities[norm(p.name)]
-        for p in order
-        if any(f.text.strip() for f in entities[norm(p.name)].facts)
-    ]
+    every = drop_faceless_places(session, [entities[norm(p.name)] for p in order])
+    cards = [e for e in every if any(f.text.strip() for f in e.facts)]
     main_cards = [c for c in cards if norm(c.name) in main]
     rest = [c for c in cards if norm(c.name) not in main]
     write_summaries(session, strong, main_cards, run.kind, run)
@@ -760,7 +764,11 @@ def _bind(
             session.add(entity)
         entity.name = plan.name
         entity.aliases = list(dict.fromkeys([*plan.aliases, *(entity.pinned_names or [])]))
-        entity.uncertain = not plan.named or plan.doubtful
+        entity.uncertain = (
+            not plan.named or plan.doubtful
+            if entity.uncertain_own is None
+            else entity.uncertain_own  # the user's call wins
+        )
         entity.facts.clear()
         bound[norm(plan.name)] = entity
     for entity in existing:

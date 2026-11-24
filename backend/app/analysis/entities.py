@@ -28,6 +28,7 @@ from app.models import (
     FACT_PROFILE,
     FACT_STATE,
     KIND_CHARACTER,
+    KIND_LOCATION,
     AnalysisRun,
     Chapter,
     ChapterExtraction,
@@ -148,7 +149,7 @@ def _cached(session: Session, chapter: Chapter, kind: str) -> ChapterExtraction 
     fresh = (
         row is not None
         and row.chapter_hash == chapter.content_hash
-        and row.payload.get("version") == prompts.PROMPT_VERSION
+        and row.payload.get("version") == prompts.prompt_version(kind)
     )
     return row if fresh else None
 
@@ -288,7 +289,7 @@ def extract(state: State, config: RunnableConfig) -> dict:
             kind=run.kind,
             chapter_hash=chapter.content_hash,
             payload={
-                "version": prompts.PROMPT_VERSION,
+                "version": prompts.prompt_version(run.kind),
                 "entities": [e.model_dump() for e in found],
             },
         )
@@ -372,6 +373,8 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
             session.add(entity)
         elif not uncertain:
             entity.uncertain = False  # one chapter giving a proper name is enough
+        if entity.uncertain_own is not None:
+            entity.uncertain = entity.uncertain_own  # the user's call wins
         taken = {norm(entity.name), *map(norm, entity.aliases)}
         new_aliases = [
             n
@@ -753,6 +756,30 @@ def _fact_line(fact, label: str) -> str:
     return f"- {label}: {fact.text.strip()} (text: «{quote[:140]}»)"
 
 
+def drop_faceless_places(session: Session, cards: list[Entity]) -> list[Entity]:
+    """A place with not one fact about how it looks ("the river bank", "the land") is no use
+    for a picture or a video prompt: its card goes (the owner's rule, 23.11.2026). Cards the
+    user has touched stay: confirmed, merged, split off, described, with pictures.
+    Returns the cards left."""
+    left = []
+    for entity in cards:
+        faceless = entity.kind == KIND_LOCATION and not any(
+            f.category == FACT_PERMANENT and f.text.strip() for f in entity.facts
+        )
+        kept_by_user = (
+            entity.uncertain_own is False
+            or entity.standalone
+            or entity.pinned_names
+            or entity.description.strip()
+            or entity.images
+        )
+        if faceless and not kept_by_user:
+            session.delete(entity)
+        else:
+            left.append(entity)
+    return left
+
+
 def summarize_cards(
     session: Session,
     model: TextModel,
@@ -762,11 +789,8 @@ def summarize_cards(
 ) -> None:
     """A card with no facts but its name is left as it is: there is nothing to tell.
     A batch whose answer cannot be read keeps the old text; the rest still gets written."""
-    cards = [
-        e
-        for e in sorted(_entities(session, project_id, kind), key=lambda e: e.name)
-        if any(f.text.strip() for f in e.facts)
-    ]
+    every = drop_faceless_places(session, _entities(session, project_id, kind))
+    cards = [e for e in sorted(every, key=lambda e: e.name) if any(f.text.strip() for f in e.facts)]
     write_summaries(session, model, cards, kind, run)
     keep_general(session, model, cards, kind, run)
     describe_looks(session, model, cards, kind, run)

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.card import name_matcher
 from app.llm.calls import TextModel
-from app.models import BetaReview, Chapter, Entity, Project
+from app.models import BetaReview, Chapter, Entity, Project, text_hash
 
 # What the reader is asked about, in the order the review answers.
 ASKS = {
@@ -98,6 +98,94 @@ def review_chapter(
         project_id=project.id,
         chapter_id=chapter.id,
         chapter_hash=chapter.content_hash,
+        reader=reader,
+        tone=tone,
+        asks=asks,
+        text=_plain(answer),
+    )
+    session.add(review)
+    session.commit()
+    return review
+
+
+# ---- one review of several chapters (the whole book) ----
+# A book does not fit one request: the reader first reads chapter by chapter and keeps short
+# private notes (one request each, nothing stored), then writes one review from all of them.
+NOTES_WORDS = 250
+NOTES_CHARS = 4_000  # per chapter, what the client sends back
+
+
+def chapters_hash(chapters: list[Chapter]) -> str:
+    """Changes when any of the chapters read changes."""
+    return text_hash("|".join(c.content_hash for c in chapters))
+
+
+def _notes_system(reader: str) -> str:
+    return f"""You are a beta reader of a book in progress. You are {READERS[reader]}.
+You are reading the book chapter by chapter and will write the author one review of the \
+whole book at the end. Now write short private notes on the chapter you have just read, for \
+yourself, at most {NOTES_WORDS} words: what you liked and what stayed with you, where you got \
+bored, where you did not believe it, what stayed unclear, what you expect next. Quote a few \
+words or name the scene so you can point at it later. Do not retell the chapter. Plain text, \
+in the language of the chapter."""
+
+
+def chapter_notes(
+    session: Session, model: TextModel, project: Project, chapter: Chapter, reader: str
+) -> str:
+    """The reader's private notes on one chapter, for the review of the whole book."""
+    reader = reader if reader in READERS else "casual"
+    text = chapter.text[:CHAPTER_CHARS]
+    body = f'{_context(session, project, chapter)}\n\nChapter "{chapter.title}":\n\n{text}'
+    answer = model.invoke("beta_reader", [SystemMessage(_notes_system(reader)), HumanMessage(body)])
+    return _plain(answer)[:NOTES_CHARS]
+
+
+def _book_system(reader: str, tone: str, asks: list[str], count: int) -> str:
+    points = "\n".join(f"- {ASKS[a]}" for a in asks)
+    return f"""You are a beta reader of a book in progress. You are {READERS[reader]}.
+You have just read {count} chapters of it, and while reading you kept the notes below. Now \
+write the author ONE review of the whole read, as a person, not as a proofreader: no \
+spelling, no punctuation, no lists of typos. Do not go chapter by chapter: speak about the \
+book as a whole (the story, the people, the pace, how it holds together), and point at a \
+chapter by its number or title where it helps.
+Answer these, each under its own short heading, in this order:
+{points}
+Short paragraphs, plain words. If there is nothing to say on a point, say so in one line. \
+Do not retell the book.
+{TONES[tone]}
+Write in the language of the notes. Plain text: headings on their own line, no Markdown \
+symbols (no #, no **)."""
+
+
+def review_book(
+    session: Session,
+    model: TextModel,
+    project: Project,
+    chapters: list[Chapter],
+    notes: list[str],
+    reader: str,
+    tone: str,
+    asks: list[str],
+) -> BetaReview:
+    """One review of the chapters read, written from the notes kept on each of them."""
+    asks = [a for a in ASKS if a in asks] or DEFAULT_ASKS
+    reader = reader if reader in READERS else "casual"
+    tone = tone if tone in TONES else "soft"
+    numbers = {c.id: n for n, c in enumerate(project.chapters, 1)}
+    body = "\n\n".join(
+        f'Chapter {numbers.get(c.id, "?")} "{c.title}":\n{note.strip()[:NOTES_CHARS]}'
+        for c, note in zip(chapters, notes, strict=True)
+    )
+    answer = model.invoke(
+        "beta_reader",
+        [SystemMessage(_book_system(reader, tone, asks, len(chapters))), HumanMessage(body)],
+    )
+    review = BetaReview(
+        project_id=project.id,
+        chapter_id="",
+        chapter_ids=[c.id for c in chapters],
+        chapter_hash=chapters_hash(chapters),
         reader=reader,
         tone=tone,
         asks=asks,

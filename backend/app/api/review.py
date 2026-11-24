@@ -2,12 +2,12 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db import SessionDep
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
-from app.models import MODE_WRITER, BetaReview, Project, ReviewRun, text_hash
+from app.models import MODE_WRITER, BetaReview, Chapter, Project, ReviewRun, text_hash
 from app.review import beta, checks, continuity, service, stats, typography
 from app.services import versions
 
@@ -168,7 +168,8 @@ class BetaRequest(BaseModel):
 
 class BetaOut(BaseModel):
     id: str
-    chapter_id: str
+    chapter_id: str  # empty for one review of several chapters
+    chapter_ids: list[str] = []  # the chapters of such a review
     reader: str
     tone: str
     asks: list[str]
@@ -178,54 +179,131 @@ class BetaOut(BaseModel):
     outdated: bool = False
 
 
-def _beta_out(review: BetaReview, chapters: dict[str, str]) -> BetaOut:
+def _beta_out(review: BetaReview, chapters: dict[str, Chapter]) -> BetaOut:
+    if review.chapter_id:
+        chapter = chapters.get(review.chapter_id)
+        outdated = chapter is not None and chapter.content_hash != review.chapter_hash
+    else:
+        read = [chapters[i] for i in review.chapter_ids if i in chapters]
+        outdated = len(read) < len(review.chapter_ids) or (
+            beta.chapters_hash(read) != review.chapter_hash
+        )
     return BetaOut(
         id=review.id,
         chapter_id=review.chapter_id,
+        chapter_ids=review.chapter_ids or [],
         reader=review.reader,
         tone=review.tone,
         asks=review.asks,
         text=review.text,
         created_at=review.created_at,
-        outdated=chapters.get(review.chapter_id, review.chapter_hash) != review.chapter_hash,
+        outdated=outdated,
     )
 
 
-@router.post("/projects/{project_id}/beta")
-def beta_review(project_id: str, body: BetaRequest, session: SessionDep) -> BetaOut:
-    """A beta reader's review of one chapter, kept with the chapter."""
-    project = _writer_project(session, project_id)
-    chapter = next((c for c in project.chapters if c.id == body.chapter_id), None)
+def _readable_chapter(project: Project, chapter_id: str) -> Chapter:
+    chapter = next((c for c in project.chapters if c.id == chapter_id), None)
     if chapter is None:
         raise HTTPException(404, "chapter_not_found")
     if chapter.private:
         raise HTTPException(403, "chapter_private")
     if not chapter.text.strip():
         raise HTTPException(409, "chapter_empty")
+    return chapter
+
+
+def _beta_model(session, project: Project) -> TextModel:
     try:
-        model = TextModel(session, project.id, "chat")
+        return TextModel(session, project.id, "chat")
     except ModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/projects/{project_id}/beta")
+def beta_review(project_id: str, body: BetaRequest, session: SessionDep) -> BetaOut:
+    """A beta reader's review of one chapter, kept with the chapter."""
+    project = _writer_project(session, project_id)
+    chapter = _readable_chapter(project, body.chapter_id)
+    model = _beta_model(session, project)
     try:
         review = beta.review_chapter(
             session, model, project, chapter, body.reader, body.tone, body.asks or beta.DEFAULT_ASKS
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
-    return _beta_out(review, {chapter.id: chapter.content_hash})
+    return _beta_out(review, {chapter.id: chapter})
+
+
+class NotesRequest(BaseModel):
+    chapter_id: str
+    reader: str = "casual"
+
+
+class NotesOut(BaseModel):
+    notes: str
+
+
+@router.post("/projects/{project_id}/beta/notes")
+def beta_notes(project_id: str, body: NotesRequest, session: SessionDep) -> NotesOut:
+    """The reader's private notes on one chapter, the first step of a review of several
+    chapters. Nothing is kept: the client sends them back with `beta/book`."""
+    project = _writer_project(session, project_id)
+    chapter = _readable_chapter(project, body.chapter_id)
+    model = _beta_model(session, project)
+    try:
+        notes = beta.chapter_notes(session, model, project, chapter, body.reader)
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return NotesOut(notes=notes)
+
+
+class BookRequest(BaseModel):
+    chapter_ids: list[str] = Field(min_length=1)
+    notes: list[str]
+    reader: str = "casual"
+    tone: str = "soft"
+    asks: list[str] | None = None
+
+
+@router.post("/projects/{project_id}/beta/book")
+def beta_book_review(project_id: str, body: BookRequest, session: SessionDep) -> BetaOut:
+    """One review of several chapters (the whole book), written from the notes on each."""
+    if len(body.notes) != len(body.chapter_ids):
+        raise HTTPException(422, "notes_mismatch")
+    project = _writer_project(session, project_id)
+    chapters = [_readable_chapter(project, i) for i in body.chapter_ids]
+    model = _beta_model(session, project)
+    try:
+        review = beta.review_book(
+            session,
+            model,
+            project,
+            chapters,
+            body.notes,
+            body.reader,
+            body.tone,
+            body.asks or beta.DEFAULT_ASKS,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return _beta_out(review, {c.id: c for c in chapters})
 
 
 @router.get("/projects/{project_id}/beta")
 def beta_reviews(project_id: str, session: SessionDep) -> list[BetaOut]:
     """Every kept review of the book, newest first."""
     project = _writer_project(session, project_id)
-    hashes = {c.id: c.content_hash for c in project.chapters}
+    chapters = {c.id: c for c in project.chapters}
     rows = session.scalars(
         select(BetaReview)
         .where(BetaReview.project_id == project.id)
         .order_by(BetaReview.created_at.desc())
     ).all()
-    return [_beta_out(r, hashes) for r in rows if r.chapter_id in hashes]
+    return [
+        _beta_out(r, chapters)
+        for r in rows
+        if r.chapter_id in chapters or any(i in chapters for i in r.chapter_ids or [])
+    ]
 
 
 @router.delete("/projects/{project_id}/beta/{review_id}", status_code=204)

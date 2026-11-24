@@ -954,3 +954,49 @@ def test_the_looks_step_always_gets_the_age(session, project):
     assert "ему 14 лет" in listing and "who it is (for the age only): Сын рыбака." in listing
     assert "the sex and the age" in prompts.looks_system("character")
     assert "the sex and the age" not in prompts.looks_system("location")
+
+
+def test_user_can_send_a_card_into_question_and_back_and_runs_keep_it(client, session, project):
+    run(session, project, FakeModel())
+    hero = cast(session, project)["Рыхташ"]
+    assert hero.uncertain is False
+
+    sent = client.put(f"/api/entities/{hero.id}/uncertain", json={"uncertain": True})
+    assert sent.status_code == 200 and sent.json()["uncertain"] is True
+    run(session, project, FakeModel())  # the model still sees a proper name
+    assert cast(session, project)["Рыхташ"].uncertain is True
+
+    back = client.put(f"/api/entities/{hero.id}/uncertain", json={"uncertain": False})
+    assert back.json()["uncertain"] is False
+    run(session, project, FakeModel())
+    assert cast(session, project)["Рыхташ"].uncertain is False
+    assert client.put("/api/entities/nope/uncertain", json={"uncertain": True}).status_code == 404
+
+
+def test_a_place_with_nothing_about_its_looks_gets_no_card(session, project):
+    chapter = project.chapters[0]
+
+    def place(name, category):
+        entity = Entity(project_id=project.id, kind="location", name=name, aliases=[])
+        entity.facts = [
+            EntityFact(chapter_id=chapter.id, chapter_hash="", category=category, text="x")
+        ]
+        session.add(entity)
+        return entity
+
+    place("Мельница", "permanent")  # looks: a picture can be drawn
+    place("Берег реки", "state")  # only weather and time of day: nothing to draw
+    place("Краина", "profile")
+    kept = place("Покой", "profile")
+    kept.uncertain_own = False  # the user confirmed it
+    hero = Entity(project_id=project.id, kind="character", name="Люта", aliases=[])
+    session.add(hero)
+    session.commit()
+
+    left = analysis.drop_faceless_places(
+        session, list(session.query(Entity).filter_by(project_id=project.id))
+    )
+    session.commit()
+    names = {e.name for e in session.query(Entity).filter_by(project_id=project.id)}
+    assert names == {"Мельница", "Покой", "Люта"}
+    assert {e.name for e in left} == names

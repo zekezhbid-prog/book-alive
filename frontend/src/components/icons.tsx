@@ -388,3 +388,20 @@ export function AiMark({ title }: { title?: string }) {
     </svg>
   )
 }
+
+export function CheckIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
+export function QuestionIcon() {
+  return (
+    <svg {...stroke}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.3-2.4 3.8M12 17h.01" />
+    </svg>
+  )
+}

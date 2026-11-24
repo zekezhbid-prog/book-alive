@@ -526,3 +526,18 @@ def test_card_file_must_be_a_card(client, project):
         data={"kind": "character"},
     )
     assert (response.status_code, response.json()["detail"]) == (422, "not_a_card_file")
+
+
+def test_a_place_is_drawn_with_the_users_note_and_no_face_talk(session, project):
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.system, self.facts = messages[0].content, messages[1].content
+            return "prompt"
+
+    mill = Entity(project_id=project.id, kind="location", name="Мельница", aliases=[])
+    session.add(mill)
+    session.commit()
+    model = Recorder()
+    build_image_prompt(model, project, mill, None, "", has_reference=True, note="вид сверху")
+    assert "The user asks for: вид сверху" in model.facts
+    assert "face" not in model.system

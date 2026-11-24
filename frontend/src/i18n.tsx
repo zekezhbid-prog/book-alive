@@ -182,6 +182,8 @@ const ru = {
   'entities.select': 'Выберите карточку слева.',
   'entities.aliases': 'Также',
   'entities.profile': 'Общее описание',
+  'entities.confirm': 'Подтвердить',
+  'entities.doubt': 'Под вопрос',
   'entities.uncertain': 'Под вопросом',
   'entities.uncertain.hint': 'Найдены без имени или группой: скорее всего, это кто-то из уже известных. Объедините с нужной карточкой через «Объединить с…».',
   'entities.profile.edit': 'Править общее описание',
@@ -563,7 +565,10 @@ const ru = {
   'beta.tone.soft': 'мягкий',
   'beta.tone.honest': 'честный',
   'beta.start': 'Получить отзыв',
-  'beta.many': 'Глав: {n}. На каждую главу — отдельный отзыв и отдельный запрос к модели.',
+  'beta.many': 'Глав: {n}. Будет один общий отзыв обо всём прочитанном: читатель делает заметки по каждой главе (запрос к модели на главу) и в конце пишет единый отзыв.',
+  'beta.writing': 'Читатель пишет общий отзыв…',
+  'beta.book': 'Вся книга',
+  'beta.chapters': 'Глав: {n}',
   'beta.reading': 'Читатель читает главу {done} из {n}…',
   'beta.saved': 'Отзывы бета-читателя: {n}',
   'beta.outdated': 'Глава изменилась после этого отзыва.',
@@ -685,6 +690,11 @@ const ru = {
   'generate.made': 'Картинка сохранена в референсах.',
   'generate.hint.main':
     'Базовая картинка показывает лицо или фигуру с одного ракурса. Первая рисуется с нуля по постоянным чертам карточки или от загруженного фото, следующие — от уже готовых базовых, чтобы лицо совпадало. Промпт можно поправить.',
+  'generate.hint.place':
+    'Базовые картинки этого места или предмета. Каждое нажатие «Сгенерировать» добавляет ещё одну: сколько нажали, столько картинок. Первая рисуется по описанию карточки, следующие — от уже готовых, чтобы облик совпадал.',
+  'generate.note': 'Уточнение',
+  'generate.note.placeholder': 'Например: вид сверху, ночью, издалека',
+  'generate.bases.empty': 'Базовых картинок пока нет: новая появится здесь.',
   'generate.hint.base_set':
     'Набор ракурсов по одному промпту с описанием внешности. Ракурс к каждой картинке добавится сам. Первая картинка станет референсом для остальных, чтобы лицо совпадало; загруженное фото — тоже.',
   'generate.hint.look':
@@ -1054,6 +1064,8 @@ const en: Record<keyof typeof ru, string> = {
   'entities.select': 'Pick a card on the left.',
   'entities.aliases': 'Also',
   'entities.profile': 'General description',
+  'entities.confirm': 'Confirm',
+  'entities.doubt': 'Mark as doubtful',
   'entities.uncertain': 'In question',
   'entities.uncertain.hint': 'Found without a name or as a group: probably someone already known. Merge it into the right card with “Merge with…”.',
   'entities.profile.edit': 'Edit the general description',
@@ -1434,7 +1446,10 @@ const en: Record<keyof typeof ru, string> = {
   'beta.tone.soft': 'gentle',
   'beta.tone.honest': 'honest',
   'beta.start': 'Get a review',
-  'beta.many': 'Chapters: {n}. Each chapter gets its own review and its own model request.',
+  'beta.many': 'Chapters: {n}. One review of everything read: the reader makes notes on each chapter (one model request per chapter) and then writes a single review.',
+  'beta.writing': 'The reader is writing the review…',
+  'beta.book': 'The whole book',
+  'beta.chapters': 'Chapters: {n}',
   'beta.reading': 'The reader is reading chapter {done} of {n}…',
   'beta.saved': 'Beta reader reviews: {n}',
   'beta.outdated': 'The chapter changed after this review.',
@@ -1556,6 +1571,11 @@ const en: Record<keyof typeof ru, string> = {
   'generate.made': 'The picture is saved to the references.',
   'generate.hint.main':
     'A base picture shows the face or the figure from one view. The first is drawn from scratch from the card’s permanent traits or from an uploaded photo, the next ones from the base pictures already there, so the face matches. The prompt can be edited.',
+  'generate.hint.place':
+    'Base pictures of this place or object. Each press of “Generate” adds one more: as many presses, as many pictures. The first is drawn from the card, the next ones from those already there, so the look stays the same.',
+  'generate.note': 'Refinement',
+  'generate.note.placeholder': 'For example: a view from above, at night, from afar',
+  'generate.bases.empty': 'No base pictures yet: a new one will appear here.',
   'generate.hint.base_set':
     'A set of views from one prompt describing the appearance. Each picture gets its view added. The first picture becomes the reference for the rest, so the face matches; an uploaded photo does too.',
   'generate.hint.look':

@@ -64,6 +64,8 @@ interface Props {
 interface Job {
   done: number
   total: number
+  /** The notes are read: the review of the whole read is being written. */
+  writing?: boolean
 }
 
 /** A living review of chapters, as from a reader the author knows. The button opens a
@@ -86,12 +88,20 @@ export default function BetaReader({ project, chapterId, busy, onBusy }: Props) 
     onBusy(true)
     const made: BetaReview[] = []
     try {
-      for (const [n, id] of chapterIds.entries()) {
-        setJob({ done: n, total: chapterIds.length })
-        const review = await api.betaReview(project.id, id, choice)
-        made.push(review)
-        setReviews((list) => [review, ...list])
+      if (chapterIds.length === 1) {
+        setJob({ done: 0, total: 1 })
+        made.push(await api.betaReview(project.id, chapterIds[0], choice))
+      } else {
+        // Several chapters get one review: notes chapter by chapter, then the review itself.
+        const notes: string[] = []
+        for (const [n, id] of chapterIds.entries()) {
+          setJob({ done: n, total: chapterIds.length + 1 })
+          notes.push((await api.betaNotes(project.id, id, choice.reader)).notes)
+        }
+        setJob({ done: chapterIds.length, total: chapterIds.length + 1, writing: true })
+        made.push(await api.betaBookReview(project.id, chapterIds, notes, choice))
       }
+      setReviews((list) => [...made, ...list])
     } catch (e) {
       setError(errorText(t, e))
     }
@@ -121,7 +131,11 @@ export default function BetaReader({ project, chapterId, busy, onBusy }: Props) 
         <CheckWindow title={t('beta.title')} onClose={() => setOpen(false)}>
           {job ? (
             <CheckProgress
-              text={t('beta.reading', { done: job.done + 1, n: job.total })}
+              text={
+                job.writing
+                  ? t('beta.writing')
+                  : t('beta.reading', { done: job.done + 1, n: job.total > 1 ? job.total - 1 : 1 })
+              }
               done={job.done}
               total={job.total}
             />
@@ -172,7 +186,14 @@ function ReviewList({ project, reviews, full, onOpen, onRemove, onLeave }: ListP
   const { t } = useI18n()
   const whenText = useWhen()
   const navigate = useNavigate()
-  const title = (id: string) => project.chapters.find((c) => c.id === id)?.title || t('book.untitled')
+  const chapterTitle = (id: string) => project.chapters.find((c) => c.id === id)?.title || t('book.untitled')
+  // One review of several chapters: the whole book, or how many chapters it read.
+  const title = (review: BetaReview) =>
+    review.chapter_id
+      ? chapterTitle(review.chapter_id)
+      : review.chapter_ids.length >= project.chapters.filter((c) => !c.private && c.chars > 0).length
+        ? t('beta.book')
+        : t('beta.chapters', { n: review.chapter_ids.length })
   return (
     <ul className="history">
       {reviews.map((review) => (
@@ -184,11 +205,12 @@ function ReviewList({ project, reviews, full, onOpen, onRemove, onLeave }: ListP
                 title={onOpen ? undefined : t('review.open')}
                 onClick={() => {
                   if (onOpen) return onOpen(review)
+                  if (!review.chapter_id) return
                   onLeave?.()
                   navigate(`/projects/${project.id}/chapters/${review.chapter_id}`)
                 }}
               >
-                <span className="small">{title(review.chapter_id)}</span>
+                <span className="small">{title(review)}</span>
                 <span className="faint small">
                   {t(`beta.reader.${review.reader}` as MessageKey)} · {t(`beta.tone.${review.tone}` as MessageKey)} ·{' '}
                   {whenText(review.created_at)}
@@ -232,7 +254,8 @@ function BetaSetup({ project, initial, onStart }: SetupProps) {
   const { t } = useI18n()
   const [choice, setChoice] = useState(() => savedChoice(project.id))
   const [selected, setSelected] = useState(() => new Set(initial ? [initial] : []))
-  const ids = project.chapters.filter((c) => selected.has(c.id)).map((c) => c.id)
+  // A private chapter is never sent to a model, an empty one has nothing to read.
+  const ids = project.chapters.filter((c) => selected.has(c.id) && !c.private && c.chars > 0).map((c) => c.id)
   const update = (next: Choice) => {
     setChoice(next)
     saveChoice(project.id, next)
