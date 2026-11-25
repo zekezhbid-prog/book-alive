@@ -645,6 +645,10 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .face-check-prompt .two-lang { height: 220px; }
 .face-check-buttons { gap: 10px; justify-content: center; }
 /* "What to change" over the face: its own small window. */
+/* A character's outward looks over the set's slots. */
+.variant-bar { gap: 6px; }
+.variant-bar .chip.active { border-color: var(--accent); color: var(--accent); }
+.variant-offer { gap: 6px; padding: 10px; border: 1px dashed var(--accent-line); border-radius: var(--radius); }
 /* A scene's two texts; an offer to add more shows the new parts lit, softer than a search hit. */
 .scene-summary { white-space: pre-wrap; line-height: 1.6; margin: 0; }
 .enrich-offer mark { background: rgba(250, 204, 21, 0.2); color: inherit; box-shadow: none; border-bottom: 1px solid var(--accent); }

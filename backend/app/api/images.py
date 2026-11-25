@@ -26,6 +26,7 @@ from app.images.prompts import (
     LANGUAGES,
     build_image_prompt,
     chapters_between,
+    find_variants,
     refine_image_prompt,
     translate_prompt,
 )
@@ -71,6 +72,7 @@ class ImageOut(BaseModel):
     current_style: bool
     is_main: bool
     angle: str
+    variant: str = ""
     look_label: str
     chapter_from_id: str
     chapter_to_id: str
@@ -84,6 +86,7 @@ class ImageOut(BaseModel):
 class ImagePatch(BaseModel):
     is_main: bool | None = None
     angle: str | None = None
+    variant: str | None = Field(default=None, max_length=40)
     look_label: str | None = Field(default=None, max_length=200)
     chapter_from_id: str | None = None
     chapter_to_id: str | None = None
@@ -97,6 +100,8 @@ class LookRequest(BaseModel):
     look_label: str = Field(default="", max_length=200)
     chapter_from_id: str = ""
     chapter_to_id: str = ""
+    # A character's outward look (`Entity.variants` key) the base picture is drawn for.
+    variant: str = Field(default="", max_length=40)
     # The user's own samples ("make it look like this"): pictures of the project, sent to
     # the image model first; the card's main pictures fill the remaining places.
     reference_ids: list[str] = Field(default_factory=list, max_length=angles.DRAWING_LIMIT)
@@ -165,6 +170,7 @@ def _out(image: Image, project: Project) -> ImageOut:
         current_style=image.style_key == style_key(project),
         is_main=image.is_main,
         angle=image.angle,
+        variant=image.variant or "",
         look_label=image.look_label,
         chapter_from_id=image.chapter_from_id,
         chapter_to_id=image.chapter_to_id,
@@ -364,6 +370,8 @@ def update_image(image_id: str, patch: ImagePatch, session: SessionDep) -> Image
         if patch.angle not in ("", *angles.ANGLES):
             raise HTTPException(422, "bad_angle")
         image.angle = patch.angle
+    if patch.variant is not None:
+        image.variant = patch.variant
     if patch.look_label is not None:
         image.look_label = patch.look_label.strip()
     if patch.chapter_from_id is not None:
@@ -394,6 +402,8 @@ class Drawing:
     chapters: list[Chapter] | None  # None: a main picture
     angle: str
     references: list[Image]
+    # The outward look a base picture is drawn for; None: the card has one look.
+    variant: dict | None = None
 
 
 def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
@@ -403,19 +413,36 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
     chapters = (
         chapters_between(project, body.chapter_from_id, body.chapter_to_id) if is_look else None
     )
+    variant = None
+    if body.variant and not is_look:
+        variant = next((v for v in entity.variants or [] if v.get("key") == body.variant), None)
+        if variant is None:
+            raise HTTPException(404, "variant_not_found")
+    # Each look is a set of its own: views and references come from its pictures only.
+    own = [i for i in entity.images if (i.variant or "") == (body.variant if not is_look else "")]
     angle = ""
     if not is_look and entity.kind == KIND_CHARACTER:
         if body.angle and body.angle not in angles.ANGLES:
             raise HTTPException(422, "bad_angle")
-        angle = body.angle or angles.next_angle(entity.images, key)
+        angle = body.angle or angles.next_angle(own if variant else entity.images, key)
     # Every new picture is drawn from the main ones, so the face stays the same;
     # the very first main picture starts from nothing. The user's samples go first.
     samples = [session.get(Image, image_id) for image_id in dict.fromkeys(body.reference_ids)]
     if any(image is None or image.project_id != project.id for image in samples):
         raise HTTPException(404, "image_not_found")
     references = [image for image in samples if image is not None]
-    references += [i for i in angles.for_drawing(entity.images, key) if i not in references]
-    return Drawing(project, chapters, angle, references[: angles.DRAWING_LIMIT])
+    if variant is None:
+        drawn_from = angles.for_drawing(entity.images, key)
+    else:
+        # A new look starts from the face of a look already there (owner's notes 25.11), so
+        # it stays the same person; a thing-like shape is not drawn from a human face.
+        drawn_from = angles.for_drawing(own, key)
+        if not drawn_from and variant.get("shape") != "object":
+            human = {v["key"] for v in entity.variants if v.get("shape") != "object"}
+            others = [i for i in entity.images if i.variant in human and i.angle == "face_front"]
+            drawn_from = angles.for_drawing(others, key)[:1]
+    references += [i for i in drawn_from if i not in references]
+    return Drawing(project, chapters, angle, references[: angles.DRAWING_LIMIT], variant)
 
 
 @router.post("/entities/{entity_id}/image-prompt")
@@ -439,6 +466,7 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
             "" if view_free else drawing.angle,
             view_free,
             body.note,
+            drawing.variant,
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
@@ -525,6 +553,7 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
         style_key=key,
         is_main=not is_look,
         angle=drawing.angle,
+        variant=drawing.variant["key"] if drawing.variant else "",
         look_label=body.look_label.strip(),
         chapter_from_id=body.chapter_from_id,
         chapter_to_id=body.chapter_to_id,
@@ -537,6 +566,57 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
     session.add(image)
     session.commit()
     return _out(image, project)
+
+
+# ---------- outward looks ----------
+
+
+class Variant(BaseModel):
+    key: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=2000)
+    shape: str = "human"
+
+    @field_validator("shape")
+    @classmethod
+    def known_shape(cls, value: str) -> str:
+        return value if value in ("human", "object") else "human"
+
+
+@router.get("/entities/{entity_id}/variants")
+def get_variants(entity_id: str, session: SessionDep) -> list[Variant]:
+    return [Variant(**v) for v in _entity(session, entity_id).variants or []]
+
+
+@router.post("/entities/{entity_id}/variants/find")
+def find_entity_variants(entity_id: str, session: SessionDep) -> list[Variant]:
+    """The text model lists the character's outward looks; shown, saved only by the user."""
+    entity = _entity(session, entity_id)
+    model = _prompt_model(session, entity_id)
+    try:
+        found = find_variants(model, entity)
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return [Variant(**v) for v in found]
+
+
+@router.put("/entities/{entity_id}/variants")
+def save_variants(entity_id: str, body: list[Variant], session: SessionDep) -> list[Variant]:
+    """The looks the user kept. Pictures of a dropped look stay, shown with no look."""
+    entity = _entity(session, entity_id)
+    if len(body) > 8:
+        raise HTTPException(422, "too_many_variants")
+    had_looks = bool(entity.variants)
+    entity.variants = [v.model_dump() for v in body]
+    kept = {v.key for v in body}
+    for image in entity.images:
+        if image.variant and image.variant not in kept:
+            image.variant = ""
+        # The first looks of a card: the base pictures drawn so far belong to the first one.
+        if not had_looks and body and image.is_main and not image.variant:
+            image.variant = body[0].key
+    session.commit()
+    return body
 
 
 # ---------- cards made by hand ----------

@@ -7,6 +7,7 @@ import {
   type EntityKind,
   type ImageInfo,
   type ImageSize,
+  type Variant,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
@@ -274,7 +275,7 @@ interface DialogProps {
 type Mode = 'base' | 'context'
 
 // A base set is drawn face first: that picture becomes the reference for the rest.
-const SET_ORDER: Angle[] = [
+const FULL_ORDER: Angle[] = [
   'face_front',
   'face_three_quarter',
   'face_profile',
@@ -282,6 +283,8 @@ const SET_ORDER: Angle[] = [
   'full_side',
   'full_back',
 ]
+// A thing-like look (a seed, a stone) needs only two views (owner's notes 25.11).
+const OBJECT_ORDER: Angle[] = ['face_front', 'full_front']
 
 /** A large thin plus for empty places: faint at rest, glowing gold under the pointer. */
 function ThinPlus() {
@@ -369,7 +372,7 @@ function latest(bases: ImageInfo[], view: Angle) {
 export function ImageDialog({
   projectId,
   entityId,
-  bases,
+  bases: allBases,
   looks = [],
   withAngles,
   chapters,
@@ -381,14 +384,14 @@ export function ImageDialog({
   const [current, setCurrent] = useState<ImageInfo | null>(null)
   const [mode, setMode] = useState<Mode>('base')
   // Ticked views; only empty slots are drawn, so a filled one counts only once deleted.
-  const [views, setViews] = useState<Angle[]>(SET_ORDER)
+  const [views, setViews] = useState<Angle[]>(FULL_ORDER)
   const [look, setLook] = useState('')
   // A place or object: the user's wish for the next picture ("a view from above").
   const [note, setNote] = useState('')
   const [chapter, setChapter] = useState('')
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageSize | ''>('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort'>('')
+  const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort' | 'variants'>('')
   // After the first face of an empty set: the views still to draw once the user likes it.
   const [pending, setPending] = useState<{ views: Angle[]; references: string[] } | null>(null)
   // The face shown large in its own little window, waiting for "like it" or "redraw".
@@ -420,6 +423,21 @@ export function ImageDialog({
   const [remarkOpen, setRemarkOpen] = useState(false)
   // A filled slot or picture clicked: its prompt and references are shown instead of the form.
   const [inspected, setInspected] = useState<ImageInfo | null>(null)
+  // A character's outward looks, each a set of its own; the one whose slots are shown.
+  const [variants, setVariants] = useState<Variant[]>([])
+  const [variantKey, setVariantKey] = useState('')
+  // Looks the model found, waiting for "Save" or "Cancel".
+  const [found, setFound] = useState<Variant[] | null>(null)
+  useEffect(() => {
+    if (!withAngles) return
+    api.variants(entityId).then((list) => {
+      setVariants(list)
+      setVariantKey((now) => now || list[0]?.key || '')
+    }, () => {})
+  }, [entityId, withAngles])
+  const variant = variants.find((v) => v.key === variantKey) ?? null
+  const SET_ORDER = variant?.shape === 'object' ? OBJECT_ORDER : FULL_ORDER
+  const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
   // The prompt in English and in the interface language, wherever it can be edited.
   const twoLang = useTwoLang(entityId, prompt, setPrompt, !autoPrompt || !!faceCheck, setError)
 
@@ -442,7 +460,7 @@ export function ImageDialog({
   const shown = current ?? firstView ?? (!isMain ? pickedLook : null)
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
-    ? { angle: '' as const, look_label: '', chapter_from_id: '', chapter_to_id: '' }
+    ? { angle: '' as const, look_label: '', chapter_from_id: '', chapter_to_id: '', variant: variant?.key ?? '' }
     : { angle: '' as const, look_label: look.trim(), chapter_from_id: chapter, chapter_to_id: chapter }
   // The server tells a look by its label or chapter: without them it would draw a base picture.
   const ready = isMain ? !asSet || wanted.length > 0 : Boolean(look.trim() || chapter)
@@ -536,7 +554,7 @@ export function ImageDialog({
       const file = samples[index].file
       const ready = ratio ? await padTo(file, ratio[0] / ratio[1]) : file
       const [made] = await api.uploadImages(projectId, [ready], entityId)
-      const saved = await api.updateImage(made.id, { is_main: true, angle, look_label: '' })
+      const saved = await api.updateImage(made.id, { is_main: true, angle, variant: variant?.key ?? '', look_label: '' })
       setCurrent(saved)
       filled.push(angle)
     }
@@ -740,6 +758,34 @@ export function ImageDialog({
       setError(t('gallery.paste.denied'))
     }
   }
+  // The model looks for the character's outward looks; the user keeps some or none.
+  const findLooks = async () => {
+    setBusy('variants')
+    setError('')
+    try {
+      setFound(await api.findVariants(entityId))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  // Kept looks replace the old list; pictures drawn before any look go to the first one.
+  const keepLooks = async () => {
+    if (!found) return
+    setBusy('variants')
+    try {
+      const saved = await api.saveVariants(entityId, found)
+      setVariants(saved)
+      setVariantKey(saved[0]?.key ?? '')
+      setFound(null)
+      setCurrent(null)
+      setInspected(null)
+      onChanged()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
   // The small menu of the new picture's plus: from a file or from the clipboard.
   const insertMenu = (target: 'look') =>
     menuFor === target && (
@@ -844,6 +890,69 @@ export function ImageDialog({
               </span>
             )}
           </div>
+          {/* A character's outward looks: each one is a set of its own (owner's notes 25.11). */}
+          {asSet && (
+            <div className="stack variant-bar">
+              <div className="row wrap">
+                {variants.map((v) => (
+                  <button
+                    key={v.key}
+                    className={`chip ${v.key === variantKey ? 'active' : ''}`}
+                    disabled={busy !== '' || !!pending}
+                    title={v.description}
+                    onClick={() => {
+                      setVariantKey(v.key)
+                      setCurrent(null)
+                      setInspected(null)
+                      setPeek('')
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+                <span className="spacer" />
+                <button
+                  className="btn ghost small"
+                  disabled={busy !== '' || !!pending || !!found}
+                  title={t('variants.find.hint')}
+                  onClick={findLooks}
+                >
+                  <SparklesIcon />
+                  {busy === 'variants' ? t('variants.finding') : t('variants.find')}
+                </button>
+              </div>
+              {variant && <p className="faint small">{variant.description}</p>}
+              {found && (
+                <div className="stack variant-offer">
+                  <span className="small muted">{t('variants.found', { n: found.length })}</span>
+                  {found.map((v) => (
+                    <div key={v.key} className="row">
+                      <span className="grow small">
+                        <b>{v.label}</b> · {t(`variants.shape.${v.shape}`)} — {v.description}
+                      </span>
+                      <button
+                        className="btn ghost small icon"
+                        title={t('app.delete')}
+                        aria-label={t('app.delete')}
+                        onClick={() => setFound(found.filter((x) => x.key !== v.key))}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <div className="row">
+                    <button className="btn primary small" disabled={busy !== ''} onClick={keepLooks}>
+                      <CheckIcon />
+                      {t('generate.face.apply')}
+                    </button>
+                    <button className="btn ghost small" onClick={() => setFound(null)}>
+                      {t('app.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {/* The set as slots: what is there, what is missing, what is drawn on the next press. */}
           {asSet && (
             <div className="view-slots">

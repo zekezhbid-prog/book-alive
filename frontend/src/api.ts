@@ -425,6 +425,8 @@ export interface ImageInfo {
   is_main: boolean
   /** The view a main picture shows; empty when not set. */
   angle: Angle | ''
+  /** The card's outward look (`Variant.key`) a base picture belongs to; empty: the only one. */
+  variant: string
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
@@ -456,8 +458,18 @@ export interface LookRequest {
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
+  /** The outward look a base picture is drawn for. */
+  variant?: string
   /** The user's own samples, sent to the image model first. */
   reference_ids?: string[]
+}
+
+/** One outward look of a character, drawn as its own set: "human" six views, "object" two. */
+export interface Variant {
+  key: string
+  label: string
+  description: string
+  shape: 'human' | 'object'
 }
 
 export interface SceneBrief {
@@ -781,10 +793,15 @@ export const api = {
   updateImage: (
     id: string,
     patch: Partial<
-      Pick<ImageInfo, 'is_main' | 'angle' | 'look_label' | 'chapter_from_id' | 'chapter_to_id'>
+      Pick<ImageInfo, 'is_main' | 'angle' | 'variant' | 'look_label' | 'chapter_from_id' | 'chapter_to_id'>
     >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
+  variants: (entityId: string) => request<Variant[]>('GET', `/entities/${entityId}/variants`),
+  /** The model's list of the card's outward looks; nothing is saved until `saveVariants`. */
+  findVariants: (entityId: string) => request<Variant[]>('POST', `/entities/${entityId}/variants/find`),
+  saveVariants: (entityId: string, variants: Variant[]) =>
+    request<Variant[]>('PUT', `/entities/${entityId}/variants`, variants),
   /** The prompt in another language (`ru`, `by` or `en`): the other half of the two-language field. */
   translateImagePrompt: (entityId: string, text: string, language: string) =>
     request<{ text: string }>('POST', `/entities/${entityId}/image-prompt/translate`, { text, language }),

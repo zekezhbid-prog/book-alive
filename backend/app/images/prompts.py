@@ -1,6 +1,7 @@
 """Turning a card (facts in the book's language) into an English image prompt."""
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
 
 from app.images.angles import ANGLES
 from app.images.styles import style_prompt
@@ -13,6 +14,7 @@ from app.models import (
     Chapter,
     Entity,
     Project,
+    new_id,
 )
 
 SYSTEM = """You write one prompt for an AI image generator. The picture is a reference \
@@ -65,6 +67,7 @@ def build_image_prompt(
     angle: str = "",
     view_free: bool = False,
     note: str = "",
+    variant: dict | None = None,
 ) -> str:
     """`chapters` given: a look at that point of the story (its state facts are used).
     None: a main picture, from permanent traits only, in the given view, or with
@@ -79,6 +82,11 @@ def build_image_prompt(
     who = ""
     if entity.kind == KIND_CHARACTER:
         who = " ".join((entity.description or entity.summary).split())[:400]
+    if variant is not None and chapters is None:
+        # One outward look of several: only its own description, so the model cannot mix in
+        # the others (owner's notes 25.11: a kerchief and loose hair in one picture).
+        appearance, permanent = variant.get("description", ""), []
+        who = f"{who} (shown here as: {variant.get('label', '')})".strip()
     facts = "\n".join(
         [
             f"Name: {entity.name}",
@@ -86,8 +94,11 @@ def build_image_prompt(
             *([f"Appearance: {appearance}"] if appearance else []),
             # Who it is often tells the age (a boy, a grandmother) when the looks do not.
             *([f"Who it is: {who}"] if who else []),
-            "Permanent traits:",
-            *(f"- {t}" for t in permanent or ["(none described)"]),
+            *(
+                ["Permanent traits:", *(f"- {t}" for t in permanent or ["(none described)"])]
+                if variant is None or chapters is not None
+                else []
+            ),
             *(["At this point of the story:", *(f"- {t}" for t in state)] if state else []),
             *([f"The look to show: {look_label}"] if look_label else []),
             *([f"The user asks for: {note.strip()}"] if note.strip() else []),
@@ -159,3 +170,60 @@ def refine_image_prompt(model: TextModel, prompt: str, change: str) -> str:
     return model.invoke(
         "refine_image_prompt", [SystemMessage(REFINE_SYSTEM), HumanMessage(request)]
     ).strip()
+
+
+VARIANTS_SYSTEM = """Below is everything a book says about how one character looks. Decide \
+whether the character has more than one distinct outward look that must be drawn as \
+separate reference sheets: the same person dressed or groomed in clearly different ways (in \
+a kerchief and with loose hair), or one being that appears under several names and shapes \
+(a cat that is at times a tiny seed-like creature). Small changes of clothes in one scene \
+are not separate looks.
+
+For each look give:
+- "label": a few words in the language of the book, with the name used for that look \
+when the book has one;
+- "description": how the character looks in this look only, in the language of the book, \
+from the facts, without anything from the other looks;
+- "shape": "human" for a person or a human-like or animal body, "object" for something \
+closer to a thing (a seed, a stone, a lantern).
+
+One look is the usual answer. Reply with one JSON object and nothing else:
+{"variants": [{"label": "", "description": "", "shape": "human"}]}"""
+
+
+class VariantDraft(BaseModel):
+    label: str
+    description: str = ""
+    shape: str = "human"
+
+
+class VariantDrafts(BaseModel):
+    variants: list[VariantDraft] = Field(default_factory=list)
+
+
+def find_variants(model: TextModel, entity: Entity) -> list[dict]:
+    """The character's outward looks, each with its own description: what a set of base
+    pictures is drawn for. Keys are new; the caller decides what to keep."""
+    lines = [
+        f"Name: {entity.name}",
+        *([f"Other names: {', '.join(entity.aliases)}"] if entity.aliases else []),
+        *([f"Appearance: {a}"] if (a := entity.appearance_own or entity.appearance) else []),
+        *([f"Who it is: {w}"] if (w := entity.description or entity.summary) else []),
+        "Facts:",
+        *(f"- {f.text}" for f in entity.facts if f.category in (FACT_PERMANENT, FACT_STATE)),
+    ]
+    answer = model.invoke_json(
+        "image_variants",
+        [SystemMessage(VARIANTS_SYSTEM), HumanMessage("\n".join(lines))],
+        VariantDrafts,
+    )
+    return [
+        {
+            "key": new_id()[:8],
+            "label": draft.label.strip()[:120],
+            "description": draft.description.strip()[:2000],
+            "shape": "object" if draft.shape == "object" else "human",
+        }
+        for draft in answer.variants
+        if draft.label.strip()
+    ][:8]

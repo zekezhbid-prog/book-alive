@@ -201,6 +201,10 @@ class Entity(Base):
     # never touch it.
     appearance: Mapped[str] = mapped_column(Text, default="")
     appearance_own: Mapped[str] = mapped_column(Text, default="")
+    # A character's outward looks, each drawn as its own set of base pictures (in a kerchief
+    # and without; one being under several names and shapes): [{key, label, description,
+    # shape}], shape "human" (six views) or "object" (two). Found on the user's press.
+    variants: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # What the author told about the card in "Improve" and the book does not say: true
     # without a quote, heard by every later run. A note the text confirms becomes a fact.
     author_notes: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -370,6 +374,8 @@ class Image(Base):
     # Main pictures define face and build, one view each; the others are looks drawn from them.
     is_main: Mapped[bool] = mapped_column(default=False)
     angle: Mapped[str] = mapped_column(String(20), default="")  # see app/images/angles.py
+    # The key of the card's outward look this base picture belongs to; empty: the only one.
+    variant: Mapped[str] = mapped_column(String(40), default="")
     look_label: Mapped[str] = mapped_column(String(200), default="")
     # Part of the story the look belongs to; empty means an open end.
     chapter_from_id: Mapped[str] = mapped_column(String(32), default="")

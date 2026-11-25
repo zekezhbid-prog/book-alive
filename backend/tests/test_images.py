@@ -587,3 +587,60 @@ def test_a_character_prompt_keeps_only_what_is_seen(session, project):
     build_image_prompt(model, project, hero, None, "", has_reference=False, view_free=True)
     # Owner's notes 25.11: the voice and a limp went into the face picture's prompt.
     assert "Leave out the voice, the way of walking" in model.system
+
+
+def test_each_outward_look_is_its_own_set_drawn_from_the_first(
+    client, session, project, monkeypatch
+):
+    # Owner's notes 25.11: Zhurei in a kerchief and with loose hair are two sets; the prompt
+    # of one look sees only its own description, and a new look starts from an approved face.
+    looks = [
+        {"key": "kerchief", "label": "в платке", "description": "красный платок", "shape": "human"},
+        {
+            "key": "loose",
+            "label": "без платка",
+            "description": "волосы на плечах",
+            "shape": "human",
+        },
+        {"key": "seed", "label": "Зернейка", "description": "зёрнышко", "shape": "object"},
+    ]
+    saved = client.put(f"/api/entities/{project.hero_id}/variants", json=looks)
+    assert [v["key"] for v in saved.json()] == ["kerchief", "loose", "seed"]
+
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.facts = messages[1].content
+            return "prompt"
+
+    hero = session.get(Entity, project.hero_id)
+    session.refresh(hero)
+    model = Recorder()
+    build_image_prompt(model, project, hero, None, "", False, view_free=True, variant=looks[1])
+    assert "волосы на плечах" in model.facts
+    assert "платок" not in model.facts and "рыжие волосы" not in model.facts
+
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append(len(references))
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.images.ImageModel", Painter)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    draw = lambda variant: client.post(
+        url, json={"prompt": "p", "angle": "face_front", "add_view": True, "variant": variant}
+    ).json()
+    first = draw("kerchief")
+    second = draw("loose")
+    seed = draw("seed")
+    assert (first["variant"], second["variant"]) == ("kerchief", "loose")
+    # The second look is drawn from the first one's face; the seed from nothing human.
+    assert second["reference_ids"] == [first["id"]] and seed["reference_ids"] == []
+    assert drawn == [0, 1, 0]
+    missing = client.post(url, json={"prompt": "p", "variant": "nope"})
+    assert missing.status_code == 404
