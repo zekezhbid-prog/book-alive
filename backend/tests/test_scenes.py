@@ -33,6 +33,15 @@ class FakeModel:
         }
 
     def invoke_json(self, operation, messages, schema):
+        if schema is service.EnrichAnswer:
+            self.system, self.context = messages[0].content, messages[1].content
+            return schema.model_validate(
+                {
+                    "text": "Люта ждёт у жернова. Мука пылит в луче света.",
+                    "added": ["Мука пылит в луче света.", "Этого нет в тексте."],
+                    "why": "Мельница в работе.",
+                }
+            )
         if schema is service.VideoAnswer:
             self.system, self.context = messages[0].content, messages[1].content
             return schema.model_validate(self.video)
@@ -134,6 +143,32 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
         ("auto", "Вся глава"),
         ("manual", "Она молча протянула ему серебряный ключ."),
     ]
+
+
+def test_names_in_a_title_line_are_not_the_scene_cast(session, book):
+    # Owner's notes 25.11: Tsmok came into a scene from the book title at the chapter's top.
+    text = "ЛЮТА И МЕЛЬНИЦА\n\nРыхташ шёл по дороге один."
+    chapter = Chapter(project_id=book.id, position=2, title="", text=text, content_hash="x")
+    session.add(chapter)
+    session.commit()
+    model = FakeModel([{"from": 0, "to": 1, "title": "Дорога", "characters": ["Люта", "Рыхташ"]}])
+    [scene] = service.split_chapter(session, model, chapter)
+    assert {session.get(Entity, i).name for i in scene.entity_ids} == {"Рыхташ"}
+    assert service.is_heading("Пасланцы Цмока", "Пасланцы Цмока MAIN", "")
+    assert not service.is_heading("Цмок!", "Пасланцы Цмока MAIN", "")
+    assert not service.is_heading("Адбыўся цуд.", "Пасланцы Цмока MAIN", "")
+    manual = service.mark_scene(session, chapter, 0, 1, "")
+    assert {session.get(Entity, i).name for i in manual.entity_ids} == {"Рыхташ"}
+
+
+def test_enrich_suggests_and_marks_only_what_is_in_the_text(session, book):
+    scene = service.mark_scene(session, book.mill, 2, 3, "Ключ")
+    model = FakeModel()
+    answer = service.enrich_scene(session, model, book, scene, book.mill)
+    assert answer.added == ["Мука пылит в луче света."]
+    # The paragraphs around the scene are given to the model; nothing is saved yet.
+    assert "Колесо скрипело" in model.context and "К вечеру" in model.context
+    assert session.get(Scene, scene.id).summary == ""
 
 
 def test_references_follow_the_chapter_and_the_current_style(session, book):

@@ -33,7 +33,13 @@ The paragraphs are numbered from 0.
 A scene is a continuous stretch of the text in one place and time. Rules:
 - Cover every paragraph, in order, with no gaps and no overlaps.
 - "from" and "to" are paragraph numbers, inclusive.
-- "title": a few words. "summary": one sentence. Both in the language of the chapter.
+- "title": a few words, in the language of the chapter.
+- "summary": the scene as a film director would see it, 3 to 6 sentences in the language \
+of the chapter: where and when it happens and what the place looks like, who is there, \
+what they do one after another, what happens and why it matters for the story. Read the \
+paragraphs around the scene to understand what is going on and say it plainly, but add \
+no events the chapter does not give.
+- A paragraph marked [heading] is a title of the book or the chapter, not part of the story.
 - "vivid": true for the two or three scenes of the chapter that would look most striking \
 on screen, false for the rest.
 - "characters": names of those who take part, as the text writes them. "location": the \
@@ -95,6 +101,39 @@ def paragraphs_of(chapter: Chapter) -> list[str]:
     return chapter.text.split("\n\n") if chapter.text else []
 
 
+def _folded(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", text).casefold().split())
+
+
+def is_heading(paragraph: str, project_title: str, chapter_title: str) -> bool:
+    """A title line inside the chapter text ("ПАСЛАНЦЫ ЦМОКА"): the book's or the chapter's
+    name, or a short line in capitals without a sentence end. Names in it are not the
+    scene's cast (owner's notes 25.11: Tsmok was taken from the book title)."""
+    line = paragraph.strip()
+    if not line or "\n" in line or len(line.split()) > 10:
+        return False
+    folded = _folded(line)
+    if not folded:
+        return True
+    if folded == _folded(chapter_title) or folded == _folded(project_title):
+        return True
+    # The book's title with a working mark ("… MAIN"): two words or more of it, in order.
+    if len(folded.split()) >= 2 and f" {folded} " in f" {_folded(project_title)} ":
+        return True
+    letters = [c for c in line if c.isalpha()]
+    return len(letters) >= 3 and line.upper() == line and line[-1] not in ".!?…"
+
+
+def _story_text(paragraphs: list[str], project_title: str, chapter_title: str) -> str:
+    """The paragraphs without title lines: what the cast of a scene is looked for in."""
+    return "\n\n".join(p for p in paragraphs if not is_heading(p, project_title, chapter_title))
+
+
+def _project_title(session: Session, chapter: Chapter) -> str:
+    project = session.get(Project, chapter.project_id)
+    return project.title if project else ""
+
+
 def scene_text(scene: Scene, chapter: Chapter) -> str:
     return "\n\n".join(paragraphs_of(chapter)[scene.paragraph_from : scene.paragraph_to + 1])
 
@@ -104,19 +143,22 @@ def _stem(name: str) -> str:
     return re.sub(r"(?<=.{3})[аяоеыиьйуюіaeo]$", "", name.strip().casefold())
 
 
+def _mentions(text: str, name: str) -> bool:
+    """The name, with any Slavic ending, in the text."""
+    stem = _stem(name)
+    return len(stem) >= 3 and bool(
+        re.search(rf"(?<!\w){re.escape(stem)}\w{{0,3}}(?!\w)", text.casefold())
+    )
+
+
 def entities_in(session: Session, project_id: str, text: str, named: list[str]) -> list[str]:
     """Cards that belong to a stretch of text: named by the model, or found by name."""
-    lowered = text.casefold()
     wanted = {norm(n) for n in named if n.strip()}
     found = []
     for entity in session.scalars(select(Entity).where(Entity.project_id == project_id)):
         names = [entity.name, *entity.aliases]
         by_model = any(norm(n) in wanted for n in names)
-        by_text = any(
-            re.search(rf"(?<!\w){re.escape(_stem(n))}\w{{0,3}}(?!\w)", lowered)
-            for n in names
-            if len(_stem(n)) >= 3
-        )
+        by_text = any(_mentions(text, n) for n in names)
         if by_model or by_text:
             found.append(entity.id)
     return found
@@ -126,7 +168,12 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
     """Ask the model for scene boundaries. Replaces the chapter's earlier automatic
     scenes; scenes the user marked by hand stay."""
     paragraphs = paragraphs_of(chapter)
-    numbered = "\n\n".join(f"[{n}] {text}" for n, text in enumerate(paragraphs))
+    book = _project_title(session, chapter)
+    numbered = "\n\n".join(
+        f"[{n}] [heading] {text}" if is_heading(text, book, chapter.title) else f"[{n}] {text}"
+        for n, text in enumerate(paragraphs)
+    )
+    headings = "\n".join(p for p in paragraphs if is_heading(p, book, chapter.title))
     answer = model.invoke_json(
         "split_scenes", [SystemMessage(SPLIT_SYSTEM), HumanMessage(numbered)], SceneDrafts
     )
@@ -140,7 +187,13 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
             break
         # The model's numbers are a suggestion; the result must tile the chapter exactly.
         end = last if index == len(drafts) - 1 else min(max(draft.end, cursor), last)
-        text = "\n\n".join(paragraphs[cursor : end + 1])
+        text = _story_text(paragraphs[cursor : end + 1], book, chapter.title)
+        # A name the model took from a title line is not someone in the scene either.
+        named = [
+            n
+            for n in [*draft.characters, draft.location]
+            if not (_mentions(headings, n) and not _mentions(text, n))
+        ]
         scenes.append(
             Scene(
                 project_id=chapter.project_id,
@@ -152,9 +205,7 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
                 summary=draft.summary.strip(),
                 vivid=draft.vivid,
                 origin="auto",
-                entity_ids=entities_in(
-                    session, chapter.project_id, text, [*draft.characters, draft.location]
-                ),
+                entity_ids=entities_in(session, chapter.project_id, text, named),
             )
         )
         cursor = end + 1
@@ -165,7 +216,9 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
 
 def mark_scene(session: Session, chapter: Chapter, start: int, end: int, title: str) -> Scene:
     """A scene the user marked in the reader. No model involved."""
-    text = "\n\n".join(paragraphs_of(chapter)[start : end + 1])
+    picked = paragraphs_of(chapter)[start : end + 1]
+    text = "\n\n".join(picked)
+    story = _story_text(picked, _project_title(session, chapter), chapter.title)
     scene = Scene(
         project_id=chapter.project_id,
         chapter_id=chapter.id,
@@ -176,7 +229,7 @@ def mark_scene(session: Session, chapter: Chapter, start: int, end: int, title: 
         summary="",
         vivid=False,
         origin="manual",
-        entity_ids=entities_in(session, chapter.project_id, text, []),
+        entity_ids=entities_in(session, chapter.project_id, story, []),
     )
     session.add(scene)
     session.commit()
@@ -356,6 +409,71 @@ def refine_prompt(model: TextModel, prompt: str, change: str) -> str:
     return model.invoke(
         "refine_prompt", [SystemMessage(REFINE_SYSTEM), HumanMessage(request)]
     ).strip()
+
+
+ENRICH_SYSTEM = """You help an author turn a scene of their book into a film scene. Below \
+are the scene's current description, its text in the book, the paragraphs around it and \
+who is in it.
+
+Write the description again, keeping everything it already says, and add what the book \
+does not say but what fits naturally: what the characters present do with their hands and \
+bodies, small actions between the lines, details of the place, light and sound, what \
+happens in the background. Every addition must agree with the book and the surrounding \
+paragraphs; add no new characters, no new events that change the story and nothing about \
+later chapters. Write in the language of the book, as plain prose, at most 10 sentences.
+
+Reply with one JSON object and nothing else:
+{"text": "the whole new description", "added": ["each added fragment, copied exactly as it \
+stands in text"], "why": "one or two sentences: what you added and why it fits"}"""
+
+
+class EnrichAnswer(BaseModel):
+    text: str
+    added: list[str] = Field(default_factory=list)
+    why: str = ""
+
+
+def enrich_scene(
+    session: Session, model: TextModel, project: Project, scene: Scene, chapter: Chapter
+) -> EnrichAnswer:
+    """Suggested additions to the scene's description; nothing is saved here: the author
+    sees them marked and applies them or not (owner's notes 25.11)."""
+    paragraphs = paragraphs_of(chapter)
+    book, title = project.title, chapter.title
+
+    def around(start: int, end: int) -> str:
+        return _story_text(paragraphs[max(start, 0) : max(end, 0)], book, title)
+
+    cast = [session.get(Entity, entity_id) for entity_id in scene.entity_ids]
+    lines = [
+        "Current description:",
+        scene.summary.strip() or "(none yet)",
+        "",
+        "Scene text:",
+        _story_text(paragraphs[scene.paragraph_from : scene.paragraph_to + 1], book, title),
+        "",
+        "Before the scene:",
+        around(scene.paragraph_from - 4, scene.paragraph_from) or "(start of the chapter)",
+        "",
+        "After the scene:",
+        around(scene.paragraph_to + 1, scene.paragraph_to + 5) or "(end of the chapter)",
+        "",
+        "In the scene:",
+    ]
+    for entity in cast:
+        if entity is None:
+            continue
+        permanent, state = _facts_at(project, entity, chapter)
+        lines.append(f"- {entity.name}: " + "; ".join([*permanent, *state][:6]))
+    answer = model.invoke_json(
+        "enrich_scene",
+        [SystemMessage(ENRICH_SYSTEM), HumanMessage("\n".join(lines))],
+        EnrichAnswer,
+    )
+    text = answer.text.strip()
+    # Only fragments really in the text can be marked.
+    added = [a.strip() for a in answer.added if a.strip() and a.strip() in text]
+    return EnrichAnswer(text=text, added=added, why=answer.why.strip())
 
 
 def frame_prompt(prompt: str) -> str:

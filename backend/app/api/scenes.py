@@ -199,7 +199,7 @@ def split_estimate(chapter_id: str, session: SessionDep) -> SplitEstimate:
     chapter = _chapter(session, chapter_id)
     overhead = 0
     try:
-        overhead = TextModel(session, chapter.project_id, "analysis").request_overhead
+        overhead = TextModel(session, chapter.project_id, "prompts").request_overhead
     except ModelNotConfigured:
         pass
     existing = session.scalars(
@@ -220,7 +220,8 @@ def split(chapter_id: str, session: SessionDep) -> list[SceneBrief]:
         raise HTTPException(422, "empty_chapter")
     if chapter.private:
         raise HTTPException(403, "chapter_private")
-    model = _text_model(session, chapter.project_id, "analysis")
+    # Scenes are the light model's work, like their prompts (owner's notes 25.11).
+    model = _text_model(session, chapter.project_id, "prompts")
     try:
         scenes = service.split_chapter(session, model, chapter)
     except BadModelOutput as exc:
@@ -289,6 +290,30 @@ def save_prompt(scene_id: str, body: PromptPatch, session: SessionDep) -> SceneO
     scene.prompt = body.prompt.strip()
     session.commit()
     return _full(session, scene, chapter, project)
+
+
+class EnrichOut(BaseModel):
+    text: str
+    added: list[str]
+    why: str
+
+
+@router.post("/scenes/{scene_id}/enrich")
+def enrich(scene_id: str, session: SessionDep) -> EnrichOut:
+    """What could be added to the description; saved only by the author's "Apply"."""
+    scene, chapter, project = _scene(session, scene_id)
+    if chapter is None:
+        raise HTTPException(409, "chapter_not_found")
+    if chapter.private:
+        raise HTTPException(403, "chapter_private")
+    model = _text_model(session, project.id, "prompts")
+    try:
+        answer = service.enrich_scene(session, model, project, scene, chapter)
+    except BadModelOutput as exc:
+        raise HTTPException(502, f"bad_model_output: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return EnrichOut(text=answer.text, added=answer.added, why=answer.why)
 
 
 @router.put("/scenes/{scene_id}/summary")

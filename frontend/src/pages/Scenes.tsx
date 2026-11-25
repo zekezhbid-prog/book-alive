@@ -22,7 +22,8 @@ import { errorText, useI18n } from '../i18n'
 import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { CopyIcon, GoldPlusSymbol, GoldSparklesSymbol, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
+import { CheckIcon, CopyIcon, GoldPlusSymbol, GoldSparklesSymbol, DownloadIcon, PlusIcon, SparklesIcon, UploadIcon } from '../components/icons'
+import FoldHead from '../components/FoldHead'
 
 type Participant = Scene['participants'][number]
 
@@ -226,6 +227,125 @@ function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
   )
 }
 
+/** The text with the fragments the model added lit, in the order they stand. */
+function marked(text: string, added: string[]): ReactNode[] {
+  const parts: ReactNode[] = []
+  let rest = text
+  for (;;) {
+    const hits = added
+      .map((fragment) => ({ fragment, at: rest.indexOf(fragment) }))
+      .filter((hit) => hit.fragment && hit.at >= 0)
+      .sort((a, b) => a.at - b.at)
+    if (!hits.length) break
+    const { fragment, at } = hits[0]
+    parts.push(rest.slice(0, at), <mark key={parts.length}>{fragment}</mark>)
+    rest = rest.slice(at + fragment.length)
+  }
+  parts.push(rest)
+  return parts
+}
+
+interface TextsProps {
+  scene: Scene
+  writing: boolean
+  aiReady: boolean
+  onChange: (scene: Scene) => void
+}
+
+/** Two folds like a card's sections: the scene as written for the screen, and the book's
+ *  own text. "Add more" suggests what fits but the book does not say; it is shown marked
+ *  and saved only by "Apply" (owner's notes 25.11). */
+function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
+  const { t } = useI18n()
+  const [open, setOpen] = useState({ scene: true, book: false })
+  const [offer, setOffer] = useState<{ text: string; added: string[]; why: string } | null>(null)
+  const [busy, setBusy] = useState<'' | 'enrich' | 'apply'>('')
+  const [error, setError] = useState('')
+  const enrich = async () => {
+    setBusy('enrich')
+    setError('')
+    try {
+      setOffer(await api.enrichScene(scene.id))
+      setOpen((now) => ({ ...now, scene: true }))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  const apply = async () => {
+    if (!offer) return
+    setBusy('apply')
+    setError('')
+    try {
+      onChange(await api.saveSceneSummary(scene.id, offer.text))
+      setOffer(null)
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  return (
+    <div className="stack scene-texts">
+      <FoldHead
+        title={t('scene.description')}
+        open={open.scene}
+        onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
+      >
+        <button
+          className="btn ghost small"
+          disabled={busy !== '' || !aiReady || !!offer}
+          title={t('scene.enrich.hint')}
+          onClick={enrich}
+        >
+          <SparklesIcon />
+          {busy === 'enrich' ? t('scene.enrich.busy') : t('scene.enrich')}
+        </button>
+      </FoldHead>
+      {open.scene &&
+        (offer ? (
+          <div className="stack enrich-offer">
+            <p className="scene-summary">{marked(offer.text, offer.added)}</p>
+            {offer.why && <p className="muted small">{offer.why}</p>}
+            {!offer.added.length && <p className="faint small">{t('scene.enrich.none')}</p>}
+            <div className="row">
+              <button className="btn primary" disabled={busy !== ''} onClick={apply}>
+                <CheckIcon />
+                {t('generate.face.apply')}
+              </button>
+              <button className="btn ghost" disabled={busy !== ''} onClick={() => setOffer(null)}>
+                {t('app.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : writing ? (
+          <DescriptionEditor
+            value={scene.summary}
+            label={t('description.title')}
+            placeholder={t('description.scene.placeholder')}
+            onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
+          />
+        ) : scene.summary ? (
+          <p className="scene-summary">{scene.summary}</p>
+        ) : (
+          <p className="faint small">{t('scene.description.empty')}</p>
+        ))}
+      {error && <p className="error small">{error}</p>}
+      <FoldHead
+        title={t('scene.text')}
+        open={open.book}
+        onToggle={() => setOpen((now) => ({ ...now, book: !now.book }))}
+      />
+      {open.book && (
+        <div className="stack scene-book-text">
+          {scene.text.split('\n\n').map((paragraph, i) => (
+            <p key={i}>{paragraph}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface ViewProps {
   /** The ✕ in the corner: back to the tiles of the section. */
   onClose: () => void
@@ -332,22 +452,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
           </Link>
         ))}
       </div>
-      {writing ? (
-        <DescriptionEditor
-          value={scene.summary}
-          label={t('description.title')}
-          placeholder={t('description.scene.placeholder')}
-          onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
-        />
-      ) : (
-        scene.summary && <p className="muted">{scene.summary}</p>
-      )}
-      <details>
-        <summary className="muted">{t('scene.text')}</summary>
-        {scene.text.split('\n\n').map((paragraph, i) => (
-          <p key={i}>{paragraph}</p>
-        ))}
-      </details>
+      <SceneTexts scene={scene} writing={writing} aiReady={!!aiReady} onChange={onChange} />
 
       {!writing && (
         <>

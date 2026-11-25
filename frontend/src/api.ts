@@ -897,5 +897,8 @@ export const api = {
     request<Entity>('PUT', `/entities/${entityId}/uncertain`, { uncertain }),
   saveSceneSummary: (sceneId: string, text: string) =>
     request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
+  /** Suggested additions to the scene's description; nothing is saved until applied. */
+  enrichScene: (sceneId: string) =>
+    request<{ text: string; added: string[]; why: string }>('POST', `/scenes/${sceneId}/enrich`),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),
 }
