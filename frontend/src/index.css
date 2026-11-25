@@ -786,3 +786,18 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .scene-export .row.small { gap: 8px; align-items: center; cursor: pointer; }
 .export-pair { gap: 14px; }
 .scene-export-row { margin-top: 18px; }
+
+/* The "Pictures" section: a board of illustrations, and the dialogue of one. */
+.illustration-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.illustration-tile { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--accent-line); border-radius: var(--radius); background: rgba(14, 12, 8, 0.45); color: var(--text); text-align: left; cursor: pointer; }
+.illustration-tile:hover { border-color: var(--accent); }
+.illustration-tile img, .illustration-blank { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; }
+.illustration-blank { display: grid; place-items: center; color: var(--accent); opacity: 0.6; border: 1px dashed var(--accent-line); }
+.illustration-blank svg { width: 40px; height: 40px; }
+.illustration-chat { max-width: 860px; }
+.illustration-log { gap: 12px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.illustration-bubble { max-width: 85%; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--accent-line); display: flex; flex-direction: column; gap: 6px; }
+.illustration-bubble p { margin: 0; }
+.illustration-bubble.user { align-self: flex-end; background: rgba(250, 204, 21, 0.08); }
+.illustration-bubble.assistant { align-self: flex-start; background: rgba(14, 12, 8, 0.45); }
+.illustration-picture { display: block; max-width: 100%; max-height: 60vh; border-radius: 8px; }

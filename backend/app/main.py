@@ -8,7 +8,17 @@ from sqlalchemy.orm import Session
 
 from app import auth, slowlog
 from app.analysis import runner
-from app.api import analysis, chat, connections, images, projects, review, scenes, voice
+from app.api import (
+    analysis,
+    chat,
+    connections,
+    illustrations,
+    images,
+    projects,
+    review,
+    scenes,
+    voice,
+)
 from app.config import settings
 from app.db import get_engine, init_db
 from app.llm.provision import ensure_hubris
@@ -42,6 +52,7 @@ app.include_router(analysis.router)
 app.include_router(chat.router)
 app.include_router(images.router)
 app.include_router(scenes.router)
+app.include_router(illustrations.router)
 app.include_router(review.router)
 app.include_router(voice.router)
 

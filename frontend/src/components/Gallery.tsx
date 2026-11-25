@@ -382,7 +382,8 @@ export function ImageDialog({
 }: DialogProps) {
   const { t } = useI18n()
   const [current, setCurrent] = useState<ImageInfo | null>(null)
-  const [mode, setMode] = useState<Mode>('base')
+  // Pictures in context now live in the "Pictures" section: the window draws base ones only.
+  const [mode] = useState<Mode>('base')
   // Ticked views; only empty slots are drawn, so a filled one counts only once deleted.
   const [views, setViews] = useState<Angle[]>(FULL_ORDER)
   const [look, setLook] = useState('')
@@ -451,8 +452,6 @@ export function ImageDialog({
   const samplesAllowed = !(asSet && bases.length > 0)
   // The views the next press draws: ticked and still empty.
   const wanted = SET_ORDER.filter((view) => views.includes(view) && !latest(bases, view))
-  // Pictures in context are drawn from base ones, so they wait for the first.
-  const contextLocked = bases.length === 0 && !current?.is_main
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
   // A place or object opens on the "new picture" tile: nothing large until one is clicked.
@@ -1135,32 +1134,7 @@ export function ImageDialog({
             </div>
           ) : (
           <div className="stack">
-            {/* One of the two is always pressed. Pictures in context are drawn from base ones,
-                so before the first base picture there is nothing to choose. */}
-            {!contextLocked && withAngles && (
-            <div className="segmented mode-switch" role="radiogroup">
-              {(['base', 'context'] as const).map((option) => (
-                <button
-                  key={option}
-                  role="radio"
-                  aria-checked={mode === option}
-                  className={mode === option ? 'active' : ''}
-                  disabled={busy !== '' || !!pending}
-                  onClick={() => {
-                    setMode(option)
-                    setPending(null)
-                    setMenuFor('')
-                    setPeek('')
-                    // A picture just made in the other mode is not this mode's picture.
-                    setCurrent(null)
-                    setInspected(null)
-                  }}
-                >
-                  {t(`gallery.mode.${option}`)}
-                </button>
-              ))}
-            </div>
-            )}
+            {/* Pictures in context moved to the "Pictures" section (owner's notes 25.11). */}
             {/* Both sets of fields sit in one grid cell, the hidden one keeping its space:
                 switching never changes the window's size or moves the buttons. */}
             <div className="mode-fields">

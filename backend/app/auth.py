@@ -24,7 +24,17 @@ from app import mail
 from app.config import settings
 from app.crypto import signing_key
 from app.db import SessionDep, get_engine
-from app.models import AnalysisRun, Chapter, Entity, Image, PasswordReset, Project, Scene, User
+from app.models import (
+    AnalysisRun,
+    Chapter,
+    Entity,
+    Illustration,
+    Image,
+    PasswordReset,
+    Project,
+    Scene,
+    User,
+)
 
 COOKIE = "lorebook_session"
 SESSION_SECONDS = 30 * 24 * 3600
@@ -184,8 +194,16 @@ def _password(raw: str) -> str:
 
 # ---------- the guard in front of every API call ----------
 
-_OWNED = {"chapters": Chapter, "entities": Entity, "images": Image, "scenes": Scene}
-_PATH = re.compile(r"^/api/(projects|chapters|entities|images|scenes|analysis)/([^/]+)")
+_OWNED = {
+    "chapters": Chapter,
+    "entities": Entity,
+    "images": Image,
+    "scenes": Scene,
+    "illustrations": Illustration,
+}
+_PATH = re.compile(
+    r"^/api/(projects|chapters|entities|images|scenes|illustrations|analysis)/([^/]+)"
+)
 
 
 def _owner_denied(db: Session, user: User, path: str) -> bool:

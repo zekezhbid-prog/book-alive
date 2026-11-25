@@ -8,6 +8,7 @@ import Book from './pages/Book'
 import Entities from './pages/Entities'
 import Projects from './pages/Projects'
 import Scenes from './pages/Scenes'
+import Illustrations from './pages/Illustrations'
 import Settings from './pages/Settings'
 import Style from './pages/Style'
 import Usage from './pages/Usage'
@@ -120,6 +121,8 @@ export default function App() {
         ))}
         <Route path="/projects/:projectId/scenes" element={<Scenes />} />
         <Route path="/projects/:projectId/scenes/:sceneId" element={<Scenes />} />
+        <Route path="/projects/:projectId/images" element={<Illustrations />} />
+        <Route path="/projects/:projectId/images/:illustrationId" element={<Illustrations />} />
         <Route path="/projects/:projectId/style" element={<Style />} />
         <Route path="/projects/:projectId/usage" element={<Usage />} />
         <Route path="/settings" element={<Settings />} />

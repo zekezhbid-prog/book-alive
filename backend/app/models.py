@@ -364,6 +364,10 @@ class Image(Base):
     entity_id: Mapped[str | None] = mapped_column(
         ForeignKey("entities.id", ondelete="SET NULL"), default=None
     )
+    # Set for a picture of the "Pictures" section: drawn in that illustration's dialogue.
+    illustration_id: Mapped[str | None] = mapped_column(
+        ForeignKey("illustrations.id", ondelete="SET NULL"), default=None
+    )
     # Set for a generated first frame of a scene; such a picture belongs to no card.
     scene_id: Mapped[str | None] = mapped_column(
         ForeignKey("scenes.id", ondelete="SET NULL"), default=None
@@ -454,4 +458,18 @@ class ReviewRun(Base):
     chapter_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     checks: Mapped[list[str]] = mapped_column(JSON, default=list)
     remarks: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class Illustration(Base):
+    """A picture of the book in the "Pictures" section, made in a dialogue: the user says
+    what to draw, the model finds the place in the book and the references and draws it."""
+
+    __tablename__ = "illustrations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(300), default="")
+    # [{role: user | assistant, text, image_id?, reference_ids?, chapter_id?, prompt?}]
+    messages: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)

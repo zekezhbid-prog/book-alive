@@ -5,7 +5,7 @@ import type { Project } from '../api'
 import { useI18n } from '../i18n'
 import { useSide, useView, type Side } from '../view'
 import BookSearch from './BookSearch'
-import { BookIcon, FilmIcon, HistoryIcon, PaletteIcon, KeyIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
+import { BookIcon, FilmIcon, ImageIcon, HistoryIcon, PaletteIcon, KeyIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
 import ChatDock from './ChatDock'
 import { isWindowPage } from '../windows'
 
@@ -77,6 +77,13 @@ export default function ProjectHeader({ project, children, chat }: Props) {
             <span>{t('tabs.scenes')}</span>
           </NavLink>
         )}
+        {/* Pictures of the book, made in a dialogue from the cards' references. */}
+        {illustrating && (
+          <NavLink to={`${base}/images`} className={({ isActive }) => tabClass(isActive)}>
+            <ImageIcon />
+            <span>{t('tabs.images')}</span>
+          </NavLink>
+        )}
         {illustrating && (
           <NavLink replace={overWindow} to={`${base}/style`} className={({ isActive }) => tabClass(isActive)}>
             <PaletteIcon />
@@ -111,4 +118,4 @@ export default function ProjectHeader({ project, children, chat }: Props) {
 }
 
 const tabClass = (active: boolean) => `tab ${active ? 'active' : ''}`
-const isSection = () => /\/(characters|locations|items|scenes|style|usage)(\/|$)/.test(location.pathname)
+const isSection = () => /\/(characters|locations|items|scenes|images|style|usage)(\/|$)/.test(location.pathname)

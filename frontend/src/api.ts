@@ -464,6 +464,29 @@ export interface LookRequest {
   reference_ids?: string[]
 }
 
+/** A message of an illustration's dialogue: the user's words, the model's answer or plan,
+ *  or a drawn picture. */
+export interface IllustrationMessage {
+  role: 'user' | 'assistant'
+  text: string
+  prompt: string
+  cast: string[]
+  chapter_id: string
+  reference_urls: string[]
+  image_url: string
+}
+
+export interface IllustrationBrief {
+  id: string
+  title: string
+  cover: string
+  created_at: string
+}
+
+export interface Illustration extends IllustrationBrief {
+  messages: IllustrationMessage[]
+}
+
 /** One outward look of a character, drawn as its own set: "human" six views, "object" two. */
 export interface Variant {
   key: string
@@ -797,6 +820,16 @@ export const api = {
     >,
   ) => request<ImageInfo>('PATCH', `/images/${id}`, patch),
   deleteImage: (id: string) => request<void>('DELETE', `/images/${id}`),
+  illustrations: (projectId: string) =>
+    request<IllustrationBrief[]>('GET', `/projects/${projectId}/illustrations`),
+  createIllustration: (projectId: string) =>
+    request<Illustration>('POST', `/projects/${projectId}/illustrations`),
+  illustration: (id: string) => request<Illustration>('GET', `/illustrations/${id}`),
+  deleteIllustration: (id: string) => request<void>('DELETE', `/illustrations/${id}`),
+  /** The user's words: the model answers with a question or a plan; nothing is drawn yet. */
+  askIllustration: (id: string, text: string) =>
+    request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),
+  drawIllustration: (id: string) => request<Illustration>('POST', `/illustrations/${id}/draw`),
   variants: (entityId: string) => request<Variant[]>('GET', `/entities/${entityId}/variants`),
   /** The model's list of the card's outward looks; nothing is saved until `saveVariants`. */
   findVariants: (entityId: string) => request<Variant[]>('POST', `/entities/${entityId}/variants/find`),
