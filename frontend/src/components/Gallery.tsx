@@ -434,8 +434,8 @@ export function ImageDialog({
     api.variants(entityId).then((list) => {
       setVariants(list)
       setVariantKey((now) => now || list[0]?.key || '')
-    }, () => {})
-  }, [entityId, withAngles])
+    }, (e) => setError(errorText(t, e)))
+  }, [entityId, withAngles, t])
   const variant = variants.find((v) => v.key === variantKey) ?? null
   const SET_ORDER = variant?.shape === 'object' ? OBJECT_ORDER : FULL_ORDER
   const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
