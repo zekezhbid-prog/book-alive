@@ -23,6 +23,7 @@ Rules:
 - {framing}
 - Use the facts below and nothing that contradicts them. Translate them faithfully. \
 Where the facts are silent, stay neutral rather than inventing striking details.
+- {visible}
 - {continuity}
 - {age}
 - End with the style, word for word: {style}
@@ -110,8 +111,17 @@ def build_image_prompt(
         if entity.kind == KIND_CHARACTER
         else "No people in the picture."
     )
+    # Owner's notes 25.11: a limp or a voice in the facts has no place in a picture.
+    visible = (
+        "Only what shows in a still picture: body, face, hair, skin, clothing, things worn "
+        "or carried. Leave out the voice, the way of walking or moving (a limp, a gait), "
+        "smell, manner, habits, character, past and anything else not seen standing still."
+        if entity.kind == KIND_CHARACTER
+        else "Only what shows in a still picture: leave out sounds, smells, history and use."
+    )
     system = SYSTEM.format(
         age=age,
+        visible=visible,
         subject={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(entity.kind, "location"),
         framing=VIEW_FREE if view_free else ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,

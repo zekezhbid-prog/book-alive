@@ -75,6 +75,8 @@ class ImageOut(BaseModel):
     chapter_from_id: str
     chapter_to_id: str
     prompt: str
+    # What a generated picture was drawn from (ids of pictures, some may be deleted since).
+    reference_ids: list[str] = Field(default_factory=list)
     url: str
     created_at: datetime
 
@@ -167,6 +169,7 @@ def _out(image: Image, project: Project) -> ImageOut:
         chapter_from_id=image.chapter_from_id,
         chapter_to_id=image.chapter_to_id,
         prompt=image.prompt,
+        reference_ids=list(image.reference_ids or []),
         url=f"/api/images/{image.id}/file",
         created_at=image.created_at,
     )
@@ -526,6 +529,7 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
         chapter_from_id=body.chapter_from_id,
         chapter_to_id=body.chapter_to_id,
         prompt=prompt,
+        reference_ids=[reference.id for reference in drawing.references],
         filename="",
         path=relative,
         mime=mime,

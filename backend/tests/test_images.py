@@ -268,12 +268,16 @@ def test_a_base_set_shares_one_prompt_and_adds_each_view(client, session, projec
     monkeypatch.setattr("app.api.images.ImageModel", Painter)
     client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
     url = f"/api/entities/{project.hero_id}/images/generate"
+    made_ids = []
     for angle in ("face_front", "face_three_quarter"):
         made = client.post(
             url, json={"prompt": "A red-haired woman.", "angle": angle, "add_view": True}
         )
         assert made.status_code == 200, made.text
         assert (made.json()["is_main"], made.json()["angle"]) == (True, angle)
+        made_ids.append(made.json()["id"])
+    # Each picture remembers what it was drawn from, to be shown with its prompt.
+    assert made.json()["reference_ids"] == made_ids[:1]
     # Each picture gets its own view in front; the second one is drawn from the first.
     assert drawn[0][0].startswith("Head-and-shoulders portrait, face turned straight")
     assert drawn[1][0].startswith("Head-and-shoulders portrait, face turned three-quarters")
@@ -570,3 +574,16 @@ def test_a_place_is_drawn_with_the_users_note_and_no_face_talk(session, project)
     build_image_prompt(model, project, mill, None, "", has_reference=True, note="вид сверху")
     assert "The user asks for: вид сверху" in model.facts
     assert "face" not in model.system
+
+
+def test_a_character_prompt_keeps_only_what_is_seen(session, project):
+    class Recorder:
+        def invoke(self, operation, messages):
+            self.system = messages[0].content
+            return "prompt"
+
+    hero = session.get(Entity, project.hero_id)
+    model = Recorder()
+    build_image_prompt(model, project, hero, None, "", has_reference=False, view_free=True)
+    # Owner's notes 25.11: the voice and a limp went into the face picture's prompt.
+    assert "Leave out the voice, the way of walking" in model.system

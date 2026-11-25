@@ -9,7 +9,7 @@ import {
   type ImageSize,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
-import { CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
+import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 import { MicButton } from './MicButton'
 import { TwoLangPrompt } from './TwoLangPrompt'
@@ -84,10 +84,15 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle,
           ) : (
             <RefStrip images={images ?? []} onRemove={remove} />
           )}
+          {/* With pictures, only a pencil like the other icons: the row keeps its room. */}
           {!!images?.length && (
-            <button className="btn ref-edit" onClick={() => setDialog(true)}>
+            <button
+              className="btn ghost icon gold ref-edit"
+              title={t('gallery.edit')}
+              aria-label={t('gallery.edit')}
+              onClick={() => setDialog(true)}
+            >
               <PencilIcon />
-              {t('gallery.edit')}
             </button>
           )}
         </div>
@@ -411,10 +416,16 @@ export function ImageDialog({
   const picker = useRef<HTMLInputElement>(null)
   // What the user wants changed in the redraw of the face, typed or spoken.
   const [remark, setRemark] = useState('')
+  // The small "what to change" window over the face, opened by its pencil.
+  const [remarkOpen, setRemarkOpen] = useState(false)
+  // A filled slot or picture clicked: its prompt and references are shown instead of the form.
+  const [inspected, setInspected] = useState<ImageInfo | null>(null)
   // The prompt in English and in the interface language, wherever it can be edited.
   const twoLang = useTwoLang(entityId, prompt, setPrompt, !autoPrompt || !!faceCheck, setError)
 
   const isMain = mode === 'base'
+  // A filled base slot or tile in view: only looked at or deleted, never drawn over.
+  const viewing = isMain && !peek ? inspected : null
   // A character's base pictures are a set of views drawn from one prompt.
   const asSet = isMain && withAngles
   // A set is started from the user's samples only while it is empty: once there is a view,
@@ -426,12 +437,8 @@ export function ImageDialog({
   const contextLocked = bases.length === 0 && !current?.is_main
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
-  // A place or object: the newest base picture (the list comes oldest first).
-  const firstView = asSet
-    ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null)
-    : isMain && !withAngles
-      ? (bases[bases.length - 1] ?? null)
-      : null
+  // A place or object opens on the "new picture" tile: nothing large until one is clicked.
+  const firstView = asSet ? (SET_ORDER.map((v) => latest(bases, v)).find(Boolean) ?? null) : null
   const shown = current ?? firstView ?? (!isMain ? pickedLook : null)
   // A look belongs to one chapter: the range is stored with both ends on it.
   const request = isMain
@@ -623,6 +630,7 @@ export function ImageDialog({
   const redrawFace = async () => {
     if (!pending) return
     setError('')
+    setRemarkOpen(false)
     let text = await twoLang.flush()
     // The remark goes into the English prompt first; on a failure the face stays in view.
     if (remark.trim()) {
@@ -655,13 +663,26 @@ export function ImageDialog({
     setBusy('')
   }
 
-  // Neither "go on" nor "redraw": the set stops here. The face stays in its slot; the user
-  // deletes it there if it is not wanted (pictures are never deleted as a side effect).
-  const cancelFace = () => {
+  // Neither "apply" nor "redraw": the set stops and the face is not kept. Pressing "Cancel"
+  // is the user's own word against it (decisions.md 25.11): the slot was empty before, so it
+  // is empty again.
+  const cancelFace = async () => {
+    const face = faceCheck
     setFaceCheck(null)
     setPending(null)
     setRemark('')
+    setRemarkOpen(false)
     setProgress('')
+    if (!face) return
+    setBusy('delete')
+    try {
+      await api.deleteImage(face.id)
+      if (current?.id === face.id) setCurrent(null)
+      onChanged()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
   }
 
   // A new picture in context put in as it is: checked against the project style first (a picture in
@@ -701,6 +722,8 @@ export function ImageDialog({
       await api.deleteImage(target.id)
       if (target.angle) setViews((had) => (had.includes(target.angle as Angle) ? had : [...had, target.angle as Angle]))
       if (current?.id === target.id) setCurrent(null)
+      // The freed slot or tile is empty again: the form to draw it comes back.
+      if (inspected?.id === target.id) setInspected(null)
       if (picked === target.id) pickLook('')
       onChanged()
     } catch (e) {
@@ -835,29 +858,21 @@ export function ImageDialog({
                     }`}
                   >
                     <div className="view-slot-box">
+                    {/* A filled slot shows what it was drawn from; an empty one opens the form. */}
                     <button
                       className="view-slot-face"
-                      disabled={!made}
-                      title={made ? t('generate.slot.show') : ''}
+                      disabled={busy !== '' || !!pending}
+                      title={made ? t('generate.slot.show') : t('generate.slot.draw')}
                       onClick={() => {
                         setPeek('')
-                        if (made) setCurrent(made)
+                        setCurrent(made)
+                        setInspected(made)
+                        if (!made && !views.includes(view)) toggleView(view)
                       }}
                     >
                       {made && <img src={made.url} alt="" loading="lazy" />}
                       {drawing === view && <span className="view-slot-busy" aria-hidden />}
                     </button>
-                    {made && (
-                      <button
-                        className="btn ghost small icon gold slot-drop"
-                        disabled={busy !== ''}
-                        title={t('app.delete')}
-                        aria-label={`${t('app.delete')}: ${t(`angle.${view}`)}`}
-                        onClick={() => remove(made)}
-                      >
-                        <TrashIcon />
-                      </button>
-                    )}
                     </div>
                     <label className="view-slot-label small">
                       {/* A filled view keeps the box's place, so the labels stay in line. */}
@@ -880,28 +895,37 @@ export function ImageDialog({
               of "Generate" adds one more here. */}
           {isMain && !withAngles && (
             <div className="look-strip base-strip">
-              {bases.length === 0 && <span className="faint small">{t('generate.bases.empty')}</span>}
+              {/* No limit here: the first tile always starts a new picture from scratch. */}
+              <div className="look-new-wrap">
+                <button
+                  className={`look-tile look-new ${!inspected ? 'shown' : ''}`}
+                  disabled={busy !== ''}
+                  title={t('generate.bases.new')}
+                  onClick={() => {
+                    setPeek('')
+                    setCurrent(null)
+                    setInspected(null)
+                  }}
+                >
+                  <span className="look-new-icon" aria-hidden>
+                    <ThinPlus />
+                  </span>
+                  <span className="small">{t('generate.bases.new')}</span>
+                </button>
+              </div>
               {[...bases].reverse().map((item) => (
                 <div key={item.id} className="look-tile-wrap">
                   <button
-                    className={`look-tile ${shown?.id === item.id ? 'shown' : ''}`}
+                    className={`look-tile ${inspected?.id === item.id ? 'shown' : ''}`}
                     disabled={busy !== ''}
                     title={t('generate.slot.show')}
                     onClick={() => {
                       setPeek('')
                       setCurrent(item)
+                      setInspected(item)
                     }}
                   >
                     <img src={item.url} alt="" loading="lazy" />
-                  </button>
-                  <button
-                    className="btn ghost small icon gold slot-drop"
-                    disabled={busy !== ''}
-                    title={t('app.delete')}
-                    aria-label={t('app.delete')}
-                    onClick={() => remove(item)}
-                  >
-                    <TrashIcon />
                   </button>
                 </div>
               ))}
@@ -964,13 +988,43 @@ export function ImageDialog({
             </div>
           )}
           {/* What the picture in view was drawn from; a picture put in has no prompt. */}
-          {!peek && (shown?.prompt || pickedLook?.prompt) && (
+          {!peek && !viewing && (shown?.prompt || pickedLook?.prompt) && (
             <details key={(shown ?? pickedLook)!.id} className="shown-prompt">
               <summary className="muted small">{t('gallery.prompt.show')}</summary>
               <p className="small prompt-last">{(shown ?? pickedLook)!.prompt}</p>
             </details>
           )}
           </div>
+          {viewing ? (
+            <div className="stack picture-info">
+              <span className="small muted">{t('generate.prompt.used')}</span>
+              <p className="small prompt-last">{viewing.prompt || t('generate.prompt.none')}</p>
+              <span className="small muted">{t('generate.references.used')}</span>
+              {viewing.reference_ids.length ? (
+                <div className="used-refs">
+                  {viewing.reference_ids.map((id) => (
+                    <a key={id} href={`/api/images/${id}/file`} target="_blank" rel="noreferrer">
+                      {/* A reference deleted since leaves no broken picture behind. */}
+                      <img
+                        src={`/api/images/${id}/file`}
+                        alt=""
+                        loading="lazy"
+                        onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
+                      />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="faint small">{t('generate.references.none')}</p>
+              )}
+              <div className="row">
+                <button className="btn danger" disabled={busy !== ''} onClick={() => remove(viewing)}>
+                  <TrashIcon />
+                  {t('app.delete')}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="stack">
             {/* One of the two is always pressed. Pictures in context are drawn from base ones,
                 so before the first base picture there is nothing to choose. */}
@@ -990,6 +1044,7 @@ export function ImageDialog({
                     setPeek('')
                     // A picture just made in the other mode is not this mode's picture.
                     setCurrent(null)
+                    setInspected(null)
                   }}
                 >
                   {t(`gallery.mode.${option}`)}
@@ -1213,6 +1268,7 @@ export function ImageDialog({
         {progress && <p className="muted small">{progress}</p>}
             </div>
           </div>
+          )}
         </div>
         {error && <p className="error">{error}</p>}
       </div>
@@ -1244,38 +1300,68 @@ export function ImageDialog({
                 disabled={busy !== ''}
               />
             </div>
-            <label className="stack field">
-              <span className="small muted">{t('generate.face.remark')}</span>
-              <div className="row">
-                <input
-                  className="input small grow"
-                  value={remark}
-                  maxLength={1000}
-                  placeholder={t('generate.face.remark.placeholder')}
-                  disabled={busy !== ''}
-                  onChange={(e) => setRemark(e.target.value)}
-                />
-                <MicButton
-                  disabled={busy !== ''}
-                  onText={(text) => setRemark((now) => (now.trim() ? `${now.trim()} ${text}` : text))}
-                  onError={setError}
-                />
-              </div>
-            </label>
             {error && <p className="error small">{error}</p>}
+            {busy === 'prompt' && <p className="muted small">{t('generate.face.refining')}</p>}
+            {busy === 'image' && <p className="muted small">{t('generate.image.busy')}</p>}
+            {/* "Apply" draws the other views from this face; the pencil asks what to change
+                and draws the face again; "Cancel" does not keep it. */}
             <div className="row wrap face-check-buttons">
-              <button className="btn primary" disabled={busy !== ''} onClick={goOn}>
-                <SparklesIcon />
-                {t('generate.face.go_on', { n: pending.views.length })}
+              <button
+                className="btn primary"
+                disabled={busy !== ''}
+                title={t('generate.face.go_on', { n: pending.views.length })}
+                onClick={goOn}
+              >
+                <CheckIcon />
+                {t('generate.face.apply')}
               </button>
-              <button className="btn" disabled={busy !== ''} onClick={redrawFace}>
-                {busy === 'prompt' ? t('generate.face.refining') : t('generate.face.redraw')}
+              <button
+                className="btn ghost icon gold"
+                disabled={busy !== ''}
+                title={t('generate.face.redraw')}
+                aria-label={t('generate.face.redraw')}
+                onClick={() => setRemarkOpen(true)}
+              >
+                <PencilIcon />
               </button>
+              <span className="spacer" />
               <button className="btn ghost" disabled={busy !== ''} onClick={cancelFace}>
                 {t('app.cancel')}
               </button>
             </div>
           </div>
+          {remarkOpen && (
+            <div className="overlay remark-overlay" onMouseDown={(e) => e.target === e.currentTarget && setRemarkOpen(false)}>
+              <div className="dialog remark-dialog">
+                <h3>{t('generate.face.remark')}</h3>
+                <div className="row">
+                  <textarea
+                    className="input small grow"
+                    rows={3}
+                    autoFocus
+                    value={remark}
+                    maxLength={1000}
+                    placeholder={t('generate.face.remark.placeholder')}
+                    onChange={(e) => setRemark(e.target.value)}
+                  />
+                  <MicButton
+                    onText={(text) => setRemark((now) => (now.trim() ? `${now.trim()} ${text}` : text))}
+                    onError={setError}
+                  />
+                </div>
+                <div className="row wrap">
+                  <button className="btn primary" onClick={redrawFace}>
+                    <PencilIcon />
+                    {t('generate.face.redraw')}
+                  </button>
+                  <span className="spacer" />
+                  <button className="btn ghost" onClick={() => setRemarkOpen(false)}>
+                    {t('app.cancel')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

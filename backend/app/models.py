@@ -375,6 +375,8 @@ class Image(Base):
     chapter_from_id: Mapped[str] = mapped_column(String(32), default="")
     chapter_to_id: Mapped[str] = mapped_column(String(32), default="")
     prompt: Mapped[str] = mapped_column(Text, default="")
+    # A generated picture: the pictures sent to the model with the prompt, shown with it.
+    reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     filename: Mapped[str] = mapped_column(String(300), default="")
     path: Mapped[str] = mapped_column(String(300))  # relative to the files directory
     mime: Mapped[str] = mapped_column(String(50))

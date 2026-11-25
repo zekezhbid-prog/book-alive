@@ -644,6 +644,16 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .dialog.face-check img { display: block; align-self: center; max-width: 100%; max-height: 40vh; border-radius: var(--radius); border: 1px solid var(--accent-line); }
 .face-check-prompt .two-lang { height: 220px; }
 .face-check-buttons { gap: 10px; justify-content: center; }
+/* "What to change" over the face: its own small window. */
+.remark-overlay { z-index: 70; }
+.dialog.remark-dialog { width: min(520px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 22px; }
+.dialog.remark-dialog h3 { margin: 0; }
+.remark-dialog textarea { resize: vertical; }
+/* A filled slot in view: the prompt it was drawn with and what it was drawn from. */
+.picture-info { gap: 8px; }
+.picture-info .prompt-last { max-height: 260px; overflow-y: auto; white-space: pre-wrap; }
+.used-refs { display: flex; flex-wrap: wrap; gap: 8px; }
+.used-refs img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--accent-line); }
 /* The image prompt, English over its translation; the halves share the height they are given. */
 .two-lang { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 .two-lang-half { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }

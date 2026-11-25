@@ -429,6 +429,8 @@ export interface ImageInfo {
   chapter_from_id: string
   chapter_to_id: string
   prompt: string
+  /** A generated picture: ids of the pictures it was drawn from (some may be deleted since). */
+  reference_ids: string[]
   url: string
   created_at: string
 }
