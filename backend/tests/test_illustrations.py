@@ -77,3 +77,30 @@ def test_the_planner_never_refuses_and_offers_to_draw_what_the_book_lacks():
     assert "Never refuse to draw" in system
     assert "ask if you should draw it anyway" in system
     assert "even if the book has no such moment" in system
+
+
+def test_picture_ideas_of_a_chapter_come_from_its_text(client, project, session, monkeypatch):
+    # Owner's notes 26.11: "Pick from the book" -> a chapter -> 3 to 20 scenes to draw.
+    seen = {}
+
+    class Ideas:
+        def __init__(self, session, project_id, task):
+            assert task == "prompts"
+
+        def invoke_json(self, operation, messages, schema):
+            seen["text"] = messages[1].content
+            ideas = [{"title": f"S{n}", "description": f"  Сцена {n}. "} for n in range(25)]
+            return schema.model_validate({"ideas": [*ideas, {"title": "", "description": ""}]})
+
+    monkeypatch.setattr("app.api.illustrations.TextModel", Ideas)
+    first, second, _ = project.chapters
+    url = f"/api/projects/{project.id}/chapters/{first.id}/picture-ideas"
+    ideas = client.post(url).json()
+    assert len(ideas) == 20 and ideas[0] == {"title": "S0", "description": "Сцена 0."}
+    assert "Мельница" in seen["text"]
+    assert "up to 20" in illustrations.IDEAS_SYSTEM
+    second.private = True
+    session.commit()
+    hidden = f"/api/projects/{project.id}/chapters/{second.id}/picture-ideas"
+    assert client.post(hidden).status_code == 404
+    assert client.post(f"/api/projects/{project.id}/chapters/nope/picture-ideas").status_code == 404

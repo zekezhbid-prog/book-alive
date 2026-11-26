@@ -95,6 +95,11 @@ export interface ReviewChecks {
   checks: ReviewCheck[]
 }
 
+export interface PictureIdea {
+  title: string
+  description: string
+}
+
 export interface ChapterBrief {
   id: string
   position: number
@@ -846,6 +851,9 @@ export const api = {
   askIllustration: (id: string, text: string) =>
     request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),
   drawIllustration: (id: string) => request<Illustration>('POST', `/illustrations/${id}/draw`),
+  /** "Pick from the book": moments of a chapter worth a picture (3 to 20). */
+  pictureIdeas: (projectId: string, chapterId: string) =>
+    request<PictureIdea[]>('POST', `/projects/${projectId}/chapters/${chapterId}/picture-ideas`),
   /** `checked`: the looks were searched for once, the first drawing does not search again. */
   variants: (entityId: string) =>
     request<{ variants: Variant[]; checked: boolean }>('GET', `/entities/${entityId}/variants`),

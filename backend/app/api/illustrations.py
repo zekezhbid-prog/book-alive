@@ -13,7 +13,7 @@ from app.db import SessionDep
 from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
-from app.models import Illustration, Image, Project
+from app.models import Chapter, Illustration, Image, Project
 
 router = APIRouter(prefix="/api", tags=["illustrations"])
 
@@ -108,6 +108,32 @@ def create_illustration(project_id: str, session: SessionDep) -> IllustrationOut
     session.add(item)
     session.commit()
     return _full(item)
+
+
+class PictureIdea(BaseModel):
+    title: str
+    description: str
+
+
+@router.post("/projects/{project_id}/chapters/{chapter_id}/picture-ideas")
+def picture_ideas(project_id: str, chapter_id: str, session: SessionDep) -> list[PictureIdea]:
+    """"Pick from the book": moments of a chapter worth a picture. A hidden chapter (the
+    author's personal data) is never sent to a model."""
+    chapter = session.get(Chapter, chapter_id)
+    if chapter is None or chapter.project_id != project_id or chapter.private:
+        raise HTTPException(404, "chapter_not_found")
+    project = session.get(Project, project_id)
+    try:
+        model = TextModel(session, project.id, "prompts")
+    except ModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        ideas = service.picture_ideas(model, project, chapter)
+    except BadModelOutput as exc:
+        raise HTTPException(502, f"bad_model_output: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return [PictureIdea(**i) for i in ideas]
 
 
 @router.get("/illustrations/{illustration_id}")

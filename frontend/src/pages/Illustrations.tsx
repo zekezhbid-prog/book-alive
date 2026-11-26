@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, peek, type Illustration, type IllustrationBrief, type Project } from '../api'
+import {
+  api,
+  peek,
+  type ChapterBrief,
+  type Illustration,
+  type IllustrationBrief,
+  type PictureIdea,
+  type Project,
+} from '../api'
 import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { MicButton } from '../components/MicButton'
@@ -61,6 +69,7 @@ export default function Illustrations() {
           <IllustrationChat
             key={illustrationId}
             id={illustrationId}
+            project={project}
             onClose={() => navigate(base)}
             onDeleted={() => navigate(base)}
           />
@@ -88,17 +97,19 @@ export default function Illustrations() {
 
 interface ChatProps {
   id: string
+  project: Project
   onClose: () => void
   onDeleted: () => void
 }
 
 /** The dialogue of one picture: the user's words, the model's questions and plans, pictures. */
-function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
+function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   const { t } = useI18n()
   const [item, setItem] = useState<Illustration | null>(null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<'' | 'think' | 'draw'>('')
   const [error, setError] = useState('')
+  const [picking, setPicking] = useState(false)
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -195,6 +206,21 @@ function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
       </div>
       {error && <p className="error small">{error}</p>}
       <div className="row">
+        <button className="btn ghost small" disabled={busy !== ''} onClick={() => setPicking(true)}>
+          📖 {t('images.pick')}
+        </button>
+      </div>
+      {picking && (
+        <BookPicker
+          project={project}
+          onPick={(words) => {
+            setText(words)
+            setPicking(false)
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+      <div className="row">
         <textarea
           className="input grow"
           rows={2}
@@ -221,5 +247,93 @@ function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
         </button>
       </div>
     </section>
+  )
+}
+
+// Ideas of a chapter, kept while the page is open: the model is asked once per text.
+const ideasCache = new Map<string, PictureIdea[]>()
+
+interface PickerProps {
+  project: Project
+  onPick: (words: string) => void
+  onClose: () => void
+}
+
+/** "Pick from the book": a chapter, then moments of it worth a picture; a press puts the
+ * moment's description into the request box (owner's notes 26.11). */
+function BookPicker({ project, onPick, onClose }: PickerProps) {
+  const { t } = useI18n()
+  const chapters = project.chapters.filter((c) => !c.private).sort((a, b) => a.position - b.position)
+  const [chapter, setChapter] = useState<ChapterBrief | null>(null)
+  const [ideas, setIdeas] = useState<PictureIdea[] | null>(null)
+  const [error, setError] = useState('')
+  const shown = useRef('') // the chapter on screen: a late answer for another one is kept, not shown
+
+  const open = async (c: ChapterBrief) => {
+    const key = `${c.id}:${c.content_hash}`
+    shown.current = key
+    setChapter(c)
+    setError('')
+    setIdeas(ideasCache.get(key) ?? null)
+    if (ideasCache.has(key)) return
+    try {
+      const found = await api.pictureIdeas(project.id, c.id)
+      ideasCache.set(key, found)
+      if (shown.current === key) setIdeas(found)
+    } catch (e) {
+      if (shown.current === key) setError(errorText(t, e))
+    }
+  }
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="dialog stack scroll">
+        <div className="row">
+          {chapter && (
+            <button className="btn ghost small icon" title={t('images.pick.back')} aria-label={t('images.pick.back')} onClick={() => {
+                shown.current = ''
+                setChapter(null)
+              }}>
+              ‹
+            </button>
+          )}
+          <h3 className="grow">{chapter ? chapter.title || t('book.untitled') : t('images.pick')}</h3>
+          <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        {!chapter && (
+          <div className="stack">
+            {chapters.length === 0 && <p className="faint">{t('images.pick.no_chapters')}</p>}
+            {chapters.map((c) => (
+              <button key={c.id} className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => open(c)}>
+                {c.title || t('book.untitled')}
+              </button>
+            ))}
+          </div>
+        )}
+        {chapter && error && <p className="error small">{error}</p>}
+        {chapter && !error && !ideas && <p className="muted">{t('images.pick.thinking')}</p>}
+        {chapter && ideas?.length === 0 && <p className="faint">{t('images.pick.none')}</p>}
+        {chapter && ideas && ideas.length > 0 && (
+          <div className="stack">
+            {ideas.map((idea, n) => (
+              <button
+                key={n}
+                className="btn ghost"
+                style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', height: 'auto' }}
+                onClick={() => onPick(idea.description)}
+              >
+                <span>
+                  <b>{idea.title}</b>
+                  <br />
+                  <span className="small muted">{idea.description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
