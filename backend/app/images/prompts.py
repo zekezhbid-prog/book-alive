@@ -8,6 +8,7 @@ from app.images.styles import style_prompt
 from app.llm.calls import TextModel
 from app.models import (
     FACT_PERMANENT,
+    FACT_PROFILE,
     FACT_STATE,
     KIND_CHARACTER,
     KIND_ITEM,
@@ -176,8 +177,9 @@ VARIANTS_SYSTEM = """Below is everything a book says about how one character loo
 whether the character has more than one distinct outward look that must be drawn as \
 separate reference sheets: the same person dressed or groomed in clearly different ways (in \
 a kerchief and with loose hair), or one being that appears under several names and shapes \
-(a cat that is at times a tiny seed-like creature). Small changes of clothes in one scene \
-are not separate looks.
+(a girl who turns into a boy, a cat or a seed). Read the facts about who the character is \
+as well: a change of shape or a second name is often told there, not among the looks. Small \
+changes of clothes in one scene are not separate looks.
 
 For each look give:
 - "label": a few words in the language of the book, with the name used for that look \
@@ -187,7 +189,7 @@ from the facts, without anything from the other looks;
 - "shape": "human" for a person or a human-like or animal body, "object" for something \
 closer to a thing (a seed, a stone, a lantern).
 
-One look is the usual answer. Reply with one JSON object and nothing else:
+Give one look only when the book really shows just one. Reply with one JSON object and nothing else:
 {"variants": [{"label": "", "description": "", "shape": "human"}]}"""
 
 
@@ -210,7 +212,12 @@ def find_variants(model: TextModel, entity: Entity) -> list[dict]:
         *([f"Appearance: {a}"] if (a := entity.appearance_own or entity.appearance) else []),
         *([f"Who it is: {w}"] if (w := entity.description or entity.summary) else []),
         "Facts:",
-        *(f"- {f.text}" for f in entity.facts if f.category in (FACT_PERMANENT, FACT_STATE)),
+        # Who the character is: a change of shape or a second name is often told there.
+        *(
+            f"- {f.text}"
+            for f in entity.facts
+            if f.category in (FACT_PERMANENT, FACT_STATE, FACT_PROFILE)
+        ),
     ]
     answer = model.invoke_json(
         "image_variants",
@@ -227,3 +234,55 @@ def find_variants(model: TextModel, entity: Entity) -> list[dict]:
         for draft in answer.variants
         if draft.label.strip()
     ][:8]
+
+
+VIEWS_SYSTEM = """Below is what a book says about one {subject}. Propose the views a set of \
+reference pictures of it should have, so that any scene can later be drawn from them. Pick \
+what suits this {subject}: a castle may need a view from above, from the front, from the \
+back and from both sides; a room an overall view and a view towards the door; a sword the \
+whole blade and a close-up of the hilt. Two to six views, the most useful first.
+
+For each view give:
+- "label": two or three words in the language of the book, as a button caption;
+- "framing": one English sentence for an image generator that sets the camera and the \
+framing only (Aerial view from high above, the whole place visible.), nothing about how \
+the {subject} looks.
+
+Reply with one JSON object and nothing else:
+{{"views": [{{"label": "", "framing": ""}}]}}"""
+
+
+class ViewDraft(BaseModel):
+    label: str
+    framing: str = ""
+
+
+class ViewDrafts(BaseModel):
+    views: list[ViewDraft] = Field(default_factory=list)
+
+
+def find_views(model: TextModel, entity: Entity) -> list[dict]:
+    """Views suited to a place or object (owner's notes 26.11): each one a base picture of
+    its own. Keys are new; the caller decides what to keep."""
+    subject = "object" if entity.kind == KIND_ITEM else "place"
+    lines = [
+        f"Name: {entity.name}",
+        *([f"Appearance: {a}"] if (a := entity.appearance_own or entity.appearance) else []),
+        *([f"What it is: {w}"] if (w := entity.description or entity.summary) else []),
+        "Facts:",
+        *(f"- {f.text}" for f in entity.facts if f.category == FACT_PERMANENT),
+    ]
+    answer = model.invoke_json(
+        "image_views",
+        [SystemMessage(VIEWS_SYSTEM.format(subject=subject)), HumanMessage("\n".join(lines))],
+        ViewDrafts,
+    )
+    return [
+        {
+            "key": "v" + new_id()[:7],
+            "label": draft.label.strip()[:60],
+            "framing": draft.framing.strip()[:400],
+        }
+        for draft in answer.views
+        if draft.label.strip() and draft.framing.strip()
+    ][:6]

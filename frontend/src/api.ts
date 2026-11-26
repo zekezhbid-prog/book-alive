@@ -423,8 +423,9 @@ export interface ImageInfo {
   style_key: string
   current_style: boolean
   is_main: boolean
-  /** The view a main picture shows; empty when not set. */
-  angle: Angle | ''
+  /** The view a main picture shows (`Angle` for a character, a `PlaceView.key` for a place
+   * or object); empty when not set. */
+  angle: string
   /** The card's outward look (`Variant.key`) a base picture belongs to; empty: the only one. */
   variant: string
   look_label: string
@@ -447,6 +448,7 @@ export const ANGLES = [
   'full_back',
 ] as const
 export type Angle = (typeof ANGLES)[number]
+export const isAngle = (view: string): view is Angle => (ANGLES as readonly string[]).includes(view)
 
 /** Picture shapes the server knows (`SIZES` there); empty leaves it to the model. */
 export const IMAGE_SIZES = ['1:1', '2:3', '3:2', '9:16', '16:9'] as const
@@ -454,7 +456,8 @@ export type ImageSize = (typeof IMAGE_SIZES)[number]
 
 /** Empty label and chapters: a main picture in `angle` (empty: the server picks one). */
 export interface LookRequest {
-  angle: Angle | ''
+  /** `Angle` for a character, a `PlaceView.key` for a place or object. */
+  angle: string
   look_label: string
   chapter_from_id: string
   chapter_to_id: string
@@ -493,6 +496,15 @@ export interface Variant {
   label: string
   description: string
   shape: 'human' | 'object'
+}
+
+/** A view of a place or object (from above, from the front): one base picture of it. */
+export interface PlaceView {
+  key: string
+  /** Button caption in the language of the book. */
+  label: string
+  /** The English camera line put in front of the prompt. */
+  framing: string
 }
 
 export interface SceneBrief {
@@ -534,7 +546,7 @@ export interface Scene extends SceneBrief {
     entity_id: string
     entity_name: string
     role: 'main' | 'look'
-    angle: Angle | ''
+    angle: string
     look_label: string
     url: string
   }[]
@@ -830,11 +842,18 @@ export const api = {
   askIllustration: (id: string, text: string) =>
     request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),
   drawIllustration: (id: string) => request<Illustration>('POST', `/illustrations/${id}/draw`),
-  variants: (entityId: string) => request<Variant[]>('GET', `/entities/${entityId}/variants`),
+  /** `checked`: the looks were searched for once, the first drawing does not search again. */
+  variants: (entityId: string) =>
+    request<{ variants: Variant[]; checked: boolean }>('GET', `/entities/${entityId}/variants`),
   /** The model's list of the card's outward looks; nothing is saved until `saveVariants`. */
   findVariants: (entityId: string) => request<Variant[]>('POST', `/entities/${entityId}/variants/find`),
   saveVariants: (entityId: string, variants: Variant[]) =>
     request<Variant[]>('PUT', `/entities/${entityId}/variants`, variants),
+  views: (entityId: string) => request<PlaceView[]>('GET', `/entities/${entityId}/views`),
+  /** The model's views for a place or object; nothing is saved until `saveViews`. */
+  findViews: (entityId: string) => request<PlaceView[]>('POST', `/entities/${entityId}/views/find`),
+  saveViews: (entityId: string, views: PlaceView[]) =>
+    request<PlaceView[]>('PUT', `/entities/${entityId}/views`, views),
   /** The prompt in another language (`ru`, `by` or `en`): the other half of the two-language field. */
   translateImagePrompt: (entityId: string, text: string, language: string) =>
     request<{ text: string }>('POST', `/entities/${entityId}/image-prompt/translate`, { text, language }),

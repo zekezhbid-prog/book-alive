@@ -4,7 +4,7 @@ import {
   api,
   peek,
   sectionOf,
-  type Angle,
+  isAngle,
   type ChapterBrief,
   type EntityKind,
   type ImageInfo,
@@ -419,9 +419,10 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
     location.href = api.sceneArchiveUrl(scene.id)
   }
   const section = (kind: EntityKind) => sectionOf(kind)
-  const describe = (main: boolean, angle: Angle | '', look: string) =>
+  // A place's own view (owner's notes 26.11) has no caption here, only a character's.
+  const describe = (main: boolean, angle: string, look: string) =>
     main
-      ? [t('gallery.main'), angle && t(`angle.${angle}`)].filter(Boolean).join(', ')
+      ? [t('gallery.main'), isAngle(angle) && t(`angle.${angle}`)].filter(Boolean).join(', ')
       : look || t('scene.look')
 
   return (

@@ -205,6 +205,13 @@ class Entity(Base):
     # and without; one being under several names and shapes): [{key, label, description,
     # shape}], shape "human" (six views) or "object" (two). Found on the user's press.
     variants: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    # The looks were searched for once (on the first drawing or by the button): the first
+    # drawing does not search again (owner's notes 26.11).
+    variants_checked: Mapped[bool] = mapped_column(default=False)
+    # Views of a place or object, proposed by the model and kept by the user (from above,
+    # from the front...): [{key, label, framing}], `framing` is the English camera line put
+    # in front of the prompt; a base picture of a view has it as `Image.angle`.
+    views: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # What the author told about the card in "Improve" and the book does not say: true
     # without a quote, heard by every later run. A note the text confirms becomes a fact.
     author_notes: Mapped[list[str]] = mapped_column(JSON, default=list)

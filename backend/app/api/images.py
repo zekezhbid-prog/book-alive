@@ -27,6 +27,7 @@ from app.images.prompts import (
     build_image_prompt,
     chapters_between,
     find_variants,
+    find_views,
     refine_image_prompt,
     translate_prompt,
 )
@@ -375,7 +376,8 @@ def update_image(image_id: str, patch: ImagePatch, session: SessionDep) -> Image
         # A card may have any number of main pictures: each one shows another view.
         image.is_main = patch.is_main and image.entity_id is not None
     if patch.angle is not None:
-        if patch.angle not in ("", *angles.ANGLES):
+        entity = session.get(Entity, image.entity_id) if image.entity_id else None
+        if patch.angle not in ("", *angles.ANGLES, *_view_keys(entity)):
             raise HTTPException(422, "bad_angle")
         image.angle = patch.angle
     if patch.variant is not None:
@@ -433,6 +435,11 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
         if body.angle and body.angle not in angles.ANGLES:
             raise HTTPException(422, "bad_angle")
         angle = body.angle or angles.next_angle(own if variant else entity.images, key)
+    elif not is_look and body.angle:
+        # A place or object: one of the views the user kept (owner's notes 26.11).
+        if body.angle not in _view_keys(entity):
+            raise HTTPException(422, "bad_angle")
+        angle = body.angle
     # Every new picture is drawn from the main ones, so the face stays the same;
     # the very first main picture starts from nothing. The user's samples go first.
     samples = [session.get(Image, image_id) for image_id in dict.fromkeys(body.reference_ids)]
@@ -544,7 +551,7 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
     references = [settings.files_dir / image.path for image in drawing.references]
     prompt = body.prompt.strip()
     if body.add_view and drawing.angle:
-        prompt = f"{angles.ANGLES[drawing.angle]} {prompt}"
+        prompt = f"{_framing(entity, drawing.angle)} {prompt}"
     try:
         result = model.generate(prompt, references, body.size)
     except ImageGenerationFailed as exc:
@@ -665,20 +672,33 @@ class Variant(BaseModel):
         return value if value in ("human", "object") else "human"
 
 
+class Variants(BaseModel):
+    variants: list[Variant]
+    # The looks were searched for once: the first drawing does not search again.
+    checked: bool
+
+
 @router.get("/entities/{entity_id}/variants")
-def get_variants(entity_id: str, session: SessionDep) -> list[Variant]:
-    return [Variant(**v) for v in _entity(session, entity_id).variants or []]
+def get_variants(entity_id: str, session: SessionDep) -> Variants:
+    entity = _entity(session, entity_id)
+    return Variants(
+        variants=[Variant(**v) for v in entity.variants or []],
+        checked=entity.variants_checked or bool(entity.variants),
+    )
 
 
 @router.post("/entities/{entity_id}/variants/find")
 def find_entity_variants(entity_id: str, session: SessionDep) -> list[Variant]:
-    """The text model lists the character's outward looks; shown, saved only by the user."""
+    """The text model lists the character's outward looks; shown, saved only by the user.
+    The search is remembered, so the first drawing asks the model only once (26.11)."""
     entity = _entity(session, entity_id)
     model = _prompt_model(session, entity_id)
     try:
         found = find_variants(model, entity)
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    entity.variants_checked = True
+    session.commit()
     return [Variant(**v) for v in found]
 
 
@@ -697,6 +717,64 @@ def save_variants(entity_id: str, body: list[Variant], session: SessionDep) -> l
         # The first looks of a card: the base pictures drawn so far belong to the first one.
         if not had_looks and body and image.is_main and not image.variant:
             image.variant = body[0].key
+    session.commit()
+    return body
+
+
+# ---------- views of a place or object ----------
+
+
+class View(BaseModel):
+    key: str = Field(min_length=1, max_length=20)
+    label: str = Field(min_length=1, max_length=60)
+    framing: str = Field(min_length=1, max_length=400)
+
+
+def _view_keys(entity: Entity | None) -> list[str]:
+    if entity is None or entity.kind == KIND_CHARACTER:
+        return []
+    return [v["key"] for v in entity.views or []]
+
+
+def _framing(entity: Entity, angle: str) -> str:
+    """The camera line put in front of the prompt of one picture of a set."""
+    if angle in angles.ANGLES:
+        return angles.ANGLES[angle]
+    return next((v["framing"] for v in entity.views or [] if v.get("key") == angle), "")
+
+
+@router.get("/entities/{entity_id}/views")
+def get_views(entity_id: str, session: SessionDep) -> list[View]:
+    return [View(**v) for v in _entity(session, entity_id).views or []]
+
+
+@router.post("/entities/{entity_id}/views/find")
+def find_entity_views(entity_id: str, session: SessionDep) -> list[View]:
+    """The text model proposes views suited to the place or object; saved only by the user."""
+    entity = _entity(session, entity_id)
+    if entity.kind == KIND_CHARACTER:
+        raise HTTPException(422, "views_for_places_only")
+    model = _prompt_model(session, entity_id)
+    try:
+        found = find_views(model, entity)
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return [View(**v) for v in found]
+
+
+@router.put("/entities/{entity_id}/views")
+def save_views(entity_id: str, body: list[View], session: SessionDep) -> list[View]:
+    """The views the user kept. A picture of a dropped view stays, as a plain base picture."""
+    entity = _entity(session, entity_id)
+    if entity.kind == KIND_CHARACTER:
+        raise HTTPException(422, "views_for_places_only")
+    if len(body) > 8:
+        raise HTTPException(422, "too_many_views")
+    entity.views = [v.model_dump() for v in body]
+    kept = {v.key for v in body}
+    for image in entity.images:
+        if image.angle and image.angle not in kept:
+            image.angle = ""
     session.commit()
     return body
 

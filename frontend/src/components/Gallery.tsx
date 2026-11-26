@@ -7,6 +7,7 @@ import {
   type EntityKind,
   type ImageInfo,
   type ImageSize,
+  type PlaceView,
   type Variant,
 } from '../api'
 import { errorText, useI18n } from '../i18n'
@@ -337,7 +338,7 @@ function saveAuto(on: boolean) {
 }
 
 /** The newest base picture of a view: the one its slot shows. */
-function latest(bases: ImageInfo[], view: Angle) {
+function latest(bases: ImageInfo[], view: string) {
   return bases
     .filter((b) => b.angle === view)
     .reduce<ImageInfo | null>((best, b) => (!best || b.created_at > best.created_at ? b : best), null)
@@ -376,7 +377,7 @@ export function ImageDialog({
   const [size, setSize] = useState<ImageSize>('1:1')
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort' | 'variants'>('')
   // After the first face of an empty set: the views still to draw once the user likes it.
-  const [pending, setPending] = useState<{ views: Angle[]; references: string[] } | null>(null)
+  const [pending, setPending] = useState<{ views: string[]; references: string[] } | null>(null)
   // The face shown large in its own little window, waiting for "like it" or "redraw".
   const [faceCheck, setFaceCheck] = useState<ImageInfo | null>(null)
   const [progress, setProgress] = useState('')
@@ -397,7 +398,7 @@ export function ImageDialog({
   const [picked, setPicked] = useState('')
   const draft = useRef({ prompt: '', look: '', chapter: '' })
   // The view of a set being drawn right now: its slot shows a spinner.
-  const [drawing, setDrawing] = useState<Angle | ''>('')
+  const [drawing, setDrawing] = useState('')
   const [error, setError] = useState('')
   const picker = useRef<HTMLInputElement>(null)
   // What the user wants changed in the redraw of the face, typed or spoken.
@@ -411,13 +412,26 @@ export function ImageDialog({
   const [variantKey, setVariantKey] = useState('')
   // Looks the model found, waiting for "Save" or "Cancel".
   const [found, setFound] = useState<Variant[] | null>(null)
+  // The looks were searched for once: the first drawing searches only while this is false.
+  const [looksChecked, setLooksChecked] = useState(true)
+  // A place or object: the views the user kept, the ones the model just proposed, and the
+  // ones ticked to be drawn on the next press (owner's notes 26.11).
+  const [placeViews, setPlaceViews] = useState<PlaceView[]>([])
+  const [foundViews, setFoundViews] = useState<PlaceView[] | null>(null)
+  const [tickedViews, setTickedViews] = useState<string[]>([])
   useEffect(() => {
-    if (!withAngles) return
-    api.variants(entityId).then((list) => {
+    if (!withAngles) {
+      api.views(entityId).then(setPlaceViews, (e) => setError(errorText(t, e)))
+      return
+    }
+    api.variants(entityId).then(({ variants: list, checked }) => {
       setVariants(list)
+      setLooksChecked(checked)
       setVariantKey((now) => now || list[0]?.key || '')
     }, (e) => setError(errorText(t, e)))
   }, [entityId, withAngles, t])
+  const viewLabel = (view: string) =>
+    placeViews.find((v) => v.key === view)?.label ?? t(`angle.${view as Angle}`)
   const variant = variants.find((v) => v.key === variantKey) ?? null
   const SET_ORDER = variant?.shape === 'object' ? OBJECT_ORDER : FULL_ORDER
   const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
@@ -434,6 +448,13 @@ export function ImageDialog({
   const samplesAllowed = !(asSet && bases.length > 0)
   // The views the next press draws: ticked and still empty.
   const wanted = SET_ORDER.filter((view) => views.includes(view) && !latest(bases, view))
+  // A place or object: the ticked views still without a picture. While there are any, the
+  // press draws them as a set; otherwise it adds one more free picture.
+  const placeWanted =
+    isMain && !withAngles
+      ? placeViews.filter((v) => tickedViews.includes(v.key) && !latest(bases, v.key)).map((v) => v.key)
+      : []
+  const placeSet = placeWanted.length > 0
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
   // A place or object opens on the "new picture" tile: nothing large until one is clicked.
@@ -458,7 +479,7 @@ export function ImageDialog({
     try {
       const written = await api.imagePrompt(entityId, {
         ...request,
-        view_free: asSet,
+        view_free: asSet || placeSet,
         reference_ids,
         note: withAngles ? '' : note.trim(),
       })
@@ -495,10 +516,10 @@ export function ImageDialog({
   }
 
   // The views of a set, one after another; each new one is drawn from those already there.
-  const drawViews = async (order: Angle[], text: string, reference_ids: string[]) => {
+  const drawViews = async (order: string[], text: string, reference_ids: string[]) => {
     let last: ImageInfo | null = null
     for (const [n, view] of order.entries()) {
-      setProgress(t('generate.set.progress', { done: n + 1, total: order.length, view: t(`angle.${view}`) }))
+      setProgress(t('generate.set.progress', { done: n + 1, total: order.length, view: viewLabel(view) }))
       setDrawing(view)
       const made = await api.generateImage(entityId, {
         ...request,
@@ -552,15 +573,32 @@ export function ImageDialog({
   const draw = async () => {
     setError('')
     setProgress('')
+    // The first drawing of a character asks once whether it has several outward looks
+    // (owner's notes 26.11): with two or more, they are offered and nothing is drawn yet.
+    if (asSet && !looksChecked && !variants.length) {
+      setBusy('variants')
+      try {
+        const list = await api.findVariants(entityId)
+        setLooksChecked(true)
+        if (list.length > 1) {
+          setFound(list)
+          setProgress(t('variants.auto'))
+          return setBusy('')
+        }
+      } catch (e) {
+        setError(errorText(t, e))
+        return setBusy('')
+      }
+    }
     let reference_ids: string[] = []
-    let order = wanted
+    let order: string[] = asSet ? wanted : placeWanted
     const useSamples = samplesAllowed && samples.length > 0
     try {
       if (useSamples && asSet) {
         const sorted = await sortSamples()
         if (!sorted) return setBusy('')
         reference_ids = sorted.references
-        order = order.filter((view) => !sorted.filled.includes(view))
+        order = order.filter((view) => !sorted.filled.includes(view as Angle))
       } else if (useSamples) {
         setBusy('upload')
         reference_ids = await storeSamples(samples.slice(0, 3))
@@ -581,10 +619,11 @@ export function ImageDialog({
     }
     setBusy('image')
     try {
-      if (asSet) {
+      if (asSet || placeSet) {
         // The face front comes first and sets the face for every other view: the set waits
-        // until the user likes it.
-        const first = order[0] === 'face_front' && order.length > 1
+        // until the user likes it. A place or object with no picture yet: its first view
+        // sets the look of the rest the same way (owner's notes 26.11).
+        const first = order.length > 1 && (asSet ? order[0] === 'face_front' : bases.length === 0)
         const made = await drawViews(first ? ['face_front'] : order, text, reference_ids)
         if (first) {
           setPending({ views: order.slice(1), references: reference_ids })
@@ -653,7 +692,7 @@ export function ImageDialog({
       if (face) await api.deleteImage(face.id)
       setCurrent(null)
       onChanged()
-      const made = await drawViews(['face_front'], text, pending.references)
+      const made = await drawViews([face?.angle || 'face_front'], text, pending.references)
       setFaceCheck(made)
       setProgress('')
     } catch (e) {
@@ -762,6 +801,7 @@ export function ImageDialog({
       setVariants(saved)
       setVariantKey(saved[0]?.key ?? '')
       setFound(null)
+      if (saved.length > 1) setProgress(t('variants.kept'))
       setCurrent(null)
       setInspected(null)
       onChanged()
@@ -841,6 +881,35 @@ export function ImageDialog({
     setPicked(id)
     setCurrent(null)
   }
+
+  // A place or object: the model proposes views, the user keeps some (owner's notes 26.11).
+  const findPlaceViews = async () => {
+    setBusy('variants')
+    setError('')
+    try {
+      setFoundViews(await api.findViews(entityId))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  const keepPlaceViews = async () => {
+    if (!foundViews) return
+    setBusy('variants')
+    try {
+      const saved = await api.saveViews(entityId, foundViews)
+      setPlaceViews(saved)
+      // The new views are ticked: one press draws them all.
+      setTickedViews(saved.map((v) => v.key))
+      setFoundViews(null)
+      onChanged()
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  const tickPlaceView = (key: string) =>
+    setTickedViews((had) => (had.includes(key) ? had.filter((k) => k !== key) : [...had, key]))
 
   // The full explanation of the form: in the empty picture, or on hover over "Generate".
   const longHint = asSet
@@ -1017,7 +1086,7 @@ export function ImageDialog({
                   <button
                     className={`look-tile ${inspected?.id === item.id ? 'shown' : ''}`}
                     disabled={busy !== ''}
-                    title={t('generate.slot.show')}
+                    title={item.angle ? viewLabel(item.angle) : t('generate.slot.show')}
                     onClick={() => {
                       setPeek('')
                       setCurrent(item)
@@ -1028,6 +1097,83 @@ export function ImageDialog({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+          {/* A place or object: views of its own (from above, from the front), each a base
+              picture; ticked empty ones are drawn as a set on the next press (owner's notes 26.11). */}
+          {isMain && !withAngles && (
+            <div className="stack variant-bar place-views">
+              <div className="row wrap">
+                <span className="small muted">{t('views.title')}</span>
+                {placeViews.map((v) => {
+                  const made = latest(bases, v.key)
+                  return made ? (
+                    <button
+                      key={v.key}
+                      className={`chip ${inspected?.id === made.id ? 'active' : ''}`}
+                      disabled={busy !== '' || !!pending}
+                      title={t('generate.slot.show')}
+                      onClick={() => {
+                        setPeek('')
+                        setCurrent(made)
+                        setInspected(made)
+                      }}
+                    >
+                      <CheckIcon />
+                      {v.label}
+                    </button>
+                  ) : (
+                    <label key={v.key} className="chip small" title={v.framing}>
+                      <input
+                        type="checkbox"
+                        checked={tickedViews.includes(v.key)}
+                        disabled={busy !== '' || !!pending}
+                        onChange={() => tickPlaceView(v.key)}
+                      />
+                      {v.label}
+                    </label>
+                  )
+                })}
+                <span className="spacer" />
+                <button
+                  className="btn ghost small"
+                  disabled={busy !== '' || !!pending || !!foundViews}
+                  title={t('views.find.hint')}
+                  onClick={findPlaceViews}
+                >
+                  <SparklesIcon />
+                  {busy === 'variants' ? t('views.finding') : t(placeViews.length ? 'views.find.again' : 'views.find')}
+                </button>
+              </div>
+              {foundViews && (
+                <div className="stack variant-offer">
+                  <span className="small muted">{t('views.found', { n: foundViews.length })}</span>
+                  {foundViews.map((v) => (
+                    <div key={v.key} className="row">
+                      <span className="grow small">
+                        <b>{v.label}</b> — <span className="faint">{v.framing}</span>
+                      </span>
+                      <button
+                        className="btn ghost small icon"
+                        title={t('app.delete')}
+                        aria-label={t('app.delete')}
+                        onClick={() => setFoundViews(foundViews.filter((x) => x.key !== v.key))}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <div className="row">
+                    <button className="btn primary small" disabled={busy !== ''} onClick={keepPlaceViews}>
+                      <CheckIcon />
+                      {t('generate.face.apply')}
+                    </button>
+                    <button className="btn ghost small" onClick={() => setFoundViews(null)}>
+                      {t('app.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {/* In context: the new picture first, then every earlier one; a click takes its settings. */}
@@ -1292,6 +1438,8 @@ export function ImageDialog({
               ? t('generate.image.busy')
               : asSet
                 ? t('generate.set', { n: wanted.length })
+                : placeSet
+                ? t('generate.set', { n: placeWanted.length })
                 : t('generate.image')}
           </button>
         </div>
@@ -1308,7 +1456,9 @@ export function ImageDialog({
         <div className="overlay face-check-overlay">
           <div className="dialog face-check">
             <div className="row">
-              <h3 className="grow">{t('generate.face.title')}</h3>
+              <h3 className="grow">
+                {withAngles ? t('generate.face.title') : t('views.first.title', { view: viewLabel(faceCheck.angle) })}
+              </h3>
               <button
                 className="btn ghost small icon"
                 title={t('app.cancel')}
@@ -1372,7 +1522,7 @@ export function ImageDialog({
                     autoFocus
                     value={remark}
                     maxLength={1000}
-                    placeholder={t('generate.face.remark.placeholder')}
+                    placeholder={t(withAngles ? 'generate.face.remark.placeholder' : 'views.remark.placeholder')}
                     onChange={(e) => setRemark(e.target.value)}
                   />
                   <MicButton

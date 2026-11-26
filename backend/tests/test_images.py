@@ -735,3 +735,82 @@ def test_redo_of_an_uploaded_picture_and_its_rules(client, project, monkeypatch)
     assert drawn[-1][1] == [] and out["origin"] == "generated"
     client.post(redo, json={"remark": "brighter"})
     assert len(drawn[-1][1]) == 1  # the picture itself, as drawn a moment ago
+
+
+def test_looks_are_searched_with_who_it_is_and_only_once(client, session, project, monkeypatch):
+    # Owner's notes 26.11: the shapes of Zihtinka are told among the facts about who she is,
+    # and the first drawing must offer the looks itself; it asks the model only once.
+    first = project.chapters[0]
+    hero = session.get(Entity, project.hero_id)
+    hero.facts.append(
+        EntityFact(chapter_id=first.id, chapter_hash="", category="profile", text="бывает котиком")
+    )
+    session.commit()
+    seen = []
+
+    class Model:
+        def __init__(self, session, project_id, task=None):
+            pass
+
+        def invoke_json(self, operation, messages, schema):
+            seen.append(messages[1].content)
+            return schema(variants=[{"label": "девочка"}, {"label": "котик"}])
+
+    monkeypatch.setattr("app.api.images.TextModel", Model)
+    url = f"/api/entities/{project.hero_id}/variants"
+    assert client.get(url).json() == {"variants": [], "checked": False}
+    found = client.post(f"{url}/find").json()
+    assert [v["label"] for v in found] == ["девочка", "котик"]
+    assert "бывает котиком" in seen[0]
+    assert client.get(url).json()["checked"] is True
+
+
+def test_a_place_gets_views_of_its_own_drawn_with_their_framing(
+    client, session, project, monkeypatch
+):
+    # Owner's notes 26.11: a castle from above, from the front...; the model proposes, the
+    # user keeps some, each one is drawn with its camera line in front of the prompt.
+    castle = Entity(project_id=project.id, kind="location", name="Замок", aliases=[])
+    session.add(castle)
+    session.commit()
+
+    class Model:
+        def __init__(self, session, project_id, task=None):
+            pass
+
+        def invoke_json(self, operation, messages, schema):
+            return schema(
+                views=[
+                    {"label": "Вид сверху", "framing": "Aerial view from high above."},
+                    {"label": "Спереди", "framing": "Seen from the front, at eye level."},
+                ]
+            )
+
+    monkeypatch.setattr("app.api.images.TextModel", Model)
+    url = f"/api/entities/{castle.id}/views"
+    found = client.post(f"{url}/find").json()
+    assert [v["label"] for v in found] == ["Вид сверху", "Спереди"]
+    assert client.get(url).json() == []  # nothing kept until the user saves
+    assert client.put(url, json=found).json() == found
+    assert client.post(f"/api/entities/{project.hero_id}/views/find").status_code == 422
+
+    drawn = []
+    _painter(monkeypatch, drawn)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    gen = f"/api/entities/{castle.id}/images/generate"
+    top = client.post(gen, json={"prompt": "a castle", "angle": found[0]["key"], "add_view": True})
+    assert top.status_code == 200, top.text
+    assert top.json()["angle"] == found[0]["key"]
+    assert drawn[0][0] == "Aerial view from high above. a castle"
+    # The next view is drawn from the first picture.
+    front = client.post(
+        gen, json={"prompt": "a castle", "angle": found[1]["key"], "add_view": True}
+    )
+    assert front.json()["reference_ids"] == [top.json()["id"]]
+    assert client.post(gen, json={"prompt": "p", "angle": "face_front"}).status_code == 422
+
+    # A dropped view leaves its picture as a plain base picture.
+    client.put(url, json=found[1:])
+    listed = client.get(f"/api/projects/{project.id}/images?entity_id={castle.id}").json()
+    pictures = {i["id"]: i for i in listed}
+    assert pictures[top.json()["id"]]["angle"] == ""
