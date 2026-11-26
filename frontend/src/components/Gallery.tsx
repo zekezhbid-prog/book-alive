@@ -13,6 +13,7 @@ import { errorText, useI18n } from '../i18n'
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 import { MicButton } from './MicButton'
+import { AutoTextarea } from './AutoTextarea'
 import { TwoLangPrompt } from './TwoLangPrompt'
 import { useTwoLang } from '../twoLang'
 
@@ -88,7 +89,7 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle,
           {/* With pictures, only a pencil like the other icons: the row keeps its room. */}
           {!!images?.length && (
             <button
-              className="btn ghost icon gold ref-edit"
+              className="btn primary nav-action ref-edit"
               title={t('gallery.edit')}
               aria-label={t('gallery.edit')}
               onClick={() => setDialog(true)}
@@ -391,7 +392,8 @@ export function ImageDialog({
   const [note, setNote] = useState('')
   const [chapter, setChapter] = useState('')
   const [prompt, setPrompt] = useState('')
-  const [size, setSize] = useState<ImageSize | ''>('')
+  // Square unless the user picks another shape (owner's notes 26.11).
+  const [size, setSize] = useState<ImageSize>('1:1')
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort' | 'variants'>('')
   // After the first face of an empty set: the views still to draw once the user likes it.
   const [pending, setPending] = useState<{ views: Angle[]; references: string[] } | null>(null)
@@ -1146,10 +1148,10 @@ export function ImageDialog({
                 {!withAngles && (
                   <label className="stack field">
                     <span className="small muted">{t('generate.note')}</span>
-                    <input
+                    <AutoTextarea
                       className="input small"
                       value={note}
-                      maxLength={300}
+                      maxLength={1000}
                       placeholder={t('generate.note.placeholder')}
                       disabled={busy !== ''}
                       onChange={(e) => setNote(e.target.value)}
@@ -1316,9 +1318,8 @@ export function ImageDialog({
               className="input small"
               value={size}
               aria-label={t('generate.size')}
-              onChange={(e) => setSize(e.target.value as ImageSize | '')}
+              onChange={(e) => setSize(e.target.value as ImageSize)}
             >
-              <option value="">{t('generate.size.auto')}</option>
               {IMAGE_SIZES.map((option) => (
                 <option key={option} value={option}>
                   {t(`generate.size.${option}`)}

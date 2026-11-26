@@ -111,7 +111,7 @@ class PromptRequest(LookRequest):
     # A prompt for a set of base pictures: the appearance only, no view.
     view_free: bool = False
     # The user's wish for this one picture of a place or object ("a view from above").
-    note: str = Field(default="", max_length=300)
+    note: str = Field(default="", max_length=1000)
 
 
 class GenerateRequest(LookRequest):

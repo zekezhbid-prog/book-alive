@@ -3,6 +3,7 @@ import { api, type Scene, type SceneExportOptions } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { DownloadIcon } from './icons'
 import { MicButton } from './MicButton'
+import { AutoTextarea } from './AutoTextarea'
 
 const ASPECTS: SceneExportOptions['aspect'][] = ['16:9', '9:16', '1:1']
 const DURATIONS = [5, 10, 15, 20, 30, 45, 60]
@@ -151,7 +152,7 @@ export default function SceneExport({ scene, onClose }: { scene: Scene; onClose:
         <label className="stack field">
           <span className="small muted">{t('export.note')}</span>
           <div className="row">
-            <input
+            <AutoTextarea
               className="input small grow"
               value={options.note}
               maxLength={1000}

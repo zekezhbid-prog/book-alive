@@ -26,7 +26,8 @@ from app.models import Connection, UsageEvent, new_id
 TIMEOUT = httpx.Timeout(300, connect=20)
 
 # Picture shapes offered in the UI. Chat-style image models take an aspect ratio, the
-# classic endpoint a size in pixels; empty means the model's own default.
+# classic endpoint a size in pixels. Nothing chosen means square (owner's notes 26.11).
+DEFAULT_SIZE = "1:1"
 SIZES = {
     "1:1": "1024x1024",
     "2:3": "1024x1536",
@@ -78,7 +79,8 @@ class ImageModel:
         self, prompt: str, references: list[Path] | None = None, size: str = ""
     ) -> GeneratedImage:
         references = references or []
-        if size and size not in SIZES:
+        size = size or DEFAULT_SIZE
+        if size not in SIZES:
             raise ValueError(f"unknown size {size!r}")
         release_connection(self.session)  # a picture can take minutes
         try:

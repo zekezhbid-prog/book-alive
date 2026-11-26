@@ -396,7 +396,11 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .view-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
 .view-choice label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); }
 .view-choice input { accent-color: var(--accent); }
-.image-dialog .picture-slot img { max-height: 340px; }
+/* Always a square: a tall or wide picture fits inside, the window never changes size. */
+.image-dialog .picture-slot { aspect-ratio: 1; width: min(340px, 100%); min-height: 0; justify-self: center; align-self: center; margin-inline: auto; }
+.image-dialog .picture-slot:has(img) { background: var(--panel-2); }
+.image-dialog .picture-slot .slot-picture, .image-dialog .picture-slot .slot-picture a { width: 100%; height: 100%; display: grid; place-items: center; }
+.image-dialog .picture-slot img { width: 100%; height: 100%; max-height: none; object-fit: contain; }
 .view-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .view-slot { display: flex; flex-direction: column; gap: 4px; }
 .view-slot-face { position: relative; width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden; border: 1px solid var(--line-2); transition: border-color 0.15s, box-shadow 0.15s; border-radius: var(--radius-sm); background: var(--panel-2); cursor: default; }
@@ -588,6 +592,8 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .present-list { margin: 0; line-height: 1.7; }
 .pick-all { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .tile-wrap { position: relative; height: 100%; }
+/* A button only grows to its text: a card with little text came out narrower (26.11). */
+.tile-wrap > .tile { width: 100%; }
 .tile-check { position: absolute; z-index: 2; top: 12px; right: 12px; width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--accent); }
 .tile.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
 .tile-wrap .tile-title { padding-right: 22px; }

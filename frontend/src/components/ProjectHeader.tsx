@@ -70,18 +70,18 @@ export default function ProjectHeader({ project, children, chat }: Props) {
           <KeyIcon />
           <span>{t('tabs.item')}</span>
         </NavLink>
-        {/* Scenes are frames to draw and animate: the illustrator's part only. */}
-        {illustrating && (
-          <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
-            <FilmIcon />
-            <span>{t('tabs.scenes')}</span>
-          </NavLink>
-        )}
         {/* Pictures of the book, made in a dialogue from the cards' references. */}
         {illustrating && (
           <NavLink to={`${base}/images`} className={({ isActive }) => tabClass(isActive)}>
             <ImageIcon />
             <span>{t('tabs.images')}</span>
+          </NavLink>
+        )}
+        {/* Scenes are frames to draw and animate: the illustrator's part only. */}
+        {illustrating && (
+          <NavLink to={`${base}/scenes`} className={({ isActive }) => tabClass(isActive)}>
+            <FilmIcon />
+            <span>{t('tabs.scenes')}</span>
           </NavLink>
         )}
         {illustrating && (

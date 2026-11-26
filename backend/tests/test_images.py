@@ -215,6 +215,21 @@ def test_generation_passes_the_chosen_size_to_both_endpoints(session, project):
         image_model(session, project, handler).generate("a castle", size="7:3")
 
 
+def test_generation_is_square_unless_a_size_is_chosen(session, project):
+    """Owner's notes 26.11: the default shape everywhere is 1:1."""
+    bodies = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies[request.url.path.rsplit("/", 1)[-1]] = json.loads(request.content)
+        if request.url.path.endswith("/completions"):
+            return httpx.Response(404, json={"error": "no such route"})
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(PNG).decode()}]})
+
+    image_model(session, project, handler).generate("a castle")
+    assert bodies["completions"]["image_config"] == {"aspect_ratio": "1:1"}
+    assert bodies["generations"]["size"] == "1024x1024"
+
+
 def test_generation_reports_a_provider_error(session, project, tmp_path):
     reference = tmp_path / "main.png"
     reference.write_bytes(PNG)

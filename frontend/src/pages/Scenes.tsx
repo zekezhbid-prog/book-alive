@@ -15,6 +15,7 @@ import {
 import CardGrid from '../components/CardGrid'
 import { ImageDialog } from '../components/Gallery'
 import SceneExport from '../components/SceneExport'
+import { AutoTextarea } from '../components/AutoTextarea'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import DescriptionEditor from '../components/DescriptionEditor'
@@ -552,7 +553,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
         )}
       </div>
       {!scene.prompt && (
-        <input
+        <AutoTextarea
           className="input"
           value={note}
           maxLength={2000}
