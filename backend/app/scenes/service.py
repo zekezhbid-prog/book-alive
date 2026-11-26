@@ -52,22 +52,30 @@ Reply with one JSON object and nothing else:
 {"scenes": [{"from": 0, "to": 4, "title": "", "summary": "", "vivid": false, \
 "characters": [], "location": ""}]}"""
 
-VIDEO_SYSTEM = """You write one prompt for an AI video generator: a single shot of 5 to 10 \
-seconds that brings a scene from a book to life.
+VIDEO_SYSTEM = """You write one prompt for an AI video generator that makes video with \
+sound: 5 to 15 seconds that bring a scene from a book to life.
 
 Rules:
-- English only, one paragraph, under 130 words, no line breaks, no quotation marks.
-- Pick the single most visual moment of the scene and describe one clear action.
+- English, except the spoken lines. Under 250 words, no line breaks.
+- A scene may take several shots. When the action moves on (someone arrives, then they \
+talk, then one leaves) or the camera has to change, write 2 to 4 shots, each beginning with \
+its number and time, for example: Shot 1 (0-4s): ... Shot 2 (4-9s): ... Otherwise write one \
+shot. Each shot has one clear action.
+- Dialogue: when people speak in the scene text, put their lines into the shot where they \
+are said, word for word in the language of the book, in quotation marks, with who says \
+them and how (for example: the figure from reference 1 says quietly: "..."). Take only \
+lines the text gives, the ones that fit the time, about 2.5 words a second. Also name the \
+sounds of the place in a few words.
 - Video models do not know the book. Never rely on names: describe who is on screen by how \
 they look. When you use a reference picture for someone, call them "the figure from \
 reference N" and add only what the picture cannot show (action, expression, state).
-- Choose the reference pictures the shot needs from those listed. For each person or place \
+- Choose the reference pictures the shots need from those listed. For each person or place \
 on screen, take the look made for this chapter when there is one; otherwise take only the \
-base views this shot needs (a face for a close-up, a full-length view for a wide shot). Use \
+base views the shots need (a face for a close-up, a full-length view for a wide shot). Use \
 as few as serve, at most 4 in all, and mention in the prompt only the ones you chose.
 - Appearance comes only from the facts given. Do not invent clothes, colours or features.
-- Say where it happens, the time of day and the light, then the camera: shot size and one \
-movement.
+- Say once where it happens, the time of day and the light; for each shot the camera: shot \
+size and one movement.
 - If the author's note below asks for something, it overrides your own choices.
 - End with the style, word for word: {style}
 
@@ -76,7 +84,8 @@ Reply with one JSON object and nothing else:
 
 REFINE_SYSTEM = """Below is a prompt for an AI video generator and a change the author \
 wants. Rewrite the prompt with that change and keep everything else as it is, including \
-the references and the style at the end. English only, one paragraph, under 130 words.
+the references, the shots, the spoken lines (in the language of the book) and the style at \
+the end. English apart from the spoken lines, under 250 words, no line breaks.
 
 Reply with the prompt only."""
 
@@ -545,7 +554,10 @@ def enrich_scene(
 
 def frame_prompt(prompt: str) -> str:
     """The still that a video model animates from: the same shot, frozen at its start."""
-    return f"A single still frame, the opening moment of this shot, no motion blur: {prompt}"
+    return (
+        "A single still frame, the opening moment of the first shot, no motion blur, "
+        f"no text: {prompt}"
+    )
 
 
 # ---------- archive ----------

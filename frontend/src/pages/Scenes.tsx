@@ -27,7 +27,7 @@ import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import {
   CheckIcon,
   CopyIcon,
-  FilmIcon,
+  TrashIcon,
   GoldPlusSymbol,
   GoldSparklesSymbol,
   DownloadIcon,
@@ -378,6 +378,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
   const [note, setNote] = useState('')
   const [change, setChange] = useState('')
   const [busy, setBusy] = useState<'' | 'prompt' | 'refine'>('')
+  const [promptOpen, setPromptOpen] = useState(Boolean(scene.prompt))
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   // The picture window over the scene: for a card in it, or for the first frame.
@@ -436,6 +437,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
   const build = async () => {
     if (await enoughRefs()) {
       setRefsChanged(false)
+      setPromptOpen(true)
       run('prompt', () => api.buildScenePrompt(scene.id, note))
     }
   }
@@ -465,8 +467,23 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
     <>
       <div className="row">
         <h1 className="entity-name grow">{scene.title || t('book.untitled')}</h1>
-        <button className="btn ghost small danger" onClick={onDelete}>
-          {t('scene.delete')}
+        {/* Saving the scene and deleting it are icons beside the ✕ (owner's notes 26.11). */}
+        <button
+          className="btn ghost small icon"
+          disabled={aiReady === false}
+          title={t('export.button')}
+          aria-label={t('export.button')}
+          onClick={openExport}
+        >
+          <UploadIcon />
+        </button>
+        <button
+          className="btn ghost small icon gold"
+          title={t('scene.delete')}
+          aria-label={t('scene.delete')}
+          onClick={onDelete}
+        >
+          <TrashIcon />
         </button>
         <button className="btn ghost card-close" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
           ✕
@@ -597,10 +614,14 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
         />
       )}
 
-      <div className="row">
-        <h4 className="grow">{t('scene.prompt')}</h4>
-        {/* The scene's actions are icons in one row beside the heading, the name on hover
-            (owner's notes 26.11). */}
+      {/* The prompt folds away; building it opens the fold. The busy line sits in the
+          heading, so nothing below moves while it is written (owner's notes 26.11). */}
+      <FoldHead
+        title={t('scene.prompt')}
+        open={promptOpen || busy !== ''}
+        onToggle={() => setPromptOpen((now) => !now)}
+        note={busy === 'prompt' ? <span className="muted small">{t('scene.build.busy')}</span> : undefined}
+      >
         <button
           className="btn ghost small icon gold"
           disabled={busy !== '' || aiReady === false}
@@ -611,37 +632,17 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
           <SparklesIcon />
         </button>
         {scene.prompt && (
-          <>
-            <button
-              className={`btn ghost small icon ${copied ? 'on' : ''}`}
-              title={copied ? t('scene.copied') : t('scene.copy')}
-              aria-label={t('scene.copy')}
-              onClick={copy}
-            >
-              <CopyIcon />
-            </button>
-            <button
-              className="btn ghost small icon"
-              title={t('scene.archive.hint')}
-              aria-label={t('scene.archive')}
-              onClick={download}
-            >
-              <DownloadIcon />
-            </button>
-          </>
+          <button
+            className={`btn ghost small icon ${copied ? 'on' : ''}`}
+            title={copied ? t('scene.copied') : t('scene.copy')}
+            aria-label={t('scene.copy')}
+            onClick={copy}
+          >
+            <CopyIcon />
+          </button>
         )}
-        <button
-          className="btn ghost small icon gold"
-          disabled={aiReady === false}
-          title={t('export.button')}
-          aria-label={t('export.button')}
-          onClick={openExport}
-        >
-          <FilmIcon />
-        </button>
-      </div>
-      {busy === 'prompt' && <p className="muted small">{t('scene.build.busy')}</p>}
-      {!scene.prompt && (
+      </FoldHead>
+      {(promptOpen || busy !== '') && !scene.prompt && (
         <AutoTextarea
           className="input"
           value={note}
@@ -650,7 +651,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
           onChange={(e) => setNote(e.target.value)}
         />
       )}
-      {scene.prompt && (
+      {(promptOpen || busy !== '') && scene.prompt && (
         <>
           <textarea
             className="input prompt"
@@ -684,16 +685,19 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
         </>
       )}
       {!scene.prompt && <AiNotice ready={aiReady} />}
+      {/* The archive is what the work here is for: one large button at the end. */}
+      <div className="row scene-export-row">
+        <button
+          className="btn primary large grow"
+          disabled={!scene.prompt}
+          title={scene.prompt ? t('scene.archive.hint') : t('scene.archive.no_prompt')}
+          onClick={download}
+        >
+          <DownloadIcon />
+          {t('scene.archive.big')}
+        </button>
+      </div>
         </>
-      )}
-      {/* A writer's scene has no prompt section: the export stays a button of its own. */}
-      {writing && (
-        <div className="row wrap scene-export-row">
-          <button className="btn primary" disabled={aiReady === false} onClick={() => setExporting(true)}>
-            <DownloadIcon />
-            {t('export.button')}
-          </button>
-        </div>
       )}
       {exporting && <SceneExport scene={scene} onClose={closeExport} />}
       {error && <p className="error">{error}</p>}

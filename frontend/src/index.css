@@ -793,6 +793,7 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .scene-export .row.small { gap: 8px; align-items: center; cursor: pointer; }
 .export-pair { gap: 14px; }
 .scene-export-row { margin-top: 18px; }
+.btn.large { padding: 14px 22px; font-size: 17px; justify-content: center; }
 
 /* The "Pictures" section: a board of illustrations, and the dialogue of one. */
 .illustration-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
