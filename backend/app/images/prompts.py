@@ -186,8 +186,9 @@ For each look give:
 when the book has one;
 - "description": how the character looks in this look only, in the language of the book, \
 from the facts, without anything from the other looks;
-- "shape": "human" for a person or a human-like or animal body, "object" for something \
-closer to a thing (a seed, a stone, a lantern).
+- "shape": "human" for a person or a human-like body, "creature" for an animal, a bird or \
+another beast (a wolf cub, a kitten, a dove), "object" for something closer to a thing (a \
+seed, a stone, a lantern).
 
 Give one look only when the book really shows just one. Reply with one JSON object and nothing else:
 {"variants": [{"label": "", "description": "", "shape": "human"}]}"""
@@ -229,7 +230,7 @@ def find_variants(model: TextModel, entity: Entity) -> list[dict]:
             "key": new_id()[:8],
             "label": draft.label.strip()[:120],
             "description": draft.description.strip()[:2000],
-            "shape": "object" if draft.shape == "object" else "human",
+            "shape": draft.shape if draft.shape in ("object", "creature") else "human",
         }
         for draft in answer.variants
         if draft.label.strip()

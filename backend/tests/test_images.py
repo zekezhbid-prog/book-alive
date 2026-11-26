@@ -660,6 +660,17 @@ def test_each_outward_look_is_its_own_set_drawn_from_the_first(
     missing = client.post(url, json={"prompt": "p", "variant": "nope"})
     assert missing.status_code == 404
 
+    # Owner's notes 26.11 (2): an animal or a bird is drawn whole, in its own few views, and
+    # never from a human face.
+    wolf = {"key": "wolf", "label": "ваўчаня", "description": "шэрае", "shape": "creature"}
+    saved = client.put(f"/api/entities/{project.hero_id}/variants", json=[*looks, wolf]).json()
+    assert saved[-1]["shape"] == "creature"
+    cub = client.post(
+        url,
+        json={"prompt": "p", "angle": "full_three_quarter", "add_view": True, "variant": "wolf"},
+    ).json()
+    assert (cub["angle"], cub["reference_ids"]) == ("full_three_quarter", [])
+
 
 def _painter(monkeypatch, drawn):
     class Painter:

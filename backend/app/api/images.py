@@ -452,8 +452,8 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
         # A new look starts from the face of a look already there (owner's notes 25.11), so
         # it stays the same person; a thing-like shape is not drawn from a human face.
         drawn_from = angles.for_drawing(own, key)
-        if not drawn_from and variant.get("shape") != "object":
-            human = {v["key"] for v in entity.variants if v.get("shape") != "object"}
+        if not drawn_from and variant.get("shape", "human") == "human":
+            human = {v["key"] for v in entity.variants if v.get("shape", "human") == "human"}
             others = [i for i in entity.images if i.variant in human and i.angle == "face_front"]
             drawn_from = angles.for_drawing(others, key)[:1]
     references += [i for i in drawn_from if i not in references]
@@ -660,6 +660,10 @@ def redo_image(image_id: str, body: RedoRequest, session: SessionDep) -> ImageOu
 # ---------- outward looks ----------
 
 
+# "creature": an animal or a bird, drawn whole in a few views (owner's notes 26.11).
+SHAPES = ("human", "object", "creature")
+
+
 class Variant(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     label: str = Field(min_length=1, max_length=120)
@@ -669,7 +673,7 @@ class Variant(BaseModel):
     @field_validator("shape")
     @classmethod
     def known_shape(cls, value: str) -> str:
-        return value if value in ("human", "object") else "human"
+        return value if value in SHAPES else "human"
 
 
 class Variants(BaseModel):

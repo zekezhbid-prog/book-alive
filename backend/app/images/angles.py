@@ -17,11 +17,13 @@ ANGLES = {
     "the camera, neutral expression, plain uncluttered background, even light.",
     "full_side": "Full-body view of the character alone, standing in side profile, neutral "
     "pose, plain uncluttered background, even light.",
+    "full_three_quarter": "Full-body view of the whole figure alone, turned about forty "
+    "degrees from the camera, neutral pose, plain uncluttered background, even light.",
     "full_back": "Full-body view of the character alone, standing, seen from behind, neutral "
     "pose, plain uncluttered background, even light.",
 }
 FACES = ("face_front", "face_profile", "face_three_quarter")
-FIGURES = ("full_front", "full_side", "full_back")
+FIGURES = ("full_front", "full_three_quarter", "full_side", "full_back")
 
 # Image models take only a few pictures, and each one costs input tokens.
 DRAWING_LIMIT = 3

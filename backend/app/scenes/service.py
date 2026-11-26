@@ -382,6 +382,10 @@ def missing_references(session: Session, project: Project, scene: Scene) -> list
                 for need, views in (("face", angles.FACES), ("figure", angles.FIGURES))
                 if not taken & set(views)
             ]
+            # An animal or a bird has no face portraits, only views of its whole body.
+            looks = entity.variants or []
+            if looks and all(v.get("shape") == "creature" for v in looks):
+                needs = [need for need in needs if need != "face"]
         else:
             needs = [] if has_main else ["base"]
         missing += [
