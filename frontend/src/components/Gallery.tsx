@@ -1563,7 +1563,7 @@ interface RedoProps {
  * The prompt and the remarks lock each other: a changed prompt draws the picture anew from
  * its first references, a remark improves the picture as it is.
  */
-function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoProps) {
+export function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoProps) {
   const { t } = useI18n()
   const [prompt, setPrompt] = useState(image.prompt)
   const [remark, setRemark] = useState('')

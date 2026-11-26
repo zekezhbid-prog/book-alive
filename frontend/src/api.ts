@@ -543,6 +543,7 @@ export interface Scene extends SceneBrief {
   participants: { id: string; kind: EntityKind; name: string; images: ImageInfo[] }[]
   references: {
     number: number
+    image_id: string
     entity_id: string
     entity_name: string
     role: 'main' | 'look'
@@ -551,6 +552,8 @@ export interface Scene extends SceneBrief {
     url: string
   }[]
   frames: ImageInfo[]
+  /** Pictures the scene would want and its cards do not have yet (no model, fixed rules). */
+  missing: { entity_id: string; name: string; kind: EntityKind; need: 'face' | 'figure' | 'base' }[]
 }
 
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
@@ -915,6 +918,9 @@ export const api = {
     request<Scene>('POST', `/scenes/${id}/prompt/refine`, { change }),
   saveScenePrompt: (id: string, prompt: string) =>
     request<Scene>('PUT', `/scenes/${id}/prompt`, { prompt }),
+  /** The user's own choice of the pictures that go with the scene; empty: back to the rules. */
+  chooseSceneReferences: (id: string, imageIds: string[]) =>
+    request<Scene>('PUT', `/scenes/${id}/references`, { image_ids: imageIds }),
   generateSceneFrame: (id: string, prompt: string) =>
     request<Scene>('POST', `/scenes/${id}/frame`, { prompt }),
   uploadSceneFrame: (id: string, file: File) => {

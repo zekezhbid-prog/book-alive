@@ -324,6 +324,39 @@ def references(
     return [Reference(n, r.image, r.entity, r.role) for n, r in enumerate(chosen, 1)]
 
 
+def missing_references(session: Session, project: Project, scene: Scene) -> list[dict]:
+    """The pictures a scene would want and its cards do not have yet, by fixed rules and
+    no model (owner's notes 26.11): a character's face and full-length view, one base
+    picture of a place or object. Only pictures in the project's current style count."""
+    key = style_key(project)
+    missing = []
+    for entity in _cast(session, scene):
+        taken = {i.angle for i in angles.mains(entity.images, key)}
+        has_main = bool(angles.mains(entity.images, key))
+        if entity.kind == KIND_CHARACTER:
+            needs = [
+                need
+                for need, views in (("face", angles.FACES), ("figure", angles.FIGURES))
+                if not taken & set(views)
+            ]
+        else:
+            needs = [] if has_main else ["base"]
+        missing += [
+            {"entity_id": entity.id, "name": entity.name, "kind": entity.kind, "need": need}
+            for need in needs
+        ]
+    return missing
+
+
+def choose_references(
+    session: Session, project: Project, scene: Scene, chapter: Chapter, image_ids: list[str]
+) -> None:
+    """The user's own choice of the pictures that go with the scene (owner's notes 26.11),
+    in the given order. Only pictures the scene may use count."""
+    allowed = {r.image.id for r in candidates(session, project, scene, chapter)}
+    scene.reference_ids = [i for i in dict.fromkeys(image_ids) if i in allowed]
+
+
 # ---------- prompt ----------
 
 

@@ -45,12 +45,21 @@ class Participant(BaseModel):
 
 class ReferenceOut(BaseModel):
     number: int
+    image_id: str
     entity_id: str
     entity_name: str
     role: str
     angle: str
     look_label: str
     url: str
+
+
+class Missing(BaseModel):
+    entity_id: str
+    name: str
+    kind: str
+    # face | figure for a character, base for a place or object
+    need: str
 
 
 class SceneOut(SceneBrief):
@@ -61,6 +70,12 @@ class SceneOut(SceneBrief):
     participants: list[Participant]
     references: list[ReferenceOut]
     frames: list[ImageOut]
+    # Pictures the scene would want and its cards do not have yet.
+    missing: list[Missing] = Field(default_factory=list)
+
+
+class ReferencesRequest(BaseModel):
+    image_ids: list[str] = Field(max_length=12)
 
 
 class MarkRequest(BaseModel):
@@ -162,6 +177,7 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
         references=[
             ReferenceOut(
                 number=r.number,
+                image_id=r.image.id,
                 entity_id=r.entity.id,
                 entity_name=r.entity.name,
                 role=r.role,
@@ -172,6 +188,7 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
             for r in refs
         ],
         frames=[image_out(frame, project) for frame in frames],
+        missing=[Missing(**m) for m in service.missing_references(session, project, scene)],
     )
 
 
@@ -354,11 +371,25 @@ def generate_frame(
             origin="generated",
             style_key=style_key(project),
             prompt=prompt,
+            # Kept so that a changed prompt redraws the frame from the same pictures.
+            reference_ids=[r.image.id for r in refs],
             filename="",
             path=relative,
             mime=mime,
         )
     )
+    session.commit()
+    return _full(session, scene, chapter, project)
+
+
+@router.put("/scenes/{scene_id}/references")
+def choose_references(scene_id: str, body: ReferencesRequest, session: SessionDep) -> SceneOut:
+    """The user picks the pictures that go with the scene by hand (owner's notes 26.11).
+    An empty list goes back to the choice by fixed rules."""
+    scene, chapter, project = _scene(session, scene_id)
+    if chapter is None:
+        raise HTTPException(409, "chapter_not_found")
+    service.choose_references(session, project, scene, chapter, body.image_ids)
     session.commit()
     return _full(session, scene, chapter, project)
 

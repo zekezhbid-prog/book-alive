@@ -297,3 +297,43 @@ def test_writer_can_describe_a_card_and_a_scene_in_words(client, book):
     assert scene.status_code == 200
     assert scene.json()["summary"] == "Люта отдаёт ключ."
     assert client.get(f"/api/scenes/{made['id']}").json()["summary"] == "Люта отдаёт ключ."
+
+
+def test_a_scene_names_the_references_it_still_lacks(client, session, book):
+    # Owner's notes 26.11: Люта's main picture has no view, Рыхташ's is in another style, the
+    # mill has none: each lack is named, so the user can draw it from the scene.
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 0, "paragraph_to": 3, "title": "Мельница"},
+    ).json()
+    made = client.get(f"/api/scenes/{made['id']}").json()
+    names = {p["name"] for p in made["participants"]}
+    lacks = {(m["name"], m["need"]) for m in made["missing"]}
+    if "Мельница" in names:
+        assert ("Мельница", "base") in lacks
+    assert {("Люта", "face"), ("Люта", "figure")} <= lacks
+    luta = next(p for p in made["participants"] if p["name"] == "Люта")
+    main = next(i for i in luta["images"] if i["is_main"])
+    client.patch(f"/api/images/{main['id']}", json={"angle": "face_front"})
+    again = client.get(f"/api/scenes/{made['id']}").json()
+    lacks = {(m["name"], m["need"]) for m in again["missing"]}
+    assert ("Люта", "face") not in lacks and ("Люта", "figure") in lacks
+
+
+def test_the_user_picks_the_scene_references_by_hand(client, book):
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 2, "paragraph_to": 3, "title": "Ключ"},
+    ).json()
+    made = client.get(f"/api/scenes/{made['id']}").json()
+    main, look = [r["image_id"] for r in made["references"]]
+    # The look of the prologue does not cover this chapter: the scene may not use it.
+    prologue = next(
+        i["id"] for p in made["participants"] for i in p["images"] if i["look_label"] == "в плаще"
+    )
+    url = f"/api/scenes/{made['id']}/references"
+    chosen = client.put(url, json={"image_ids": [look, prologue]}).json()
+    assert [r["image_id"] for r in chosen["references"]] == [look]
+    # An empty choice goes back to the fixed rules.
+    back = client.put(url, json={"image_ids": []}).json()
+    assert [r["image_id"] for r in back["references"]] == [main, look]
