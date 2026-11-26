@@ -161,6 +161,14 @@ def _image(session: SessionDep, image_id: str) -> Image:
     return image
 
 
+def _file_url(image: Image) -> str:
+    # A picture drawn again keeps its id but gets a new file: the name in the link makes the
+    # browser fetch it instead of showing the old one from its cache.
+    stem = PurePath(image.path).stem
+    suffix = "" if stem == image.id else f"?v={stem[:12]}"
+    return f"/api/images/{image.id}/file{suffix}"
+
+
 def _out(image: Image, project: Project) -> ImageOut:
     return ImageOut(
         id=image.id,
@@ -176,7 +184,7 @@ def _out(image: Image, project: Project) -> ImageOut:
         chapter_to_id=image.chapter_to_id,
         prompt=image.prompt,
         reference_ids=list(image.reference_ids or []),
-        url=f"/api/images/{image.id}/file",
+        url=_file_url(image),
         created_at=image.created_at,
     )
 
@@ -565,6 +573,80 @@ def generate_image(entity_id: str, body: GenerateRequest, session: SessionDep) -
     )
     session.add(image)
     session.commit()
+    return _out(image, project)
+
+
+class RedoRequest(BaseModel):
+    # Exactly one: an edited prompt (drawn anew) or a remark (the picture improved).
+    prompt: str = Field(default="", max_length=4000)
+    remark: str = Field(default="", max_length=1000)
+    size: str = ""
+
+    @field_validator("size")
+    @classmethod
+    def known_size(cls, value: str) -> str:
+        if value and value not in SIZES:
+            raise ValueError("unknown size")
+        return value
+
+
+# A remark is carried out on the picture itself: the image model sees it as the reference.
+IMPROVE_PROMPT = (
+    "Edit the reference image. Change only this: {remark}. Keep everything else exactly as "
+    "it is: the same subject, face, clothes, pose, framing, background, lighting and style."
+)
+
+
+@router.post("/images/{image_id}/redo")
+def redo_image(image_id: str, body: RedoRequest, session: SessionDep) -> ImageOut:
+    """A finished or put in picture drawn again by the user's press (owner's notes 26.11).
+
+    An edited prompt draws it anew from the references of its first drawing; a remark
+    improves the picture as it is. The new picture takes the old one's place and id, so the
+    slot, the card and the scenes that use it keep pointing at it; the old file goes, as the
+    user asked to replace it.
+    """
+    image = _image(session, image_id)
+    prompt, remark = body.prompt.strip(), body.remark.strip()
+    if bool(prompt) == bool(remark):
+        raise HTTPException(422, "redo_prompt_or_remark")
+    project = _project(session, image.project_id)
+    if not style_prompt(project):
+        raise HTTPException(409, "style_not_chosen")
+    try:
+        model = ImageModel(session, project.id)
+    except ImageModelNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if prompt:
+        first = [session.get(Image, i) for i in image.reference_ids or []]
+        kept = [i for i in first if i is not None and i.project_id == project.id]
+        references = [settings.files_dir / i.path for i in kept]
+        text = prompt
+    else:
+        references = [settings.files_dir / image.path]
+        text = IMPROVE_PROMPT.format(remark=remark)
+    try:
+        result = model.generate(text, references, body.size)
+    except ImageGenerationFailed as exc:
+        raise HTTPException(502, f"provider_error: {exc}") from exc
+    mime = result.mime if result.mime in EXTENSIONS else "image/png"
+    _, relative = _store(project, result.data, mime)
+    old_path = (settings.files_dir / image.path).resolve()
+    image.path = relative
+    image.mime = mime
+    image.origin = "generated"
+    image.style_key = style_key(project)
+    if prompt:
+        # The prompt and references of the first drawing stay after an improvement, so a later
+        # edit of the prompt still starts from them.
+        image.prompt = prompt
+        image.reference_ids = [i.id for i in kept]
+    session.commit()
+    if (
+        old_path.is_relative_to(settings.files_dir.resolve())
+        and old_path.name != PurePath(relative).name
+    ):
+        old_path.unlink(missing_ok=True)
     return _out(image, project)
 
 

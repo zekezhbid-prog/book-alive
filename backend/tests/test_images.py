@@ -659,3 +659,79 @@ def test_each_outward_look_is_its_own_set_drawn_from_the_first(
     assert drawn == [0, 1, 0]
     missing = client.post(url, json={"prompt": "p", "variant": "nope"})
     assert missing.status_code == 404
+
+
+def _painter(monkeypatch, drawn):
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append((prompt, [p.name for p in references], size))
+            return type("Result", (), {"data": PNG + b"new", "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.images.ImageModel", Painter)
+
+
+def test_redo_with_an_edited_prompt_draws_anew_from_the_first_references(
+    client, project, monkeypatch
+):
+    """Owner's notes 26.11, p. 8: a changed prompt draws the picture again from scratch with
+    the references of its first drawing; the picture keeps its place and id."""
+    drawn = []
+    _painter(monkeypatch, drawn)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    face = upload(client, project, project.hero_id)[0]
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    body = {"prompt": "A woman.", "angle": "full_front", "reference_ids": [face["id"]]}
+    made = client.post(url, json=body).json()
+
+    redone = client.post(f"/api/images/{made['id']}/redo", json={"prompt": "A tall woman."})
+    assert redone.status_code == 200, redone.text
+    out = redone.json()
+    assert (out["id"], out["angle"], out["is_main"]) == (made["id"], "full_front", True)
+    assert out["prompt"] == "A tall woman."
+    assert out["reference_ids"] == [face["id"]]
+    assert out["url"] != made["url"]  # the browser must not show the old file from its cache
+    assert drawn[-1][0] == "A tall woman."
+    assert drawn[-1][1] == [face["url"].split("/")[-2] + ".png"]
+    assert client.get(out["url"]).status_code == 200
+
+
+def test_redo_with_a_remark_improves_the_picture_itself(client, project, monkeypatch):
+    """A remark draws from the picture as it is; the old prompt and references do not count."""
+    drawn = []
+    _painter(monkeypatch, drawn)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    face = upload(client, project, project.hero_id)[0]
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    made = client.post(url, json={"prompt": "A woman.", "reference_ids": [face["id"]]}).json()
+
+    redone = client.post(f"/api/images/{made['id']}/redo", json={"remark": "добавь шрам"})
+    assert redone.status_code == 200, redone.text
+    prompt, references, _ = drawn[-1]
+    assert "добавь шрам" in prompt and "A woman." not in prompt
+    assert references == [made["id"] + ".png"]
+    # The prompt and references of the first drawing stay for a later redo by prompt.
+    assert (redone.json()["prompt"], redone.json()["reference_ids"]) == (
+        made["prompt"],
+        [face["id"]],
+    )
+
+
+def test_redo_of_an_uploaded_picture_and_its_rules(client, project, monkeypatch):
+    """Owner's notes 26.11, p. 9: a picture put in from a file has no prompt; one written by
+    hand draws it anew, a remark improves it. Exactly one of the two is sent."""
+    drawn = []
+    _painter(monkeypatch, drawn)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    picture = upload(client, project, project.hero_id)[0]
+    redo = f"/api/images/{picture['id']}/redo"
+    assert client.post(redo, json={}).status_code == 422
+    both = client.post(redo, json={"prompt": "x", "remark": "y"})
+    assert (both.status_code, both.json()["detail"]) == (422, "redo_prompt_or_remark")
+
+    out = client.post(redo, json={"prompt": "A woman in a red scarf."}).json()
+    assert drawn[-1][1] == [] and out["origin"] == "generated"
+    client.post(redo, json={"remark": "brighter"})
+    assert len(drawn[-1][1]) == 1  # the picture itself, as drawn a moment ago

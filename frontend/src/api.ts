@@ -862,6 +862,9 @@ export const api = {
     body: LookRequest & { prompt: string; size: ImageSize | ''; add_view?: boolean },
   ) =>
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
+  /** A finished picture drawn again: an edited prompt draws it anew, a remark improves it. */
+  redoImage: (imageId: string, body: { prompt?: string; remark?: string; size: ImageSize }) =>
+    request<ImageInfo>('POST', `/images/${imageId}/redo`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
   /** A card saved by the export (a zip), with its texts and pictures. */

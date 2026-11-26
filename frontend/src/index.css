@@ -817,3 +817,6 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .lightbox-arrow.left { left: 14px; }
 .lightbox-arrow.right { right: 14px; }
 .lightbox-count { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 13px; }
+/* The empty picture explains the form; the prompt of a finished one is edited in place. */
+.image-dialog .slot-hint { gap: 12px; max-width: 300px; }
+.image-dialog .redo-prompt { min-height: 150px; resize: vertical; }

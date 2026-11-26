@@ -238,27 +238,6 @@ function RefStrip({ images, onRemove }: { images: ImageInfo[]; onRemove: (image:
   )
 }
 
-interface SelectProps {
-  value: string
-  chapters: ChapterBrief[]
-  empty: string
-  onChange: (id: string) => void
-}
-
-function ChapterSelect({ value, chapters, empty, onChange }: SelectProps) {
-  const { t } = useI18n()
-  return (
-    <select className="input small" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{empty}</option>
-      {chapters.map((chapter) => (
-        <option key={chapter.id} value={chapter.id}>
-          {chapter.title || t('book.untitled')}
-        </option>
-      ))}
-    </select>
-  )
-}
-
 interface DialogProps {
   projectId: string
   entityId: string
@@ -615,6 +594,9 @@ export function ImageDialog({
       } else {
         const made = await api.generateImage(entityId, { ...request, prompt: text, size, reference_ids })
         setCurrent(made)
+        // The new picture opens with its prompt and remarks, ready to be drawn again or
+        // improved (owner's notes 26.11).
+        setInspected(made)
         onChanged()
       }
     } catch (e) {
@@ -860,6 +842,11 @@ export function ImageDialog({
     setCurrent(null)
   }
 
+  // The full explanation of the form: in the empty picture, or on hover over "Generate".
+  const longHint = asSet
+    ? `${t('generate.hint.base_set')} ${t('generate.views.hint')}`
+    : t(withAngles ? 'generate.hint.main' : 'generate.hint.place')
+
   const toggleView = (view: Angle) =>
     setViews((chosen) => (chosen.includes(view) ? chosen.filter((v) => v !== view) : [...chosen, view]))
 
@@ -887,8 +874,9 @@ export function ImageDialog({
                 </a>
               </div>
             ) : (
-              <span className="faint small">
-                {busy === 'image' ? t('generate.image.busy') : t('generate.slot')}
+              <span className="stack slot-hint">
+                <span className="faint small">{busy === 'image' ? t('generate.image.busy') : t('generate.slot')}</span>
+                {busy !== 'image' && <span className="muted small">{longHint}</span>}
               </span>
             )}
           </div>
@@ -1107,82 +1095,24 @@ export function ImageDialog({
           )}
           </div>
           {viewing ? (
-            <div className="stack picture-info">
-              <span className="small muted">{t('generate.prompt.used')}</span>
-              <p className="small prompt-last">{viewing.prompt || t('generate.prompt.none')}</p>
-              <span className="small muted">{t('generate.references.used')}</span>
-              {viewing.reference_ids.length ? (
-                <div className="used-refs">
-                  {viewing.reference_ids.map((id, n) => (
-                    <a key={id} {...zoomLink(viewing.reference_ids.map((r) => `/api/images/${r}/file`), n)}>
-                      {/* A reference deleted since leaves no broken picture behind. */}
-                      <img
-                        src={`/api/images/${id}/file`}
-                        alt=""
-                        loading="lazy"
-                        onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
-                      />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="faint small">{t('generate.references.none')}</p>
-              )}
-              <div className="row">
-                <button className="btn danger" disabled={busy !== ''} onClick={() => remove(viewing)}>
-                  <TrashIcon />
-                  {t('app.delete')}
-                </button>
-              </div>
-            </div>
+            <RedoPanel
+              key={viewing.id}
+              image={viewing}
+              hasStyle={hasStyle}
+              disabled={busy !== ''}
+              onDone={(made) => {
+                setCurrent(made)
+                setInspected(made)
+                onChanged()
+              }}
+              onDelete={() => remove(viewing)}
+            />
           ) : (
           <div className="stack">
-            {/* Pictures in context moved to the "Pictures" section (owner's notes 25.11). */}
-            {/* Both sets of fields sit in one grid cell, the hidden one keeping its space:
-                switching never changes the window's size or moves the buttons. */}
-            <div className="mode-fields">
-              <div className="stack" inert={!isMain} style={{ visibility: isMain ? 'visible' : 'hidden' }}>
-                <p className="muted small">
-                  {t(asSet ? 'generate.hint.base_set' : withAngles ? 'generate.hint.main' : 'generate.hint.place')}
-                </p>
-                {asSet && <p className="muted small">{t('generate.views.hint')}</p>}
-                {!withAngles && (
-                  <label className="stack field">
-                    <span className="small muted">{t('generate.note')}</span>
-                    <AutoTextarea
-                      className="input small"
-                      value={note}
-                      maxLength={1000}
-                      placeholder={t('generate.note.placeholder')}
-                      disabled={busy !== ''}
-                      onChange={(e) => setNote(e.target.value)}
-                    />
-                  </label>
-                )}
-              </div>
-              <div className="stack" inert={isMain} style={{ visibility: isMain ? 'hidden' : 'visible' }}>
-                <p className="muted small">{t('generate.hint.look')}</p>
-                <label className="stack field">
-                  <span className="small muted">{t('gallery.look')}</span>
-                  <input
-                    className="input small"
-                    value={look}
-                    maxLength={200}
-                    placeholder={t('gallery.look.placeholder')}
-                    onChange={(e) => setLook(e.target.value)}
-                  />
-                </label>
-                <label className="stack field">
-                  <span className="small muted">{t('gallery.chapter')}</span>
-                  <ChapterSelect
-                    value={chapter}
-                    chapters={chapters}
-                    empty={t('gallery.chapter.none')}
-                    onChange={setChapter}
-                  />
-                </label>
-              </div>
-            </div>
+            {/* Pictures in context moved to the "Pictures" section (owner's notes 25.11). The
+                long explanation sits in the empty picture or on the "Generate" button; here only
+                a line or two (owner's notes 26.11). */}
+            <p className="muted small">{t(asSet ? 'generate.short.set' : 'generate.short.place')}</p>
             {/* The user's own samples. For a set: the AI puts the fitting ones into slots and
                 draws the rest from them; once a view is there, the set is drawn from it. */}
               {samplesAllowed && (
@@ -1315,6 +1245,21 @@ export function ImageDialog({
                 )}
               </div>
             </div>
+            {/* A place or object: the wish for the next picture, under the prompt as for
+                characters (owner's notes 26.11). */}
+            {!withAngles && (
+              <label className="stack field">
+                <span className="small muted">{t('generate.note')}</span>
+                <AutoTextarea
+                  className="input small"
+                  value={note}
+                  maxLength={1000}
+                  placeholder={t('generate.note.placeholder')}
+                  disabled={busy !== ''}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </label>
+            )}
             <select
               className="input small"
               value={size}
@@ -1333,6 +1278,7 @@ export function ImageDialog({
           <button
             className="btn primary generate-big"
             disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
+            title={longHint}
             onClick={draw}
           >
             <SparklesIcon />
@@ -1449,6 +1395,128 @@ export function ImageDialog({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+interface RedoProps {
+  image: ImageInfo
+  hasStyle: boolean
+  disabled: boolean
+  onDone: (image: ImageInfo) => void
+  onDelete: () => void
+}
+
+/**
+ * A finished or put in picture, in the same order as the form of a new one: hint, the
+ * references it was drawn from, the prompt, remarks, size, the button (owner's notes 26.11).
+ * The prompt and the remarks lock each other: a changed prompt draws the picture anew from
+ * its first references, a remark improves the picture as it is.
+ */
+function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoProps) {
+  const { t } = useI18n()
+  const [prompt, setPrompt] = useState(image.prompt)
+  const [remark, setRemark] = useState('')
+  const [size, setSize] = useState<ImageSize>('1:1')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const edited = prompt.trim() !== image.prompt.trim() && prompt.trim() !== ''
+  const remarked = remark.trim() !== ''
+  const urls = image.reference_ids.map((id) => `/api/images/${id}/file`)
+
+  const redo = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const made = await api.redoImage(image.id, edited ? { prompt: prompt.trim(), size } : { remark: remark.trim(), size })
+      setRemark('')
+      onDone(made)
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="stack picture-info">
+      <p className="muted small">{t(image.prompt ? 'generate.short.done' : 'generate.short.upload')}</p>
+      <div className="stack field">
+        <span className="small muted">{t('generate.references.used')}</span>
+        {urls.length ? (
+          <div className="used-refs">
+            {urls.map((url, n) => (
+              <a key={url} {...zoomLink(urls, n)}>
+                {/* A reference deleted since leaves no broken picture behind. */}
+                <img src={url} alt="" loading="lazy" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} />
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="faint small">{t('generate.references.none')}</p>
+        )}
+      </div>
+      <label className="stack field">
+        <span className="small muted">{t('generate.prompt.label')}</span>
+        <textarea
+          className="input small redo-prompt"
+          value={prompt}
+          maxLength={4000}
+          disabled={busy || remarked}
+          title={remarked ? t('generate.remark.placeholder') : undefined}
+          placeholder={t('generate.redo.prompt.placeholder')}
+          onChange={(e) => setPrompt(e.target.value)}
+        />
+      </label>
+      <div className="stack field">
+        <span className="small muted">{t('generate.remark')}</span>
+        <div className="row">
+          <AutoTextarea
+            className="input small grow"
+            value={remark}
+            maxLength={1000}
+            disabled={busy || edited}
+            title={edited ? t('generate.prompt.locked') : undefined}
+            placeholder={edited ? t('generate.prompt.locked') : t('generate.remark.placeholder')}
+            onChange={(e) => setRemark(e.target.value)}
+          />
+          <MicButton
+            disabled={busy || edited}
+            onText={(text) => setRemark((now) => (now.trim() ? `${now.trim()} ${text}` : text))}
+            onError={setError}
+          />
+        </div>
+      </div>
+      <select
+        className="input small"
+        value={size}
+        aria-label={t('generate.size')}
+        onChange={(e) => setSize(e.target.value as ImageSize)}
+      >
+        {IMAGE_SIZES.map((option) => (
+          <option key={option} value={option}>
+            {t(`generate.size.${option}`)}
+          </option>
+        ))}
+      </select>
+      {error && <p className="error small">{error}</p>}
+      <div className="stack generate-row">
+        <div className="row wrap">
+          <button
+            className="btn primary generate-big grow"
+            disabled={busy || disabled || !hasStyle || (!edited && !remarked)}
+            title={!edited && !remarked ? t('generate.redo.hint') : undefined}
+            onClick={redo}
+          >
+            <SparklesIcon />
+            {busy ? t('generate.redo.busy') : remarked ? t('generate.improve') : t('generate.redo')}
+          </button>
+          <button className="btn danger" disabled={busy || disabled} onClick={onDelete}>
+            <TrashIcon />
+            {t('app.delete')}
+          </button>
+        </div>
+        {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+      </div>
     </div>
   )
 }
