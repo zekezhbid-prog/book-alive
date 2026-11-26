@@ -1069,6 +1069,7 @@ export function ImageDialog({
                   className={`look-tile look-new ${!inspected ? 'shown' : ''}`}
                   disabled={busy !== ''}
                   title={t('generate.bases.new')}
+                  aria-label={t('generate.bases.new')}
                   onClick={() => {
                     setPeek('')
                     setCurrent(null)
@@ -1078,7 +1079,6 @@ export function ImageDialog({
                   <span className="look-new-icon" aria-hidden>
                     <ThinPlus />
                   </span>
-                  <span className="small">{t('generate.bases.new')}</span>
                 </button>
               </div>
               {[...bases].reverse().map((item) => (

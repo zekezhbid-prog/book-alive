@@ -41,6 +41,9 @@ export default function ChapterReader({
   const [picked, setPicked] = useState<[number, number] | null>(null)
   const target = useRef<HTMLParagraphElement>(null)
   const paragraphs = chapter.text ? chapter.text.split('\n\n') : []
+  const place = project.chapters.findIndex((c) => c.id === chapter.id)
+  const previous = place > 0 ? project.chapters[place - 1] : undefined
+  const next = place >= 0 ? project.chapters[place + 1] : undefined
   const linker = useMemo<Linker>(() => {
     const link = buildLinker(project.id, names)
     return (text, key) => markMatches(text, found, (part, sub) => link(part, `${key}${sub}`))
@@ -92,6 +95,21 @@ export default function ChapterReader({
       <div className="chapter-tools">
         <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
         <span className="spacer" />
+        {/* Leaf through the book from the chapter itself (owner's notes 26.11). */}
+        <button
+          className="btn ghost small"
+          disabled={!previous}
+          onClick={() => previous && navigate(`/projects/${project.id}/chapters/${previous.id}`)}
+        >
+          ‹ {t('chapter.prev')}
+        </button>
+        <button
+          className="btn ghost small"
+          disabled={!next}
+          onClick={() => next && navigate(`/projects/${project.id}/chapters/${next.id}`)}
+        >
+          {t('chapter.next')} ›
+        </button>
         <button
           className="btn ghost small"
           onClick={togglePrivate}

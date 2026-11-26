@@ -40,7 +40,9 @@ what they do one after another, what happens and why it matters for the story. R
 paragraphs around the scene to understand what is going on and say it plainly, but add \
 no events the chapter does not give.
 - A paragraph marked [heading] is a title of the book or the chapter, not part of the story.
-- Do not make a scene of a passage that only announces, sums up or comments on what a neighbouring scene shows: join it to that scene. Two scenes must never tell the same event. A short chapter is often a single scene.
+- Do not make a scene of a passage that only announces, sums up or comments on what a \
+neighbouring scene shows: join it to that scene. Two scenes must never tell the same event. \
+A short chapter is often a single scene.
 - "vivid": true for the two or three scenes of the chapter that would look most striking \
 on screen, false for the rest.
 - "characters": names of those who take part, as the text writes them. "location": the \

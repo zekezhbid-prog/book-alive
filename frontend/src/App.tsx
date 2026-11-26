@@ -28,10 +28,9 @@ class ScreenBoundary extends Component<{ children: ReactNode; fallback: ReactNod
     return (
       <>
         {this.props.fallback}
-        <pre className="page faint small screen-error">{`${failed.name}: ${failed.message}
-${(failed.stack ?? '').split('
-').slice(0, 6).join('
-')}`}</pre>
+        <pre className="page faint small screen-error">
+          {`${failed.name}: ${failed.message}\n${(failed.stack ?? '').split('\n').slice(0, 6).join('\n')}`}
+        </pre>
       </>
     )
   }
