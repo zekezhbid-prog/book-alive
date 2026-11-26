@@ -15,6 +15,7 @@ import {
 import CardGrid from '../components/CardGrid'
 import { ImageDialog } from '../components/Gallery'
 import SceneExport from '../components/SceneExport'
+import { zoomLink } from '../components/Lightbox'
 import { AutoTextarea } from '../components/AutoTextarea'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
@@ -647,7 +648,7 @@ function RefSlot({ title, pictures, empty, addTitle, onAdd }: SlotProps) {
     <figure className={shown ? '' : 'empty'}>
       <div className="ref-pic">
         {shown ? (
-          <a href={shown.url} target="_blank" rel="noreferrer">
+          <a {...zoomLink(pictures.map((p) => p.url), at)}>
             <img src={shown.url} alt="" loading="lazy" />
           </a>
         ) : (
@@ -739,7 +740,7 @@ function FrameDialog({ scene, hasStyle, onChanged, onClose }: FrameProps) {
         <div className="dialog-body">
           <div className="picture-slot">
             {made ? (
-              <a href={made.url} target="_blank" rel="noreferrer">
+              <a {...zoomLink([made.url], 0)}>
                 <img src={made.url} alt="" />
               </a>
             ) : (

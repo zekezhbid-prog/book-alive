@@ -13,6 +13,7 @@ import { errorText, useI18n } from '../i18n'
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons'
 import { ask } from '../dialogs'
 import { MicButton } from './MicButton'
+import { zoomLink } from './Lightbox'
 import { AutoTextarea } from './AutoTextarea'
 import { TwoLangPrompt } from './TwoLangPrompt'
 import { useTwoLang } from '../twoLang'
@@ -137,9 +138,9 @@ export default function Gallery({ projectId, entityId, kind, chapters, hasStyle,
       {images?.length === 0 && <p className="faint small">{t('gallery.general.empty')}</p>}
       {(
         <div className="gallery">
-          {images?.map((image) => (
+          {images?.map((image, n) => (
             <figure key={image.id} className={`shot ${image.current_style ? '' : 'other-style'}`}>
-              <a href={image.url} target="_blank" rel="noreferrer">
+              <a {...zoomLink(images.map((i) => i.url), n)}>
                 <img src={image.url} alt="" loading="lazy" />
               </a>
               <figcaption className="over">
@@ -208,9 +209,9 @@ function RefStrip({ images, onRemove }: { images: ImageInfo[]; onRemove: (image:
         ‹
       </button>
       <div className="ref-strip-track" ref={track} onScroll={measure}>
-        {images.map((image) => (
+        {images.map((image, n) => (
           <figure key={image.id} className={`shot ref-shot ${image.current_style ? '' : 'other-style'}`}>
-            <a href={image.url} target="_blank" rel="noreferrer">
+            <a {...zoomLink(images.map((i) => i.url), n)}>
               <img src={image.url} alt="" loading="lazy" />
             </a>
             <button
@@ -881,7 +882,7 @@ export function ImageDialog({
               </div>
             ) : shown ? (
               <div className="stack slot-picture">
-                <a href={shown.url} target="_blank" rel="noreferrer">
+                <a {...zoomLink(bases.some((b) => b.id === shown.id) ? bases.map((b) => b.url) : [shown.url], Math.max(0, bases.findIndex((b) => b.id === shown.id)))}>
                   <img src={shown.url} alt="" />
                 </a>
               </div>
@@ -1112,8 +1113,8 @@ export function ImageDialog({
               <span className="small muted">{t('generate.references.used')}</span>
               {viewing.reference_ids.length ? (
                 <div className="used-refs">
-                  {viewing.reference_ids.map((id) => (
-                    <a key={id} href={`/api/images/${id}/file`} target="_blank" rel="noreferrer">
+                  {viewing.reference_ids.map((id, n) => (
+                    <a key={id} {...zoomLink(viewing.reference_ids.map((r) => `/api/images/${r}/file`), n)}>
                       {/* A reference deleted since leaves no broken picture behind. */}
                       <img
                         src={`/api/images/${id}/file`}

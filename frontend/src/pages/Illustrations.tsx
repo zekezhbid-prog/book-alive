@@ -4,6 +4,7 @@ import { api, peek, type Illustration, type IllustrationBrief, type Project } fr
 import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { MicButton } from '../components/MicButton'
+import { zoomLink } from '../components/Lightbox'
 import { BoldPlusIcon, ImageIcon, SparklesIcon, TrashIcon } from '../components/icons'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
@@ -135,6 +136,9 @@ function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
     }
   }
 
+  // Every picture of the dialogue, to leaf through in the lightbox.
+  const drawn = (item?.messages ?? []).map((m) => m.image_url).filter(Boolean)
+
   return (
     <section className="stack illustration-chat">
       <div className="row">
@@ -164,15 +168,15 @@ function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
             )}
             {m.reference_urls.length > 0 && (
               <div className="used-refs">
-                {m.reference_urls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noreferrer">
+                {m.reference_urls.map((url, k) => (
+                  <a key={url} {...zoomLink(m.reference_urls, k)}>
                     <img src={url} alt="" loading="lazy" />
                   </a>
                 ))}
               </div>
             )}
             {m.image_url && (
-              <a href={m.image_url} target="_blank" rel="noreferrer">
+              <a {...zoomLink(drawn, drawn.indexOf(m.image_url))}>
                 <img className="illustration-picture" src={m.image_url} alt="" />
               </a>
             )}

@@ -807,3 +807,13 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 .illustration-bubble.user { align-self: flex-end; background: rgba(250, 204, 21, 0.08); }
 .illustration-bubble.assistant { align-self: flex-start; background: rgba(14, 12, 8, 0.45); }
 .illustration-picture { display: block; max-width: 100%; max-height: 60vh; border-radius: 8px; }
+
+/* A picture over everything, leafed with arrows (owner's notes 26.11). */
+.lightbox { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(0, 0, 0, 0.88); padding: 48px 72px; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 96px); object-fit: contain; border-radius: var(--radius-sm); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); }
+.lightbox-close { position: absolute; top: 14px; right: 18px; font-size: 20px; }
+.lightbox-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 72px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.06); color: var(--text); font-size: 44px; line-height: 1; cursor: pointer; }
+.lightbox-arrow:hover { background: rgba(255, 255, 255, 0.14); color: var(--accent); }
+.lightbox-arrow.left { left: 14px; }
+.lightbox-arrow.right { right: 14px; }
+.lightbox-count { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 13px; }

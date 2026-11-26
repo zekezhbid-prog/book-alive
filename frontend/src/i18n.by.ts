@@ -57,6 +57,8 @@ export const by: Record<string, string> = {
   'app.ok': 'ОК',
   'app.delete': 'Выдаліць',
   'app.close': 'Закрыць',
+  'lightbox.prev': 'Папярэдняя выява',
+  'lightbox.next': 'Наступная выява',
   'app.save': 'Захаваць',
   'app.saved': 'Захавана',
   'app.saving': 'Захоўваю…',

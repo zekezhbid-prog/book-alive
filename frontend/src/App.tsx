@@ -3,6 +3,7 @@ import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { api, type SessionInfo } from './api'
 import { errorText, LANGS, useI18n, type Lang } from './i18n'
 import AccountMenu from './components/AccountMenu'
+import { LightboxHost } from './components/Lightbox'
 import About from './pages/About'
 import Book from './pages/Book'
 import Entities from './pages/Entities'
@@ -129,6 +130,7 @@ export default function App() {
         <Route path="/about" element={<About signedIn />} />
       </Routes>
       </ScreenBoundary>
+      <LightboxHost />
     </>
   )
 }
