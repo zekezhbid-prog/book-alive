@@ -183,6 +183,18 @@ def test_a_one_line_lead_in_is_not_a_scene_of_its_own(session, book):
     assert "Do not make a scene of a passage that only announces" in service.SPLIT_SYSTEM
 
 
+def test_short_dialogue_lines_join_one_at_a_time_not_in_a_chain(session, book):
+    # Review: a run of short lines must not melt into one scene; each lead-in joins once.
+    long = "Ноччу на пустым скрыжаванні з неба сарвалася зорка і ўпала на зямлю ля млына."
+    text = "\n\n".join(["— Хто там?", "— Я.", long, "— Ну?", "— Ды так.", long, "— Бывай."])
+    chapter = Chapter(project_id=book.id, position=2, title="", text=text, content_hash="z")
+    session.add(chapter)
+    session.commit()
+    model = FakeModel([{"from": i, "to": i, "title": f"S{i}"} for i in range(7)])
+    scenes = service.split_chapter(session, model, chapter)
+    assert [(s.paragraph_from, s.paragraph_to) for s in scenes] == [(0, 1), (2, 2), (3, 4), (5, 6)]
+
+
 def test_enrich_suggests_and_marks_only_what_is_in_the_text(session, book):
     scene = service.mark_scene(session, book.mill, 2, 3, "Ключ")
     model = FakeModel()

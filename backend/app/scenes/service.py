@@ -250,10 +250,11 @@ def _join_lead_ins(
         if n + 1 < len(joined):
             _, next_end, draft = joined[n + 1]
             joined[n : n + 2] = [(start, next_end, draft)]
+            n += 1  # joined once: a run of short lines must not melt into one scene (review)
         else:
             before_start, _, draft = joined[n - 1]
             joined[n - 1 : n + 1] = [(before_start, end, draft)]
-            n -= 1
+            break
     return joined
 
 

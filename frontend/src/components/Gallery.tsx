@@ -467,7 +467,7 @@ export function ImageDialog({
   // Finished looks of the character whose face can start this one, while it is empty.
   const refLooks =
     asSet && bases.length === 0 && variant?.shape !== 'object'
-      ? variants.filter((v) => v.key !== variant?.key && v.shape === variant?.shape && has(orderOf(v.shape)[0], v.key))
+      ? variants.filter((v) => v.key !== variant?.key && (v.shape ?? 'human') === (variant?.shape ?? 'human') && has(orderOf(v.shape)[0], v.key))
       : []
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
