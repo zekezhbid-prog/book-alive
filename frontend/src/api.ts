@@ -444,6 +444,7 @@ export const ANGLES = [
   'full_front',
   'face_profile',
   'face_three_quarter',
+  'full_three_quarter',
   'full_side',
   'full_back',
 ] as const
@@ -495,7 +496,7 @@ export interface Variant {
   key: string
   label: string
   description: string
-  shape: 'human' | 'object'
+  shape: 'human' | 'object' | 'creature'
 }
 
 /** A view of a place or object (from above, from the front): one base picture of it. */

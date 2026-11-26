@@ -3,6 +3,7 @@ import {
   api,
   IMAGE_SIZES,
   type Angle,
+  isAngle,
   type ChapterBrief,
   type EntityKind,
   type ImageInfo,
@@ -267,6 +268,10 @@ const FULL_ORDER: Angle[] = [
 ]
 // A thing-like look (a seed, a stone) needs only two views (owner's notes 25.11).
 const OBJECT_ORDER: Angle[] = ['face_front', 'full_front']
+// An animal or a bird is drawn whole, a few views without face portraits (owner's notes 26.11).
+const CREATURE_ORDER: Angle[] = ['full_front', 'full_three_quarter', 'full_side', 'full_back']
+const orderOf = (shape: Variant['shape'] | undefined): Angle[] =>
+  shape === 'object' ? OBJECT_ORDER : shape === 'creature' ? CREATURE_ORDER : FULL_ORDER
 
 /** A large thin plus for empty places: faint at rest, glowing gold under the pointer. */
 function ThinPlus() {
@@ -366,8 +371,13 @@ export function ImageDialog({
   const [current, setCurrent] = useState<ImageInfo | null>(null)
   // Pictures in context now live in the "Pictures" section: the window draws base ones only.
   const [mode] = useState<Mode>('base')
-  // Ticked views; only empty slots are drawn, so a filled one counts only once deleted.
-  const [views, setViews] = useState<Angle[]>(FULL_ORDER)
+  // The view the next press draws, leafed through in the step window (owner's notes 26.11);
+  // '' is the first free picture of a place or the first empty view of a set.
+  const [nextView, setNextView] = useState('')
+  // Views drawn in this window, `look:view`: the gallery may not have reloaded them yet.
+  const [drawnHere, setDrawnHere] = useState<string[]>([])
+  // A finished look whose face starts a new look (owner's notes 26.11).
+  const [refLook, setRefLook] = useState('')
   const [look, setLook] = useState('')
   // A place or object: the user's wish for the next picture ("a view from above").
   const [note, setNote] = useState('')
@@ -376,9 +386,9 @@ export function ImageDialog({
   // Square unless the user picks another shape (owner's notes 26.11).
   const [size, setSize] = useState<ImageSize>('1:1')
   const [busy, setBusy] = useState<'' | 'prompt' | 'image' | 'upload' | 'delete' | 'sort' | 'variants'>('')
-  // After the first face of an empty set: the views still to draw once the user likes it.
-  const [pending, setPending] = useState<{ views: string[]; references: string[] } | null>(null)
-  // The face shown large in its own little window, waiting for "like it" or "redraw".
+  // The picture just drawn waits for "OK, next" or "Redraw": the references it was drawn with.
+  const [pending, setPending] = useState<{ references: string[] } | null>(null)
+  // That picture shown large in its own little window.
   const [faceCheck, setFaceCheck] = useState<ImageInfo | null>(null)
   const [progress, setProgress] = useState('')
   const [autoPrompt, setAutoPrompt] = useState(readAuto)
@@ -397,8 +407,6 @@ export function ImageDialog({
   // In context: the earlier picture whose settings are loaded; '' is the new one.
   const [picked, setPicked] = useState('')
   const draft = useRef({ prompt: '', look: '', chapter: '' })
-  // The view of a set being drawn right now: its slot shows a spinner.
-  const [drawing, setDrawing] = useState('')
   const [error, setError] = useState('')
   const picker = useRef<HTMLInputElement>(null)
   // What the user wants changed in the redraw of the face, typed or spoken.
@@ -414,11 +422,8 @@ export function ImageDialog({
   const [found, setFound] = useState<Variant[] | null>(null)
   // The looks were searched for once: the first drawing searches only while this is false.
   const [looksChecked, setLooksChecked] = useState(true)
-  // A place or object: the views the user kept, the ones the model just proposed, and the
-  // ones ticked to be drawn on the next press (owner's notes 26.11).
+  // A place or object: its views, proposed by the model after its first picture.
   const [placeViews, setPlaceViews] = useState<PlaceView[]>([])
-  const [foundViews, setFoundViews] = useState<PlaceView[] | null>(null)
-  const [tickedViews, setTickedViews] = useState<string[]>([])
   useEffect(() => {
     if (!withAngles) {
       api.views(entityId).then(setPlaceViews, (e) => setError(errorText(t, e)))
@@ -431,10 +436,18 @@ export function ImageDialog({
     }, (e) => setError(errorText(t, e)))
   }, [entityId, withAngles, t])
   const viewLabel = (view: string) =>
-    placeViews.find((v) => v.key === view)?.label ?? t(`angle.${view as Angle}`)
+    !view
+      ? t('generate.step.free')
+      : (placeViews.find((v) => v.key === view)?.label ?? (isAngle(view) ? t(`angle.${view}`) : view))
   const variant = variants.find((v) => v.key === variantKey) ?? null
-  const SET_ORDER = variant?.shape === 'object' ? OBJECT_ORDER : FULL_ORDER
+  const SET_ORDER = orderOf(variant?.shape)
   const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
+  const has = (view: string, look = variant?.key ?? '') =>
+    Boolean(latest(allBases.filter((b) => (b.variant || '') === look), view)) ||
+    drawnHere.includes(`${look}:${view}`)
+  // The views still without a picture, in their order: what "OK, next" offers.
+  const openViews = (except = '') =>
+    (withAngles ? SET_ORDER : placeViews.map((v) => v.key)).filter((v) => v !== except && !has(v))
   // The prompt in English and in the interface language, wherever it can be edited.
   const twoLang = useTwoLang(entityId, prompt, setPrompt, !autoPrompt || !!faceCheck, setError)
 
@@ -446,15 +459,16 @@ export function ImageDialog({
   // A set is started from the user's samples only while it is empty: once there is a view,
   // the rest are drawn from it.
   const samplesAllowed = !(asSet && bases.length > 0)
-  // The views the next press draws: ticked and still empty.
-  const wanted = SET_ORDER.filter((view) => views.includes(view) && !latest(bases, view))
-  // A place or object: the ticked views still without a picture. While there are any, the
-  // press draws them as a set; otherwise it adds one more free picture.
-  const placeWanted =
-    isMain && !withAngles
-      ? placeViews.filter((v) => tickedViews.includes(v.key) && !latest(bases, v.key)).map((v) => v.key)
+  // The view the next press of "Generate" draws: the chosen one while it is still empty,
+  // otherwise the first empty one. A place draws a free picture first and when all its
+  // views are there.
+  const open = openViews()
+  const upNext = open.includes(nextView) ? nextView : asSet || bases.length > 0 ? (open[0] ?? '') : ''
+  // Finished looks of the character whose face can start this one, while it is empty.
+  const refLooks =
+    asSet && bases.length === 0 && variant?.shape !== 'object'
+      ? variants.filter((v) => v.key !== variant?.key && v.shape === variant?.shape && has(orderOf(v.shape)[0], v.key))
       : []
-  const placeSet = placeWanted.length > 0
   // The big picture: the one just made or clicked; in a set, otherwise the first finished view.
   const pickedLook = looks.find((l) => l.id === picked) ?? null
   // A place or object opens on the "new picture" tile: nothing large until one is clicked.
@@ -465,7 +479,7 @@ export function ImageDialog({
     ? { angle: '' as const, look_label: '', chapter_from_id: '', chapter_to_id: '', variant: variant?.key ?? '' }
     : { angle: '' as const, look_label: look.trim(), chapter_from_id: chapter, chapter_to_id: chapter }
   // The server tells a look by its label or chapter: without them it would draw a base picture.
-  const ready = isMain ? !asSet || wanted.length > 0 : Boolean(look.trim() || chapter)
+  const ready = isMain ? !asSet || upNext !== '' : Boolean(look.trim() || chapter)
 
   useEffect(() => {
     // While the face waits for an answer, Escape does not throw the window away.
@@ -475,11 +489,13 @@ export function ImageDialog({
   }, [onClose, faceCheck])
 
   // The text model writes the prompt; null when it failed (the error is shown).
-  const collect = async (reference_ids: string[] = []) => {
+  const collect = async (reference_ids: string[] = [], lookKey = variant?.key ?? '') => {
     try {
       const written = await api.imagePrompt(entityId, {
         ...request,
-        view_free: asSet || placeSet,
+        ...(isMain ? { variant: lookKey } : {}),
+        // One prompt serves every view of a set or a place: the view is put in front of it.
+        view_free: isMain,
         reference_ids,
         note: withAngles ? '' : note.trim(),
       })
@@ -516,13 +532,13 @@ export function ImageDialog({
   }
 
   // The views of a set, one after another; each new one is drawn from those already there.
-  const drawViews = async (order: string[], text: string, reference_ids: string[]) => {
+  const drawViews = async (order: string[], text: string, reference_ids: string[], lookKey = variant?.key ?? '') => {
     let last: ImageInfo | null = null
     for (const [n, view] of order.entries()) {
       setProgress(t('generate.set.progress', { done: n + 1, total: order.length, view: viewLabel(view) }))
-      setDrawing(view)
       const made = await api.generateImage(entityId, {
         ...request,
+        ...(isMain ? { variant: lookKey } : {}),
         angle: view,
         prompt: text,
         size,
@@ -570,11 +586,36 @@ export function ImageDialog({
     return { filled, references: references.slice(0, 3) }
   }
 
+  // One picture is drawn and shown large: the user likes it ("OK, next") or redraws it.
+  // Nothing is drawn in a batch (owner's notes 26.11).
+  const drawStep = async (view: string, text: string, references: string[], lookKey = variant?.key ?? '') => {
+    const made = await drawViews([view], text, references, lookKey)
+    if (!made) return
+    setDrawnHere((had) => [...had, `${lookKey}:${view}`])
+    setPending({ references })
+    setFaceCheck(made)
+    setProgress('')
+    setNextView(openViews(view)[0] ?? '')
+    // A place gets its views after the first picture, so "OK, next" has something to offer.
+    if (!withAngles && !placeViews.length) {
+      setBusy('variants')
+      try {
+        const proposed = await api.findViews(entityId)
+        const saved = await api.saveViews(entityId, proposed)
+        setPlaceViews(saved)
+        setNextView(saved.find((v) => v.key !== view)?.key ?? '')
+      } catch (e) {
+        setError(errorText(t, e))
+      }
+    }
+  }
+
   const draw = async () => {
     setError('')
     setProgress('')
+    let looksNow = variants
     // The first drawing of a character asks once whether it has several outward looks
-    // (owner's notes 26.11): with two or more, they are offered and nothing is drawn yet.
+    // (owner's notes 26.11): with two or more, the user picks the one to draw first.
     if (asSet && !looksChecked && !variants.length) {
       setBusy('variants')
       try {
@@ -585,20 +626,32 @@ export function ImageDialog({
           setProgress(t('variants.auto'))
           return setBusy('')
         }
+        // One look that is not a person (an animal, a thing) is kept: it has its own views.
+        if (list.length === 1 && list[0].shape !== 'human') {
+          looksNow = await api.saveVariants(entityId, list)
+          setVariants(looksNow)
+          setVariantKey(looksNow[0]?.key ?? '')
+          onChanged()
+        }
       } catch (e) {
         setError(errorText(t, e))
         return setBusy('')
       }
     }
+    const lookNow = looksNow.find((v) => v.key === variantKey) ?? looksNow[0] ?? null
     let reference_ids: string[] = []
-    let order: string[] = asSet ? wanted : placeWanted
+    let view = upNext
+    if (asSet && looksNow !== variants) view = orderOf(lookNow?.shape)[0]
     const useSamples = samplesAllowed && samples.length > 0
     try {
       if (useSamples && asSet) {
         const sorted = await sortSamples()
         if (!sorted) return setBusy('')
         reference_ids = sorted.references
-        order = order.filter((view) => !sorted.filled.includes(view as Angle))
+        if (sorted.filled.includes(view as Angle)) {
+          view = orderOf(lookNow?.shape).find((v) => !sorted.filled.includes(v) && !has(v)) ?? ''
+          if (!view) return setBusy('')
+        }
       } else if (useSamples) {
         setBusy('upload')
         reference_ids = await storeSamples(samples.slice(0, 3))
@@ -607,73 +660,77 @@ export function ImageDialog({
       setError(errorText(t, e))
       return setBusy('')
     }
-    if (asSet && !order.length) return setBusy('')
+    if (asSet && !view) return setBusy('')
+    // A new look may start from the face of a finished one, chosen by the user.
+    const from = refLooks.find((v) => v.key === refLook)
+    const fromImage = from && latest(allBases.filter((b) => b.variant === from.key), orderOf(from.shape)[0])
+    if (fromImage) reference_ids = [fromImage.id, ...reference_ids].slice(0, 3)
     // Automatic prompt: written quietly right before drawing, nothing to check in between.
     // By hand: the English half takes in the last edit of the translation first.
     let text = autoPrompt ? prompt : await twoLang.flush()
     if (autoPrompt) {
       setBusy('prompt')
-      const written = await collect(reference_ids)
+      const written = await collect(reference_ids, lookNow?.key ?? '')
       if (!written) return setBusy('')
       text = written.prompt
     }
     setBusy('image')
     try {
-      if (asSet || placeSet) {
-        // The face front comes first and sets the face for every other view: the set waits
-        // until the user likes it. A place or object with no picture yet: its first view
-        // sets the look of the rest the same way (owner's notes 26.11).
-        const first = order.length > 1 && (asSet ? order[0] === 'face_front' : bases.length === 0)
-        const made = await drawViews(first ? ['face_front'] : order, text, reference_ids)
-        if (first) {
-          setPending({ views: order.slice(1), references: reference_ids })
-          setFaceCheck(made)
-          setProgress('')
-        } else setProgress(t('generate.set.done', { n: order.length }))
-      } else {
-        const made = await api.generateImage(entityId, { ...request, prompt: text, size, reference_ids })
-        setCurrent(made)
-        // The new picture opens with its prompt and remarks, ready to be drawn again or
-        // improved (owner's notes 26.11).
-        setInspected(made)
-        onChanged()
-      }
+      await drawStep(view, text, reference_ids, lookNow?.key ?? '')
     } catch (e) {
       setProgress('')
       setError(errorText(t, e))
     }
-    setDrawing('')
     setBusy('')
   }
 
-  // The face is liked: the remaining views are drawn from it with the prompt as it is now.
+  // The picture is liked: the next view, as chosen in the window, is drawn with the prompt
+  // as it is now. With no view left, the window closes or moves on to the next look.
   const goOn = async () => {
-    if (!pending) return
+    if (!pending || !faceCheck) return
+    const following = openViews(faceCheck.angle)
+    const view = following.includes(nextView) ? nextView : (following[0] ?? '')
+    if (!view) {
+      setFaceCheck(null)
+      setPending(null)
+      setRemark('')
+      const after = asSet ? nextLook() : null
+      if (after) {
+        setVariantKey(after.key)
+        setRefLook('')
+        setCurrent(null)
+        setInspected(null)
+        setProgress(t('generate.step.look_next', { look: after.label }))
+      } else setProgress(t('generate.set.done', { n: (withAngles ? SET_ORDER.length : placeViews.length + 1) - openViews().length }))
+      return
+    }
     const text = await twoLang.flush()
     setFaceCheck(null)
     setRemark('')
     setError('')
     setBusy('image')
     try {
-      await drawViews(pending.views, text, pending.references)
-      setProgress(t('generate.set.done', { n: pending.views.length + 1 }))
+      await drawStep(view, text, pending.references)
     } catch (e) {
+      setPending(null)
       setProgress('')
       setError(errorText(t, e))
     }
-    setPending(null)
-    setDrawing('')
     setBusy('')
   }
 
-  // The face is not liked: the user's own press removes it and draws it again, with the
+  // Another look of the character that still has empty views: offered after the last view.
+  const nextLook = () =>
+    variants.find((v) => v.key !== variant?.key && orderOf(v.shape).some((view) => !has(view, v.key))) ?? null
+
+  // The picture is not liked: the user's own press removes it and draws it again, with the
   // prompt as it is now (it may have been changed in the meantime).
   const redrawFace = async () => {
     if (!pending) return
     setError('')
     setRemarkOpen(false)
     let text = await twoLang.flush()
-    // The remark goes into the English prompt first; on a failure the face stays in view.
+    // The remark goes into the English prompt first; on a failure the picture stays in view.
     if (remark.trim()) {
       setBusy('prompt')
       try {
@@ -686,13 +743,14 @@ export function ImageDialog({
       }
     }
     const face = faceCheck
+    const view = face ? face.angle : ''
     setFaceCheck(null)
     setBusy('image')
     try {
       if (face) await api.deleteImage(face.id)
       setCurrent(null)
       onChanged()
-      const made = await drawViews([face?.angle || 'face_front'], text, pending.references)
+      const made = await drawViews([view], text, pending.references)
       setFaceCheck(made)
       setProgress('')
     } catch (e) {
@@ -700,7 +758,6 @@ export function ImageDialog({
       setProgress('')
       setError(errorText(t, e))
     }
-    setDrawing('')
     setBusy('')
   }
 
@@ -710,6 +767,7 @@ export function ImageDialog({
   const cancelFace = async () => {
     const face = faceCheck
     setFaceCheck(null)
+    if (face) setDrawnHere((had) => had.filter((k) => k !== `${face.variant || ''}:${face.angle}`))
     setPending(null)
     setRemark('')
     setRemarkOpen(false)
@@ -761,7 +819,7 @@ export function ImageDialog({
     setError('')
     try {
       await api.deleteImage(target.id)
-      if (target.angle) setViews((had) => (had.includes(target.angle as Angle) ? had : [...had, target.angle as Angle]))
+      setDrawnHere((had) => had.filter((k) => k !== `${target.variant || ''}:${target.angle}`))
       if (current?.id === target.id) setCurrent(null)
       // The freed slot or tile is empty again: the form to draw it comes back.
       if (inspected?.id === target.id) setInspected(null)
@@ -780,17 +838,6 @@ export function ImageDialog({
     } catch {
       setError(t('gallery.paste.denied'))
     }
-  }
-  // The model looks for the character's outward looks; the user keeps some or none.
-  const findLooks = async () => {
-    setBusy('variants')
-    setError('')
-    try {
-      setFound(await api.findVariants(entityId))
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
   }
   // Kept looks replace the old list; pictures drawn before any look go to the first one.
   const keepLooks = async () => {
@@ -882,42 +929,20 @@ export function ImageDialog({
     setCurrent(null)
   }
 
-  // A place or object: the model proposes views, the user keeps some (owner's notes 26.11).
-  const findPlaceViews = async () => {
-    setBusy('variants')
-    setError('')
-    try {
-      setFoundViews(await api.findViews(entityId))
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
+  // The step window: the views "OK, next" can draw, the one chosen, and the next look once
+  // this one is complete.
+  const stepChoices = faceCheck ? openViews(faceCheck.angle) : []
+  const stepNext = stepChoices.includes(nextView) ? nextView : (stepChoices[0] ?? '')
+  const stepLook = faceCheck && !stepNext && asSet ? nextLook() : null
+  const leaf = (by: number) => {
+    const at = Math.max(0, stepChoices.indexOf(stepNext))
+    setNextView(stepChoices[(at + by + stepChoices.length) % stepChoices.length])
   }
-  const keepPlaceViews = async () => {
-    if (!foundViews) return
-    setBusy('variants')
-    try {
-      const saved = await api.saveViews(entityId, foundViews)
-      setPlaceViews(saved)
-      // The new views are ticked: one press draws them all.
-      setTickedViews(saved.map((v) => v.key))
-      setFoundViews(null)
-      onChanged()
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-  const tickPlaceView = (key: string) =>
-    setTickedViews((had) => (had.includes(key) ? had.filter((k) => k !== key) : [...had, key]))
 
   // The full explanation of the form: in the empty picture, or on hover over "Generate".
   const longHint = asSet
     ? `${t('generate.hint.base_set')} ${t('generate.views.hint')}`
     : t(withAngles ? 'generate.hint.main' : 'generate.hint.place')
-
-  const toggleView = (view: Angle) =>
-    setViews((chosen) => (chosen.includes(view) ? chosen.filter((v) => v !== view) : [...chosen, view]))
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -969,18 +994,25 @@ export function ImageDialog({
                     {v.label}
                   </button>
                 ))}
-                <span className="spacer" />
-                <button
-                  className="btn ghost small"
-                  disabled={busy !== '' || !!pending || !!found}
-                  title={t('variants.find.hint')}
-                  onClick={findLooks}
-                >
-                  <SparklesIcon />
-                  {busy === 'variants' ? t('variants.finding') : t('variants.find')}
-                </button>
+                {/* Looks are found by the first "Generate" only (owner's notes 26.11). */}
+                {busy === 'variants' && <span className="muted small">{t('variants.finding')}</span>}
               </div>
               {variant && <p className="faint small">{variant.description}</p>}
+              {refLooks.length > 0 && (
+                <div className="row wrap" title={t('variants.ref.hint')}>
+                  <span className="small muted">{t('variants.ref')}</span>
+                  {refLooks.map((v) => (
+                    <button
+                      key={v.key}
+                      className={`chip ${refLook === v.key ? 'active' : ''}`}
+                      disabled={busy !== ''}
+                      onClick={() => setRefLook(refLook === v.key ? '' : v.key)}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {found && (
                 <div className="stack variant-offer">
                   <span className="small muted">{t('variants.found', { n: found.length })}</span>
@@ -1012,51 +1044,31 @@ export function ImageDialog({
               )}
             </div>
           )}
-          {/* The set as slots: what is there, what is missing, what is drawn on the next press. */}
-          {asSet && (
+          {/* The views already drawn; empty ones are not shown: which view comes next is
+              chosen when it is drawn (owner's notes 26.11). */}
+          {asSet && bases.some((b) => b.angle) && (
             <div className="view-slots">
-              {SET_ORDER.map((view) => {
-                const made = latest(bases, view)
-                const ticked = !made && views.includes(view)
-                return (
-                  <div
-                    key={view}
-                    className={`view-slot ${made ? 'filled' : ''} ${ticked ? 'ticked' : ''} ${
-                      made && shown?.id === made.id ? 'shown' : ''
-                    }`}
-                  >
+              {SET_ORDER.map((view) => latest(bases, view))
+                .filter((made): made is ImageInfo => made !== null)
+                .map((made) => (
+                  <div key={made.id} className={`view-slot filled ${shown?.id === made.id ? 'shown' : ''}`}>
                     <div className="view-slot-box">
-                    {/* A filled slot shows what it was drawn from; an empty one opens the form. */}
-                    <button
-                      className="view-slot-face"
-                      disabled={busy !== '' || !!pending}
-                      title={made ? t('generate.slot.show') : t('generate.slot.draw')}
-                      onClick={() => {
-                        setPeek('')
-                        setCurrent(made)
-                        setInspected(made)
-                        if (!made && !views.includes(view)) toggleView(view)
-                      }}
-                    >
-                      {made && <img src={made.url} alt="" loading="lazy" />}
-                      {drawing === view && <span className="view-slot-busy" aria-hidden />}
-                    </button>
+                      <button
+                        className="view-slot-face"
+                        disabled={busy !== '' || !!pending}
+                        title={t('generate.slot.show')}
+                        onClick={() => {
+                          setPeek('')
+                          setCurrent(made)
+                          setInspected(made)
+                        }}
+                      >
+                        <img src={made.url} alt="" loading="lazy" />
+                      </button>
                     </div>
-                    <label className="view-slot-label small">
-                      {/* A filled view keeps the box's place, so the labels stay in line. */}
-                      <input
-                        type="checkbox"
-                        className={made ? 'hidden-check' : ''}
-                        checked={ticked}
-                        disabled={busy !== '' || !!made || !!pending}
-                        title={t('generate.slot.draw')}
-                        onChange={() => toggleView(view)}
-                      />
-                      {t(`angle.${view}`)}
-                    </label>
+                    <span className="view-slot-label small">{t(`angle.${made.angle as Angle}`)}</span>
                   </div>
-                )
-              })}
+                ))}
             </div>
           )}
           {/* A place or object: every base picture in a row, the one in view lit; each press
@@ -1097,83 +1109,6 @@ export function ImageDialog({
                   </button>
                 </div>
               ))}
-            </div>
-          )}
-          {/* A place or object: views of its own (from above, from the front), each a base
-              picture; ticked empty ones are drawn as a set on the next press (owner's notes 26.11). */}
-          {isMain && !withAngles && (
-            <div className="stack variant-bar place-views">
-              <div className="row wrap">
-                <span className="small muted">{t('views.title')}</span>
-                {placeViews.map((v) => {
-                  const made = latest(bases, v.key)
-                  return made ? (
-                    <button
-                      key={v.key}
-                      className={`chip ${inspected?.id === made.id ? 'active' : ''}`}
-                      disabled={busy !== '' || !!pending}
-                      title={t('generate.slot.show')}
-                      onClick={() => {
-                        setPeek('')
-                        setCurrent(made)
-                        setInspected(made)
-                      }}
-                    >
-                      <CheckIcon />
-                      {v.label}
-                    </button>
-                  ) : (
-                    <label key={v.key} className="chip small" title={v.framing}>
-                      <input
-                        type="checkbox"
-                        checked={tickedViews.includes(v.key)}
-                        disabled={busy !== '' || !!pending}
-                        onChange={() => tickPlaceView(v.key)}
-                      />
-                      {v.label}
-                    </label>
-                  )
-                })}
-                <span className="spacer" />
-                <button
-                  className="btn ghost small"
-                  disabled={busy !== '' || !!pending || !!foundViews}
-                  title={t('views.find.hint')}
-                  onClick={findPlaceViews}
-                >
-                  <SparklesIcon />
-                  {busy === 'variants' ? t('views.finding') : t(placeViews.length ? 'views.find.again' : 'views.find')}
-                </button>
-              </div>
-              {foundViews && (
-                <div className="stack variant-offer">
-                  <span className="small muted">{t('views.found', { n: foundViews.length })}</span>
-                  {foundViews.map((v) => (
-                    <div key={v.key} className="row">
-                      <span className="grow small">
-                        <b>{v.label}</b> — <span className="faint">{v.framing}</span>
-                      </span>
-                      <button
-                        className="btn ghost small icon"
-                        title={t('app.delete')}
-                        aria-label={t('app.delete')}
-                        onClick={() => setFoundViews(foundViews.filter((x) => x.key !== v.key))}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  <div className="row">
-                    <button className="btn primary small" disabled={busy !== ''} onClick={keepPlaceViews}>
-                      <CheckIcon />
-                      {t('generate.face.apply')}
-                    </button>
-                    <button className="btn ghost small" onClick={() => setFoundViews(null)}>
-                      {t('app.cancel')}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
           {/* In context: the new picture first, then every earlier one; a click takes its settings. */}
@@ -1436,10 +1371,10 @@ export function ImageDialog({
               ? t('generate.prompt.busy')
               : busy === 'image'
               ? t('generate.image.busy')
-              : asSet
-                ? t('generate.set', { n: wanted.length })
-                : placeSet
-                ? t('generate.set', { n: placeWanted.length })
+              : busy === 'variants'
+              ? t(withAngles ? 'variants.finding' : 'views.finding')
+              : upNext
+                ? t('generate.step.draw', { view: viewLabel(upNext) })
                 : t('generate.image')}
           </button>
         </div>
@@ -1451,13 +1386,16 @@ export function ImageDialog({
         </div>
         {error && <p className="error">{error}</p>}
       </div>
-      {/* The first face of a set, large: it sets the face of every other view. */}
+      {/* The picture just drawn, large: "OK, next" draws the next view (leafed with the
+          arrows), the pencil redraws this one (owner's notes 26.11). */}
       {faceCheck && pending && (
         <div className="overlay face-check-overlay">
           <div className="dialog face-check">
             <div className="row">
               <h3 className="grow">
-                {withAngles ? t('generate.face.title') : t('views.first.title', { view: viewLabel(faceCheck.angle) })}
+                {t('generate.step.title', {
+                  view: faceCheck.angle ? viewLabel(faceCheck.angle) : t('generate.step.free'),
+                })}
               </h3>
               <button
                 className="btn ghost small icon"
@@ -1487,23 +1425,39 @@ export function ImageDialog({
             {/* "Apply" draws the other views from this face; the pencil asks what to change
                 and draws the face again; "Cancel" does not keep it. */}
             <div className="row wrap face-check-buttons">
-              <button
-                className="btn primary"
-                disabled={busy !== ''}
-                title={t('generate.face.go_on', { n: pending.views.length })}
-                onClick={goOn}
-              >
+              {stepChoices.length > 1 && (
+                <button
+                  className="btn ghost icon"
+                  disabled={busy !== ''}
+                  title={t('generate.step.prev_view')}
+                  aria-label={t('generate.step.prev_view')}
+                  onClick={() => leaf(-1)}
+                >
+                  ‹
+                </button>
+              )}
+              <button className="btn primary" disabled={busy !== ''} onClick={goOn}>
                 <CheckIcon />
-                {t('generate.face.apply')}
+                {stepNext
+                  ? t('generate.step.next', { view: viewLabel(stepNext) })
+                  : stepLook
+                    ? t('generate.step.next_look', { look: stepLook.label })
+                    : t('generate.step.done')}
               </button>
-              <button
-                className="btn ghost icon gold"
-                disabled={busy !== ''}
-                title={t('generate.face.redraw')}
-                aria-label={t('generate.face.redraw')}
-                onClick={() => setRemarkOpen(true)}
-              >
+              {stepChoices.length > 1 && (
+                <button
+                  className="btn ghost icon"
+                  disabled={busy !== ''}
+                  title={t('generate.step.next_view')}
+                  aria-label={t('generate.step.next_view')}
+                  onClick={() => leaf(1)}
+                >
+                  ›
+                </button>
+              )}
+              <button className="btn ghost" disabled={busy !== ''} onClick={() => setRemarkOpen(true)}>
                 <PencilIcon />
+                {t('generate.face.redraw')}
               </button>
               <span className="spacer" />
               <button className="btn ghost" disabled={busy !== ''} onClick={cancelFace}>
