@@ -40,6 +40,7 @@ what they do one after another, what happens and why it matters for the story. R
 paragraphs around the scene to understand what is going on and say it plainly, but add \
 no events the chapter does not give.
 - A paragraph marked [heading] is a title of the book or the chapter, not part of the story.
+- Do not make a scene of a passage that only announces, sums up or comments on what a neighbouring scene shows: join it to that scene. Two scenes must never tell the same event. A short chapter is often a single scene.
 - "vivid": true for the two or three scenes of the chapter that would look most striking \
 on screen, false for the rest.
 - "characters": names of those who take part, as the text writes them. "location": the \
@@ -179,15 +180,20 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
     )
     drafts = sorted(answer.scenes, key=lambda d: d.start)
     session.execute(delete(Scene).where(Scene.chapter_id == chapter.id, Scene.origin == "auto"))
-    scenes: list[Scene] = []
+    # The model's numbers are a suggestion; the result must tile the chapter exactly.
+    spans: list[tuple[int, int, SceneDraft]] = []
     cursor = 0
     last = len(paragraphs) - 1
     for index, draft in enumerate(drafts):
         if cursor > last:
             break
-        # The model's numbers are a suggestion; the result must tile the chapter exactly.
         end = last if index == len(drafts) - 1 else min(max(draft.end, cursor), last)
-        text = _story_text(paragraphs[cursor : end + 1], book, chapter.title)
+        spans.append((cursor, end, draft))
+        cursor = end + 1
+    spans = _join_lead_ins(spans, paragraphs, book, chapter.title)
+    scenes: list[Scene] = []
+    for start, end, draft in spans:
+        text = _story_text(paragraphs[start : end + 1], book, chapter.title)
         # A name the model took from a title line is not someone in the scene either.
         named = [
             n
@@ -199,7 +205,7 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
                 project_id=chapter.project_id,
                 chapter_id=chapter.id,
                 chapter_hash=chapter.content_hash,
-                paragraph_from=cursor,
+                paragraph_from=start,
                 paragraph_to=end,
                 title=draft.title.strip()[:300],
                 summary=draft.summary.strip(),
@@ -208,10 +214,36 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
                 entity_ids=entities_in(session, chapter.project_id, text, named),
             )
         )
-        cursor = end + 1
     session.add_all(scenes)
     session.commit()
     return scenes
+
+
+# A stretch with less story than this is a line or two of lead-in, not a scene to film.
+LEAD_IN_CHARS = 60
+
+
+def _join_lead_ins(
+    spans: list[tuple[int, int, SceneDraft]], paragraphs: list[str], book: str, title: str
+) -> list[tuple[int, int, SceneDraft]]:
+    """Join a stretch with almost no story to the scene after it (the last one to the scene
+    before), keeping that scene's title and description: owner's notes 26.11, a prologue
+    line "a miracle happened" became a second card about the same falling star."""
+    joined = list(spans)
+    n = 0
+    while len(joined) > 1 and n < len(joined):
+        start, end, _ = joined[n]
+        if len(_story_text(paragraphs[start : end + 1], book, title)) >= LEAD_IN_CHARS:
+            n += 1
+            continue
+        if n + 1 < len(joined):
+            _, next_end, draft = joined[n + 1]
+            joined[n : n + 2] = [(start, next_end, draft)]
+        else:
+            before_start, _, draft = joined[n - 1]
+            joined[n - 1 : n + 1] = [(before_start, end, draft)]
+            n -= 1
+    return joined
 
 
 def mark_scene(session: Session, chapter: Chapter, start: int, end: int, title: str) -> Scene:

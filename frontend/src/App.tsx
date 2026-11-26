@@ -16,9 +16,25 @@ import Usage from './pages/Usage'
 
 /** Keep the navigation visible if a project screen fails to render. */
 class ScreenBoundary extends Component<{ children: ReactNode; fallback: ReactNode; path: string }> {
-  state = { failed: false }
-  static getDerivedStateFromError() { return { failed: true } }
-  render() { return this.state.failed ? this.props.fallback : this.props.children }
+  state: { failed: false | Error } = { failed: false }
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: error instanceof Error ? error : new Error(String(error)) }
+  }
+  componentDidCatch(error: unknown) { console.error(error) }
+  render() {
+    const { failed } = this.state
+    if (!failed) return this.props.children
+    // What broke, in a line the owner can send: without it a screen failure says nothing.
+    return (
+      <>
+        {this.props.fallback}
+        <pre className="page faint small screen-error">{`${failed.name}: ${failed.message}
+${(failed.stack ?? '').split('
+').slice(0, 6).join('
+')}`}</pre>
+      </>
+    )
+  }
   componentDidUpdate(previous: Readonly<typeof this.props>) {
     if (this.state.failed && previous.path !== this.props.path) this.setState({ failed: false })
   }

@@ -161,6 +161,28 @@ def test_names_in_a_title_line_are_not_the_scene_cast(session, book):
     assert {session.get(Entity, i).name for i in manual.entity_ids} == {"Рыхташ"}
 
 
+def test_a_one_line_lead_in_is_not_a_scene_of_its_own(session, book):
+    # Owner's notes 26.11: a tiny prologue came out as two cards about the same miracle.
+    text = (
+        "ПАСЛАНЦЫ ЦМОКА\n\nАдбыўся цуд. Ніхто не бачыў.\n\n"
+        "Ноччу на пустым скрыжаванні сярод цёмных сцежак з неба сарвалася зорка і "
+        "ўпала на зямлю, і там, дзе была толькі цемра, заззяў цуд."
+    )
+    chapter = Chapter(project_id=book.id, position=2, title="", text=text, content_hash="y")
+    session.add(chapter)
+    session.commit()
+    model = FakeModel(
+        [
+            {"from": 0, "to": 1, "title": "Цуд без сведкаў", "summary": "Уступ."},
+            {"from": 2, "to": 2, "title": "Зорка на скрыжаванні", "summary": "Зорка падае."},
+        ]
+    )
+    [scene] = service.split_chapter(session, model, chapter)
+    assert (scene.paragraph_from, scene.paragraph_to) == (0, 2)
+    assert scene.title == "Зорка на скрыжаванні"
+    assert "Do not make a scene of a passage that only announces" in service.SPLIT_SYSTEM
+
+
 def test_enrich_suggests_and_marks_only_what_is_in_the_text(session, book):
     scene = service.mark_scene(session, book.mill, 2, 3, "Ключ")
     model = FakeModel()

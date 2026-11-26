@@ -454,6 +454,7 @@ mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; 
 .look-new-wrap { position: relative; }
 .look-new-wrap .insert-menu { left: 0; right: auto; top: 78px; }
 .prompt-last { margin: 6px 0 0; white-space: pre-wrap; color: var(--muted); max-height: 160px; overflow: auto; }
+.screen-error { white-space: pre-wrap; word-break: break-word; user-select: text; }
 
 /* Top bar of a project: the title alone, bright; the project's own links sit in the left menu. */
 .book-title { flex: none; max-width: 28vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--book); font-size: 20px; font-weight: 800; color: #ffe7a0; text-shadow: 0 0 18px rgba(250, 204, 21, 0.35); }
