@@ -68,3 +68,12 @@ def test_a_picture_is_planned_in_a_dialogue_and_drawn_from_card_references(
     assert [i["id"] for i in listed] == [made["id"]]
     assert client.delete(url).status_code == 204
     assert client.get(url).status_code == 404
+
+
+def test_the_planner_never_refuses_and_offers_to_draw_what_the_book_lacks():
+    # Owner's notes 26.11: "not found, draw anyway?" instead of "I won't draw it";
+    # anything of the book in the request is drawn from the book.
+    system = illustrations.PLAN_SYSTEM
+    assert "Never refuse to draw" in system
+    assert "ask if you should draw it anyway" in system
+    assert "even if the book has no such moment" in system
