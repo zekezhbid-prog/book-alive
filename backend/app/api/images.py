@@ -770,10 +770,14 @@ def save_views(entity_id: str, body: list[View], session: SessionDep) -> list[Vi
         raise HTTPException(422, "views_for_places_only")
     if len(body) > 8:
         raise HTTPException(422, "too_many_views")
+    keys = [v.key for v in body]
+    # A key must name one view only and not shadow a character's built-in view.
+    if len(set(keys)) != len(keys) or any(key in angles.ANGLES for key in keys):
+        raise HTTPException(422, "bad_view_key")
     entity.views = [v.model_dump() for v in body]
-    kept = {v.key for v in body}
+    kept = set(keys)
     for image in entity.images:
-        if image.angle and image.angle not in kept:
+        if image.angle and image.angle not in kept and image.angle not in angles.ANGLES:
             image.angle = ""
     session.commit()
     return body

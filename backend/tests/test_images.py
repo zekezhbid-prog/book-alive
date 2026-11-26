@@ -793,6 +793,10 @@ def test_a_place_gets_views_of_its_own_drawn_with_their_framing(
     assert client.get(url).json() == []  # nothing kept until the user saves
     assert client.put(url, json=found).json() == found
     assert client.post(f"/api/entities/{project.hero_id}/views/find").status_code == 422
+    twice = [found[0], found[0]]
+    assert client.put(url, json=twice).status_code == 422
+    shadow = [{**found[0], "key": "face_front"}]
+    assert client.put(url, json=shadow).status_code == 422
 
     drawn = []
     _painter(monkeypatch, drawn)
