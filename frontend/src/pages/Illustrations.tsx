@@ -104,7 +104,11 @@ function IllustrationChat({ id, onClose, onDeleted }: ChatProps) {
   useEffect(() => {
     api.illustration(id).then(setItem, (e) => setError(errorText(t, e)))
   }, [id, t])
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [item, busy])
+  // Braces matter: new Chrome returns a Promise from scrollIntoView, and React would call it
+  // as the effect's cleanup ("l is not a function", owner's notes 26.11).
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' })
+  }, [item, busy])
 
   // A plan is drawn at once: the user sees what the model found, then the picture.
   const send = async () => {
