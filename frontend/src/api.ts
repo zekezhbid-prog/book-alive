@@ -976,7 +976,9 @@ export const api = {
   saveSceneSummary: (sceneId: string, text: string) =>
     request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
   /** Suggested additions to the scene's description; nothing is saved until applied. */
-  enrichScene: (sceneId: string) =>
-    request<{ text: string; added: string[]; why: string }>('POST', `/scenes/${sceneId}/enrich`),
+  enrichScene: (sceneId: string, wishes = '') =>
+    request<{ text: string; added: string[]; why: string }>('POST', `/scenes/${sceneId}/enrich`, {
+      wishes,
+    }),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),
 }

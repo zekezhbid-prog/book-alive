@@ -17,6 +17,7 @@ import { ImageDialog, RedoPanel } from '../components/Gallery'
 import SceneExport from '../components/SceneExport'
 import { zoomLink } from '../components/Lightbox'
 import { AutoTextarea } from '../components/AutoTextarea'
+import { MicButton } from '../components/MicButton'
 import ProjectHeader from '../components/ProjectHeader'
 import ProjectNav from '../components/ProjectNav'
 import DescriptionEditor from '../components/DescriptionEditor'
@@ -270,32 +271,7 @@ interface TextsProps {
 function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
   const { t } = useI18n()
   const [open, setOpen] = useState({ scene: true, book: false })
-  const [offer, setOffer] = useState<{ text: string; added: string[]; why: string } | null>(null)
-  const [busy, setBusy] = useState<'' | 'enrich' | 'apply'>('')
-  const [error, setError] = useState('')
-  const enrich = async () => {
-    setBusy('enrich')
-    setError('')
-    try {
-      setOffer(await api.enrichScene(scene.id))
-      setOpen((now) => ({ ...now, scene: true }))
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-  const apply = async () => {
-    if (!offer) return
-    setBusy('apply')
-    setError('')
-    try {
-      onChange(await api.saveSceneSummary(scene.id, offer.text))
-      setOffer(null)
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
+  const [enriching, setEnriching] = useState(false)
   return (
     <div className="stack scene-texts">
       <FoldHead
@@ -305,31 +281,26 @@ function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
       >
         <button
           className="btn ghost small"
-          disabled={busy !== '' || !aiReady || !!offer}
+          disabled={!aiReady}
           title={t('scene.enrich.hint')}
-          onClick={enrich}
+          onClick={() => setEnriching(true)}
         >
           <SparklesIcon />
-          {busy === 'enrich' ? t('scene.enrich.busy') : t('scene.enrich')}
+          {t('scene.enrich')}
         </button>
       </FoldHead>
+      {enriching && (
+        <EnrichDialog
+          scene={scene}
+          onApplied={(next) => {
+            onChange(next)
+            setOpen((now) => ({ ...now, scene: true }))
+          }}
+          onClose={() => setEnriching(false)}
+        />
+      )}
       {open.scene &&
-        (offer ? (
-          <div className="stack enrich-offer">
-            <p className="scene-summary">{marked(offer.text, offer.added)}</p>
-            {offer.why && <p className="muted small">{offer.why}</p>}
-            {!offer.added.length && <p className="faint small">{t('scene.enrich.none')}</p>}
-            <div className="row">
-              <button className="btn primary" disabled={busy !== ''} onClick={apply}>
-                <CheckIcon />
-                {t('generate.face.apply')}
-              </button>
-              <button className="btn ghost" disabled={busy !== ''} onClick={() => setOffer(null)}>
-                {t('app.cancel')}
-              </button>
-            </div>
-          </div>
-        ) : writing ? (
+        (writing ? (
           <DescriptionEditor
             value={scene.summary}
             label={t('description.title')}
@@ -341,7 +312,6 @@ function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
         ) : (
           <p className="faint small">{t('scene.description.empty')}</p>
         ))}
-      {error && <p className="error small">{error}</p>}
       <FoldHead
         title={t('scene.text')}
         open={open.book}
@@ -354,6 +324,99 @@ function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** "Add more" in a window of its own: the author's wishes (typed or spoken, may be empty),
+ *  then the progress and the result in the same place; "Apply" saves it to the scene,
+ *  "Cancel" leaves the scene as it was (owner's notes 26.11). */
+function EnrichDialog({
+  scene,
+  onApplied,
+  onClose,
+}: {
+  scene: Scene
+  onApplied: (scene: Scene) => void
+  onClose: () => void
+}) {
+  const { t } = useI18n()
+  const [wishes, setWishes] = useState('')
+  const [offer, setOffer] = useState<{ text: string; added: string[]; why: string } | null>(null)
+  const [busy, setBusy] = useState<'' | 'enrich' | 'apply'>('')
+  const [error, setError] = useState('')
+  const enrich = async () => {
+    setBusy('enrich')
+    setError('')
+    try {
+      setOffer(await api.enrichScene(scene.id, wishes.trim()))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setBusy('')
+  }
+  const apply = async () => {
+    if (!offer) return
+    setBusy('apply')
+    setError('')
+    try {
+      onApplied(await api.saveSceneSummary(scene.id, offer.text))
+      onClose()
+    } catch (e) {
+      setError(errorText(t, e))
+      setBusy('')
+    }
+  }
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="dialog stack enrich-dialog">
+        <div className="row">
+          <h2 className="grow">{t('scene.enrich.title')}</h2>
+          <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} disabled={busy !== ''} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <p className="muted small">{t('scene.enrich.hint')}</p>
+        <div className="row">
+          <AutoTextarea
+            className="input grow"
+            value={wishes}
+            maxLength={2000}
+            placeholder={t('scene.enrich.wishes')}
+            disabled={busy !== ''}
+            onChange={(e) => setWishes(e.target.value)}
+          />
+          <MicButton
+            disabled={busy !== ''}
+            onText={(spoken) => setWishes((now) => (now.trim() ? `${now.trim()} ${spoken}` : spoken))}
+            onError={setError}
+          />
+        </div>
+        <div className="row">
+          <button className="btn" disabled={busy !== ''} onClick={enrich}>
+            <SparklesIcon />
+            {busy === 'enrich' ? t('scene.enrich.busy') : t('scene.enrich')}
+          </button>
+        </div>
+        {offer && (
+          <div className="stack enrich-offer">
+            <p className="scene-summary">{marked(offer.text, offer.added)}</p>
+            {offer.why && <p className="muted small">{offer.why}</p>}
+            {!offer.added.length && <p className="faint small">{t('scene.enrich.none')}</p>}
+          </div>
+        )}
+        {error && <p className="error small">{error}</p>}
+        <div className="row">
+          <span className="spacer" />
+          <button className="btn ghost" disabled={busy !== ''} onClick={onClose}>
+            {t('app.cancel')}
+          </button>
+          <button className="btn primary" disabled={busy !== '' || !offer} onClick={apply}>
+            <CheckIcon />
+            {t('generate.face.apply')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

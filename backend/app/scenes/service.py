@@ -496,7 +496,8 @@ does not say but what fits naturally: what the characters present do with their 
 bodies, small actions between the lines, details of the place, light and sound, what \
 happens in the background. Every addition must agree with the book and the surrounding \
 paragraphs; add no new characters, no new events that change the story and nothing about \
-later chapters. Write in the language of the book, as plain prose, at most 10 sentences.
+later chapters. Write in the language of the book, as plain prose, at most 10 sentences. \
+When the author's wishes are given at the end, add above all what they ask for.
 
 Reply with one JSON object and nothing else:
 {"text": "the whole new description", "added": ["each added fragment, copied exactly as it \
@@ -510,7 +511,12 @@ class EnrichAnswer(BaseModel):
 
 
 def enrich_scene(
-    session: Session, model: TextModel, project: Project, scene: Scene, chapter: Chapter
+    session: Session,
+    model: TextModel,
+    project: Project,
+    scene: Scene,
+    chapter: Chapter,
+    wishes: str = "",
 ) -> EnrichAnswer:
     """Suggested additions to the scene's description; nothing is saved here: the author
     sees them marked and applies them or not (owner's notes 25.11)."""
@@ -541,6 +547,8 @@ def enrich_scene(
             continue
         permanent, state = _facts_at(project, entity, chapter)
         lines.append(f"- {entity.name}: " + "; ".join([*permanent, *state][:6]))
+    if wishes.strip():
+        lines += ["", f"Author's wishes: {wishes.strip()}"]
     answer = model.invoke_json(
         "enrich_scene",
         [SystemMessage(ENRICH_SYSTEM), HumanMessage("\n".join(lines))],

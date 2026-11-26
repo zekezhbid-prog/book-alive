@@ -315,8 +315,12 @@ class EnrichOut(BaseModel):
     why: str
 
 
+class EnrichRequest(BaseModel):
+    wishes: str = Field(default="", max_length=2000)
+
+
 @router.post("/scenes/{scene_id}/enrich")
-def enrich(scene_id: str, session: SessionDep) -> EnrichOut:
+def enrich(scene_id: str, session: SessionDep, body: EnrichRequest | None = None) -> EnrichOut:
     """What could be added to the description; saved only by the author's "Apply"."""
     scene, chapter, project = _scene(session, scene_id)
     if chapter is None:
@@ -325,7 +329,8 @@ def enrich(scene_id: str, session: SessionDep) -> EnrichOut:
         raise HTTPException(403, "chapter_private")
     model = _text_model(session, project.id, "prompts")
     try:
-        answer = service.enrich_scene(session, model, project, scene, chapter)
+        wishes = body.wishes if body else ""
+        answer = service.enrich_scene(session, model, project, scene, chapter, wishes)
     except BadModelOutput as exc:
         raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:

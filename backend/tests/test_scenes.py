@@ -191,6 +191,11 @@ def test_enrich_suggests_and_marks_only_what_is_in_the_text(session, book):
     # The paragraphs around the scene are given to the model; nothing is saved yet.
     assert "Колесо скрипело" in model.context and "К вечеру" in model.context
     assert session.get(Scene, scene.id).summary == ""
+    assert "Author's wishes" not in model.context
+    # Owner's notes 26.11: the author may say what to add; empty wishes change nothing.
+    service.enrich_scene(session, model, book, scene, book.mill, "  больше про звуки  ")
+    assert "Author's wishes: больше про звуки" in model.context
+    assert "wishes" in model.system
 
 
 def test_references_follow_the_chapter_and_the_current_style(session, book):
