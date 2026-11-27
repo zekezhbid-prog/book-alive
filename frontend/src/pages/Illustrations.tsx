@@ -3,7 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   api,
   peek,
+  sectionOf,
   type ChapterBrief,
+  type EntityKind,
   type Illustration,
   type IllustrationBrief,
   type PictureIdea,
@@ -113,6 +115,7 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   const [error, setError] = useState('')
   const [picking, setPicking] = useState(false)
   const end = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     api.illustration(id).then(setItem, (e) => setError(errorText(t, e)))
@@ -122,6 +125,26 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
   }, [item, busy])
+
+  const openCard = (who: { entity_id: string; kind: string }) =>
+    navigate(`/projects/${project.id}/${sectionOf(who.kind as EntityKind)}/${who.entity_id}`)
+
+  /** Draws the last plan. Cards of it without a reference are named first (owner's notes
+   * 27.11): "No" opens the first such card to make one, and the plan waits for "Draw". */
+  const draw = async (current: Illustration) => {
+    const plan = current.messages[current.messages.length - 1]
+    if (!plan?.prompt) return
+    if (plan.missing.length) {
+      const names = plan.missing.map((m) => m.name).join(', ')
+      const go = await ask(t('images.missing.confirm', { names }), {
+        yes: t('images.missing.yes'),
+        no: t('images.missing.no'),
+      })
+      if (!go) return openCard(plan.missing[0])
+    }
+    setBusy('draw')
+    setItem(await api.drawIllustration(id))
+  }
 
   // A plan is drawn at once: the user sees what the model found, then the picture.
   const send = async () => {
@@ -133,10 +156,19 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
     try {
       const answered = await api.askIllustration(id, words)
       setItem(answered)
-      if (answered.messages[answered.messages.length - 1]?.prompt) {
-        setBusy('draw')
-        setItem(await api.drawIllustration(id))
-      }
+      setBusy('')
+      await draw(answered)
+    } catch (e) {
+      setError(errorText(t, e))
+      api.illustration(id).then(setItem, () => {})
+    }
+    setBusy('')
+  }
+  const drawAgain = async () => {
+    if (!item) return
+    setError('')
+    try {
+      await draw(item)
     } catch (e) {
       setError(errorText(t, e))
       api.illustration(id).then(setItem, () => {})
@@ -155,6 +187,8 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
 
   // Every picture of the dialogue, to leaf through in the lightbox.
   const drawn = (item?.messages ?? []).map((m) => m.image_url).filter(Boolean)
+  // The last message is a plan not drawn yet: the user said "No" to drawing without a reference.
+  const waiting = item?.messages.length ? item.messages[item.messages.length - 1].prompt !== '' : false
 
   return (
     <section className="stack illustration-chat">
@@ -196,6 +230,31 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
               <a {...zoomLink(drawn, drawn.indexOf(m.image_url))}>
                 <img className="illustration-picture" src={m.image_url} alt="" />
               </a>
+            )}
+            {waiting && n === item.messages.length - 1 && !busy && (
+              <>
+                {m.missing.length > 0 && (
+                  <div className="row wrap missing-refs">
+                    <span className="small muted">{t('images.missing.title')}</span>
+                    {m.missing.map((who) => (
+                      <button
+                        key={who.entity_id}
+                        className="chip plain missing-ref"
+                        title={t('images.missing.hint')}
+                        onClick={() => openCard(who)}
+                      >
+                        {who.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="row">
+                  <button className="btn primary small" onClick={drawAgain}>
+                    <SparklesIcon />
+                    {t('images.draw')}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         ))}

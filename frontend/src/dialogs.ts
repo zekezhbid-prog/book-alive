@@ -8,6 +8,9 @@ export interface DialogRequest {
   message: string
   /** null: a yes/no question. A string: a text field starting with this value. */
   text: string | null
+  /** Own words for the two buttons of a yes/no question instead of "Cancel" and "OK". */
+  yes?: string
+  no?: string
   resolve: (answer: string | boolean | null) => void
 }
 
@@ -18,11 +21,11 @@ export function setDialogHost(handler: typeof show) {
   show = handler
 }
 
-/** Asks a yes/no question; resolves true on OK. */
-export function ask(message: string): Promise<boolean> {
+/** Asks a yes/no question; resolves true on OK (or on `labels.yes`). */
+export function ask(message: string, labels: { yes?: string; no?: string } = {}): Promise<boolean> {
   return new Promise((resolve) => {
     if (!show) return resolve(window.confirm(message))
-    show({ message, text: null, resolve: (answer) => resolve(answer === true) })
+    show({ message, text: null, ...labels, resolve: (answer) => resolve(answer === true) })
   })
 }
 

@@ -113,10 +113,31 @@ def plan(session: Session, model: TextModel, project: Project, item: Illustratio
     if answer.question.strip() or not answer.prompt.strip():
         return {"role": "assistant", "text": answer.question.strip() or answer.say.strip()}
     by_name = {norm(n): c for c in cards for n in [c.name, *c.aliases]}
-    cast = [by_name[norm(n)] for n in answer.cast if norm(n) in by_name]
+    cast = list(dict.fromkeys(by_name[norm(n)] for n in answer.cast if norm(n) in by_name))
+    template = answer.prompt.strip()
+    prompt, references = fill(project, template, cast)
+    chapter = next((c for c in project.chapters if c.title == answer.chapter.strip()), None)
+    return {
+        "role": "assistant",
+        "text": answer.say.strip(),
+        "prompt": prompt,
+        # The prompt with [[names]] and the cards, to take the references again at drawing:
+        # a reference made after the plan counts (owner's notes 27.11).
+        "template": template,
+        "cast_ids": [c.id for c in cast],
+        "chapter_id": chapter.id if chapter and not chapter.private else "",
+        "cast": [c.name for c in cast],
+        "reference_ids": [r.id for r in references],
+    }
+
+
+def fill(project: Project, template: str, cast: list[Entity]) -> tuple[str, list[Image]]:
+    """The prompt with each [[name]] turned into "the figure from reference N", and the
+    pictures it refers to: the first picture of each card of the cast in the current style."""
+    key = style_key(project)
     references: list[Image] = []
-    prompt = answer.prompt.strip()
-    for card in dict.fromkeys(cast):
+    prompt = template
+    for card in cast:
         pictures = _pictures(card, key)
         tag = f"[[{card.name}]]"
         if pictures and len(references) < angles.DRAWING_LIMIT:
@@ -124,16 +145,22 @@ def plan(session: Session, model: TextModel, project: Project, item: Illustratio
             what = "figure" if card.kind == KIND_CHARACTER else "place or thing"
             prompt = prompt.replace(tag, f"the {what} from reference {len(references)}")
     # A name left in brackets (no picture, or over the limit) is just the name.
-    prompt = re.sub(r"\[\[([^\]]+)\]\]", r"\1", prompt)
-    chapter = next((c for c in project.chapters if c.title == answer.chapter.strip()), None)
-    return {
-        "role": "assistant",
-        "text": answer.say.strip(),
-        "prompt": prompt,
-        "chapter_id": chapter.id if chapter and not chapter.private else "",
-        "cast": [c.name for c in dict.fromkeys(cast)],
-        "reference_ids": [r.id for r in references],
-    }
+    return re.sub(r"\[\[([^\]]+)\]\]", r"\1", prompt), references
+
+
+def cast_of(session: Session, message: dict) -> list[Entity]:
+    """The cards of a plan, as they are now; a deleted card is left out."""
+    cards = [session.get(Entity, i) for i in message.get("cast_ids", [])]
+    return [c for c in cards if c is not None]
+
+
+def missing(project: Project, cast: list[Entity]) -> list[dict]:
+    """Cards of the cast with no picture in the current style to draw them from: the
+    picture would come out without them looking like themselves (owner's notes 27.11)."""
+    key = style_key(project)
+    return [
+        {"entity_id": c.id, "name": c.name, "kind": c.kind} for c in cast if not _pictures(c, key)
+    ]
 
 
 IDEAS_SYSTEM = """You help an author pick a moment of their book to illustrate. You get \

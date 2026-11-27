@@ -104,3 +104,55 @@ def test_picture_ideas_of_a_chapter_come_from_its_text(client, project, session,
     hidden = f"/api/projects/{project.id}/chapters/{second.id}/picture-ideas"
     assert client.post(hidden).status_code == 404
     assert client.post(f"/api/projects/{project.id}/chapters/nope/picture-ideas").status_code == 404
+
+
+def test_a_card_without_a_reference_is_named_before_drawing(client, project, monkeypatch):
+    # Owner's notes 27.11 (13): the cast had no references and the picture was drawn anyway.
+    # The plan names the cards that lack one; a reference made afterwards counts at drawing.
+    answers = [
+        {
+            "chapter": "Мельница",
+            "cast": ["Лана"],
+            "say": "Рисую Лану у мельницы.",
+            "prompt": "[[Лана]] stands by the mill wheel at dawn.",
+        }
+    ]
+
+    class OnePlan(Planner):
+        def invoke_json(self, operation, messages, schema):
+            return schema.model_validate(answers.pop(0))
+
+    monkeypatch.setattr("app.api.illustrations.TextModel", OnePlan)
+    monkeypatch.setattr(illustrations, "search", lambda *a, **k: [])
+    monkeypatch.setattr(illustrations, "index_project", lambda *a: 0)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    url = f"/api/illustrations/{client.post(f'/api/projects/{project.id}/illustrations').json()['id']}"
+
+    planned = client.post(f"{url}/ask", json={"text": "Лана у мельницы"}).json()["messages"][-1]
+    assert planned["missing"] == [
+        {"entity_id": project.hero_id, "name": "Лана", "kind": "character"}
+    ]
+    assert planned["reference_urls"] == []
+    assert planned["prompt"] == "Лана stands by the mill wheel at dawn."
+
+    # The user went to the card and made a reference: the plan no longer lacks it.
+    face = upload(client, project, project.hero_id)[0]
+    assert client.get(url).json()["messages"][-1]["missing"] == []
+
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append((prompt, len(references)))
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.illustrations.ImageModel", Painter)
+    done = client.post(f"{url}/draw").json()
+    assert drawn == [("the figure from reference 1 stands by the mill wheel at dawn.", 1)]
+    plan = done["messages"][-2]
+    assert plan["reference_urls"] == [face["url"]] and plan["missing"] == []
+    assert plan["prompt"] == drawn[0][0]
+    assert client.get(url).json()["messages"][-2]["prompt"] == drawn[0][0]  # saved

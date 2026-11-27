@@ -54,10 +54,10 @@ function Ask({ request, onClose }: { request: DialogRequest; onClose: (answer: s
         <div className="row">
           <span className="spacer" />
           <button type="button" className="btn" onClick={() => onClose(null)}>
-            {t('app.cancel')}
+            {request.no || t('app.cancel')}
           </button>
           <button ref={ok} className="btn primary">
-            {t('app.ok')}
+            {request.yes || t('app.ok')}
           </button>
         </div>
       </form>

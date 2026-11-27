@@ -483,6 +483,8 @@ export interface IllustrationMessage {
   chapter_id: string
   reference_urls: string[]
   image_url: string
+  /** Cards of a plan with no picture to draw them from, as they are now. */
+  missing: { entity_id: string; name: string; kind: string }[]
 }
 
 export interface IllustrationBrief {

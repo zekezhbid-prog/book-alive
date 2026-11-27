@@ -18,6 +18,12 @@ from app.models import Chapter, Illustration, Image, Project
 router = APIRouter(prefix="/api", tags=["illustrations"])
 
 
+class Missing(BaseModel):
+    entity_id: str
+    name: str
+    kind: str
+
+
 class Message(BaseModel):
     role: str
     text: str = ""
@@ -26,6 +32,8 @@ class Message(BaseModel):
     chapter_id: str = ""
     reference_urls: list[str] = Field(default_factory=list)
     image_url: str = ""
+    # Cards of a plan with no picture to draw them from, as they are now (owner's notes 27.11).
+    missing: list[Missing] = Field(default_factory=list)
 
 
 class IllustrationBrief(BaseModel):
@@ -58,7 +66,8 @@ def _brief(item: Illustration) -> IllustrationBrief:
     )
 
 
-def _full(item: Illustration) -> IllustrationOut:
+def _full(session: SessionDep, item: Illustration) -> IllustrationOut:
+    project = session.get(Project, item.project_id)
     return IllustrationOut(
         **_brief(item).model_dump(),
         messages=[
@@ -70,6 +79,11 @@ def _full(item: Illustration) -> IllustrationOut:
                 chapter_id=m.get("chapter_id", ""),
                 reference_urls=[_url(i) for i in m.get("reference_ids", [])],
                 image_url=_url(m["image_id"]) if m.get("image_id") else "",
+                missing=[
+                    Missing(**c) for c in service.missing(project, service.cast_of(session, m))
+                ]
+                if m.get("prompt")
+                else [],
             )
             for m in item.messages
         ],
@@ -107,7 +121,7 @@ def create_illustration(project_id: str, session: SessionDep) -> IllustrationOut
     item = Illustration(project_id=project_id, messages=[])
     session.add(item)
     session.commit()
-    return _full(item)
+    return _full(session, item)
 
 
 class PictureIdea(BaseModel):
@@ -117,7 +131,7 @@ class PictureIdea(BaseModel):
 
 @router.post("/projects/{project_id}/chapters/{chapter_id}/picture-ideas")
 def picture_ideas(project_id: str, chapter_id: str, session: SessionDep) -> list[PictureIdea]:
-    """"Pick from the book": moments of a chapter worth a picture. A hidden chapter (the
+    """ "Pick from the book": moments of a chapter worth a picture. A hidden chapter (the
     author's personal data) is never sent to a model."""
     chapter = session.get(Chapter, chapter_id)
     if chapter is None or chapter.project_id != project_id or chapter.private:
@@ -138,7 +152,7 @@ def picture_ideas(project_id: str, chapter_id: str, session: SessionDep) -> list
 
 @router.get("/illustrations/{illustration_id}")
 def get_illustration(illustration_id: str, session: SessionDep) -> IllustrationOut:
-    return _full(_item(session, illustration_id)[0])
+    return _full(session, _item(session, illustration_id)[0])
 
 
 @router.delete("/illustrations/{illustration_id}", status_code=204)
@@ -167,7 +181,7 @@ def ask(illustration_id: str, body: AskRequest, session: SessionDep) -> Illustra
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
     item = session.get(Illustration, illustration_id)
     _say(session, item, reply)
-    return _full(item)
+    return _full(session, item)
 
 
 @router.post("/illustrations/{illustration_id}/draw")
@@ -183,10 +197,21 @@ def draw(illustration_id: str, session: SessionDep) -> IllustrationOut:
         model = ImageModel(session, project.id)
     except ImageModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
-    references = [session.get(Image, i) for i in last.get("reference_ids", [])]
-    references = [r for r in references if r is not None]
+    if last.get("template"):
+        # The references are taken again: one made after the plan counts.
+        prompt, references = service.fill(project, last["template"], service.cast_of(session, last))
+        # A new list of new dicts: a JSON column is saved only when its value changes.
+        item.messages = [
+            {**m, "prompt": prompt, "reference_ids": [r.id for r in references]} if m is last else m
+            for m in item.messages
+        ]
+        session.commit()
+    else:
+        prompt = last["prompt"]
+        references = [session.get(Image, i) for i in last.get("reference_ids", [])]
+        references = [r for r in references if r is not None]
     paths = [settings.files_dir / r.path for r in references]
-    prompt, key = last["prompt"], style_key(project)
+    key = style_key(project)
     try:
         result = model.generate(prompt, paths, "")
     except ImageGenerationFailed as exc:
@@ -212,4 +237,4 @@ def draw(illustration_id: str, session: SessionDep) -> IllustrationOut:
         item,
         {"role": "assistant", "image_id": image_id, "reference_ids": [r.id for r in references]},
     )
-    return _full(item)
+    return _full(session, item)
