@@ -271,13 +271,19 @@ export default function Entities({ kind }: { kind: EntityKind }) {
             {/* Nothing open: every card as a tile, adding by hand and finding with AI first. */}
             {list && !entityId && (
               <CardGrid
+                // Objects: "Create new" is the first card of the grid (owner's notes 27.11, item 45).
+                create={kind === 'item' ? { title: t('tiles.create'), onClick: () => setAdding(true) } : undefined}
                 actions={[
-                  {
-                    icon: <GoldPlusSymbol />,
-                    title: t(`nav.add.${section}`),
-                    hint: t(`tiles.add.${kind}`),
-                    onClick: () => setAdding(true),
-                  },
+                  ...(kind === 'item'
+                    ? []
+                    : [
+                        {
+                          icon: <GoldPlusSymbol />,
+                          title: t(`nav.add.${section}`),
+                          hint: t(`tiles.add.${kind}`),
+                          onClick: () => setAdding(true),
+                        },
+                      ]),
                   {
                     icon: <GoldSparklesSymbol />,
                     title: t(`nav.find.${section}`),

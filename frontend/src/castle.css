@@ -628,3 +628,9 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 /* The model's progress: grey lines at the end of the dialogue (item 37). */
 .chat-progress { align-self: flex-start; color: var(--faint); font: 13px/1.5 var(--sans); }
 .profile-head .quick-reply { font-size: 13px; }
+/* 27.11, item 45: the first card of a grid is empty and makes a new one. */
+.tile.tile-new { align-items: center; justify-content: center; text-align: center; gap: 10px; background: var(--corners), var(--surface-stone-deep); }
+.tile.tile-new .tile-title { color: var(--gold-light); }
+.tile-new-plus { width: 64px; height: 64px; opacity: 0.75; transition: opacity 0.2s, transform 0.2s; filter: sepia(0.4) saturate(0.7) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.8)); }
+.tile-new-plus svg { width: 100%; height: 100%; overflow: visible; }
+.tile.tile-new:hover .tile-new-plus { opacity: 0.95; transform: scale(1.06); }

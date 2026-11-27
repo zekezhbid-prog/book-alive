@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { CloseIcon, MoveIcon, TrashIcon } from './icons'
+import { CloseIcon, GoldPlusSymbol, MoveIcon, TrashIcon } from './icons'
 
 export interface Tile {
   id: string
@@ -32,6 +32,8 @@ interface Props {
   /** The first tiles: add by hand, make with AI (the list's + and ✨, spelled out). */
   actions: TileAction[]
   tiles: Tile[]
+  /** The first cell of the grid, always empty: "Create new" (owner's notes 27.11, item 45). */
+  create?: { title: string; onClick: () => void }
   onOpen: (id: string) => void
   /** Under the grid, a heading and more tiles (doubtful cards). */
   more?: { title: string; hint?: string; tiles: Tile[] }
@@ -53,7 +55,7 @@ interface Props {
 }
 
 /** The page of a section when nothing is open: every card as a tile, the actions first. */
-export default function CardGrid({ actions, tiles, onOpen, more, selection }: Props) {
+export default function CardGrid({ actions, tiles, create, onOpen, more, selection }: Props) {
   // Picking mode: the boxes are hidden until asked for, so the tiles stay clean.
   const [picking, setPicking] = useState(false)
   const [moving, setMoving] = useState(false)
@@ -134,7 +136,7 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
   return (
     <>
       {/* The actions take the first row between them; the cards start below. */}
-      <div className="card-actions">
+      {actions.length > 0 && <div className="card-actions">
         {actions.map((action) => (
           <button
             key={action.title}
@@ -149,7 +151,7 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
             <span className="tile-text">{action.hint}</span>
           </button>
         ))}
-      </div>
+      </div>}
       {/* One row of fixed height for every picking control: entering the mode moves nothing. */}
       {tiles.length + (more?.tiles.length ?? 0) > 0 && selection && (
         <div className="row card-grid-tools">
@@ -217,7 +219,19 @@ export default function CardGrid({ actions, tiles, onOpen, more, selection }: Pr
           )}
         </div>
       )}
-      {tiles.length > 0 && <div className="card-grid">{tiles.map(tile)}</div>}
+      {(tiles.length > 0 || create) && (
+        <div className="card-grid">
+          {create && (
+            <button className="tile tile-new" onClick={create.onClick}>
+              <span className="tile-new-plus" aria-hidden>
+                <GoldPlusSymbol />
+              </span>
+              <span className="tile-title">{create.title}</span>
+            </button>
+          )}
+          {tiles.map(tile)}
+        </div>
+      )}
       {more && more.tiles.length > 0 && (
         <>
           <div className="row card-grid-subhead">

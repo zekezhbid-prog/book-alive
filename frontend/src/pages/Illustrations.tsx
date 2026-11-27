@@ -15,7 +15,8 @@ import ProjectHeader from '../components/ProjectHeader'
 import { Composer } from '../components/Composer'
 import { ProposalList } from '../components/SceneProposals'
 import { zoomLink } from '../components/Lightbox'
-import { BoldPlusIcon, BookIcon, ImageIcon, TrashIcon } from '../components/icons'
+import { BoldPlusIcon, BookIcon, TrashIcon } from '../components/icons'
+import CardGrid from '../components/CardGrid'
 import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
@@ -62,9 +63,11 @@ export default function Illustrations() {
           </div>
           {/* A "+" without words; the section has no close button, it closes by going to
               another one (owner's notes 27.11, items 26 and 27). */}
-          <button className="btn primary icon" title={t('images.add')} aria-label={t('images.add')} onClick={add}>
-            <BoldPlusIcon />
-          </button>
+          {illustrationId && (
+            <button className="btn primary icon" title={t('images.add')} aria-label={t('images.add')} onClick={add}>
+              <BoldPlusIcon />
+            </button>
+          )}
           <HelpButton title={t('images.title')} paragraphs={[t('images.help')]} />
         </div>
         {error && <p className="error">{error}</p>}
@@ -78,21 +81,19 @@ export default function Illustrations() {
             onDeleted={() => navigate(base)}
           />
         ) : (
-          <div className="illustration-grid">
-            {items?.length === 0 && <p className="faint">{t('images.empty')}</p>}
-            {items?.map((item) => (
-              <button key={item.id} className="illustration-tile" onClick={() => navigate(`${base}/${item.id}`)}>
-                {item.cover ? (
-                  <img src={item.cover} alt="" loading="lazy" />
-                ) : (
-                  <span className="illustration-blank" aria-hidden>
-                    <ImageIcon />
-                  </span>
-                )}
-                <span className="small">{item.title || t('images.untitled')}</span>
-              </button>
-            ))}
-          </div>
+          // Cards like the characters' and places': "Create new picture" first (item 45).
+          items && (
+            <CardGrid
+              actions={[]}
+              create={{ title: t('images.create'), onClick: add }}
+              tiles={items.map((item) => ({
+                id: item.id,
+                title: item.title || t('images.untitled'),
+                cover: item.cover || undefined,
+              }))}
+              onOpen={(id) => navigate(`${base}/${id}`)}
+            />
+          )
         )}
       </main>
     </>
