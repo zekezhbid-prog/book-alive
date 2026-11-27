@@ -8,13 +8,14 @@ import {
   type EntityKind,
   type Illustration,
   type IllustrationBrief,
+  type ImageSize,
   type PictureIdea,
   type Project,
 } from '../api'
 import ProjectHeader from '../components/ProjectHeader'
-import { MicButton } from '../components/MicButton'
+import { Composer } from '../components/Composer'
 import { zoomLink } from '../components/Lightbox'
-import { BoldPlusIcon, BookIcon, ImageIcon, SparklesIcon, TrashIcon } from '../components/icons'
+import { BoldPlusIcon, BookIcon, ImageIcon, TrashIcon } from '../components/icons'
 import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
@@ -111,6 +112,7 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   const [item, setItem] = useState<Illustration | null>(null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<'' | 'think' | 'draw'>('')
+  const [size, setSize] = useState<ImageSize>('1:1')
   const [error, setError] = useState('')
   const [picking, setPicking] = useState(false)
   const end = useRef<HTMLDivElement>(null)
@@ -142,7 +144,7 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
       if (!go) return openCard(plan.missing[0])
     }
     setBusy('draw')
-    setItem(await api.drawIllustration(id))
+    setItem(await api.drawIllustration(id, size))
   }
 
   // A plan is drawn at once: the user sees what the model found, then the picture.
@@ -272,12 +274,12 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
             {waiting && n === item.messages.length - 1 && !busy && (
               <>
                 {m.missing.length > 0 && (
-                  <div className="row wrap missing-refs">
+                  <div className="quick-replies">
                     <span className="small muted">{t('images.missing.title')}</span>
                     {m.missing.map((who) => (
                       <button
                         key={who.entity_id}
-                        className="chip plain missing-ref"
+                        className="quick-reply dim"
                         title={t('images.missing.hint')}
                         onClick={() => openCard(who)}
                       >
@@ -286,9 +288,9 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
                     ))}
                   </div>
                 )}
-                <div className="row">
-                  <button className="btn primary small" onClick={drawAgain}>
-                    <SparklesIcon />
+                {/* Ready answers in the gold of the chat's source numbers (owner's notes 27.11, item 21). */}
+                <div className="quick-replies">
+                  <button className="quick-reply" onClick={drawAgain}>
                     {t('images.draw')}
                   </button>
                 </div>
@@ -314,32 +316,18 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
           onClose={() => setPicking(false)}
         />
       )}
-      <div className="row">
-        <textarea
-          className="input grow"
-          rows={2}
-          value={text}
-          maxLength={2000}
-          placeholder={t('images.placeholder')}
-          disabled={busy !== ''}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              send()
-            }
-          }}
-        />
-        <MicButton
-          disabled={busy !== ''}
-          onText={(spoken) => setText((now) => (now.trim() ? `${now.trim()} ${spoken}` : spoken))}
-          onError={setError}
-        />
-        <button className="btn primary" disabled={busy !== '' || !text.trim()} onClick={send}>
-          <SparklesIcon />
-          {t('images.send')}
-        </button>
-      </div>
+      {/* The same field as in every dialogue, with the picture's aspect ratio (owner's notes 27.11, items 21 and 30). */}
+      <Composer
+        value={text}
+        onChange={setText}
+        onSend={send}
+        placeholder={t('images.placeholder')}
+        disabled={busy !== ''}
+        sendDisabled={!text.trim()}
+        maxLength={2000}
+        onError={setError}
+        size={{ value: size, onChange: setSize }}
+      />
     </section>
   )
 }

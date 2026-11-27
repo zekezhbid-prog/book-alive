@@ -352,6 +352,16 @@ export function ClapperIcon() {
   )
 }
 
+/** The Enter key's arrow: send the words in a dialogue's field (owner's notes 27.11, item 21). */
+export function EnterIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M20 5v6a4 4 0 0 1-4 4H5" />
+      <path d="m9 10-5 5 5 5" />
+    </svg>
+  )
+}
+
 export function PaletteIcon() {
   return (
     <svg {...stroke}>

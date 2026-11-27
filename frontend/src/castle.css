@@ -536,3 +536,60 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   .dialog-body { grid-template-columns: minmax(0, 1fr); }
   .dialog-body > * { min-width: 0; }
 }
+
+/* ---------- 27.11, items 21 and 30: every dialogue looks the same ----------
+   The chat about the book is the model. The user's lines are on the right on a lighter
+   ground, the model's on the left on a darker one; each line has the card's trim. */
+.bubble, .illustration-bubble {
+  max-width: 88%; padding: 10px 14px; border: 1px solid #050505; border-radius: var(--radius-sm);
+  font: 15px/1.55 var(--sans); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.bubble.user, .illustration-bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(180deg, rgba(220, 184, 102, 0.17), rgba(220, 184, 102, 0.07)), rgba(34, 30, 24, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.38), var(--bevel);
+}
+.bubble.assistant, .illustration-bubble.assistant {
+  align-self: flex-start;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: var(--trim), var(--bevel);
+}
+.illustration-bubble { white-space: normal; }
+/* A window opened from a card sits inside the card's `.chapter`, whose paragraphs are set
+   in the book's type: a line of a dialogue keeps the chat's type. */
+.bubble p, .illustration-bubble p { position: static; margin: 0; font: inherit; white-space: pre-wrap; }
+.bubble p.small, .illustration-bubble p.small { font-size: 13px; }
+
+/* The field: the full width, the icons inside it on the right. */
+.composer {
+  display: flex; align-items: flex-end; gap: 4px; width: 100%; flex-shrink: 0;
+  padding: 4px 4px 4px 12px; border: 1px solid #050505; border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.42); box-shadow: var(--trim), inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.composer:focus-within { box-shadow: inset 0 0 0 1px var(--accent-line), inset 0 2px 6px rgba(0, 0, 0, 0.5); }
+.composer textarea {
+  flex: 1; min-width: 0; padding: 6px 0; border: 0; background: transparent; outline: none;
+  resize: none; overflow-y: auto; font: 15px/1.5 var(--sans); color: var(--text);
+}
+.composer.off { opacity: 0.6; }
+.composer-tools { display: flex; align-items: center; gap: 2px; flex-shrink: 0; padding-bottom: 2px; }
+.composer-tools .btn.icon { min-width: 32px; height: 32px; padding: 0 6px; border-color: transparent; background: transparent; box-shadow: none; color: var(--muted); }
+.composer-tools .btn.icon:hover:not(:disabled) { color: var(--accent); }
+.composer-tools .composer-send:not(:disabled) { color: var(--accent); }
+.composer-size {
+  height: 28px; padding: 0 4px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted); font: 600 12px/1 var(--sans); cursor: pointer;
+}
+.composer-size:hover, .composer-size:focus { border-color: var(--line-2); color: var(--accent); outline: none; }
+.composer-size option { background: #15130f; color: var(--text); }
+
+/* Answers the model offers: short words in the gold of the chat's source numbers; a press
+   sends the answer at once. */
+.quick-replies { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.quick-reply {
+  padding: 2px 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--accent); font: 700 13px/1.4 var(--sans); letter-spacing: 0.2px; text-align: left;
+}
+.quick-reply:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.quick-reply:disabled { opacity: 0.45; cursor: default; }
+.quick-reply.dim { color: var(--muted); }

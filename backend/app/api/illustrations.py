@@ -3,14 +3,14 @@
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app import illustrations as service
 from app.api.images import EXTENSIONS, _store
 from app.config import settings
 from app.db import SessionDep
-from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
+from app.images.generate import SIZES, ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
 from app.models import Chapter, Illustration, Image, Project
@@ -212,9 +212,23 @@ def ask(illustration_id: str, body: AskRequest, session: SessionDep) -> Illustra
     return _full(session, item)
 
 
+class DrawIn(BaseModel):
+    # A key of SIZES, chosen in the dialogue's field (owner's notes 27.11, item 30);
+    # empty means square.
+    size: str = ""
+
+    @field_validator("size")
+    @classmethod
+    def known_size(cls, value: str) -> str:
+        if value and value not in SIZES:
+            raise ValueError("unknown size")
+        return value
+
+
 @router.post("/illustrations/{illustration_id}/draw")
-def draw(illustration_id: str, session: SessionDep) -> IllustrationOut:
+def draw(illustration_id: str, session: SessionDep, body: DrawIn | None = None) -> IllustrationOut:
     """Draws the last plan with its references."""
+    size = body.size if body else ""
     item, project = _item(session, illustration_id)
     last = next((m for m in reversed(item.messages) if m.get("prompt")), None)
     if last is None:
@@ -241,7 +255,7 @@ def draw(illustration_id: str, session: SessionDep) -> IllustrationOut:
     paths = [settings.files_dir / r.path for r in references]
     key = style_key(project)
     try:
-        result = model.generate(prompt, paths, "")
+        result = model.generate(prompt, paths, size)
     except ImageGenerationFailed as exc:
         raise HTTPException(502, f"provider_error: {exc}") from exc
     mime = result.mime if result.mime in EXTENSIONS else "image/png"

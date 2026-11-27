@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   api,
-  IMAGE_SIZES,
   isAngle,
   type EntityKind,
   type ImageInfo,
@@ -14,9 +13,9 @@ import {
 import { errorText, useI18n } from '../i18n'
 import { useTwoLang } from '../twoLang'
 import { HelpButton } from './HelpButton'
-import { CheckIcon, CopyIcon, PencilIcon, SparklesIcon, UploadIcon } from './icons'
+import { CheckIcon, CopyIcon, UploadIcon } from './icons'
 import { zoomLink } from './Lightbox'
-import { MicButton } from './MicButton'
+import { Composer } from './Composer'
 import { latest, orderOf, padTo } from './refViews'
 import { TwoLangPrompt } from './TwoLangPrompt'
 
@@ -569,13 +568,13 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       return (
         <>
           <p>{t('ref.upload.ask')}</p>
-          <div className="row wrap">
+          <div className="quick-replies">
             {uploadViews.map((view) => (
-              <button key={view || 'free'} className="chip" onClick={() => placeUpload(view)}>
+              <button key={view || 'free'} className="quick-reply" onClick={() => placeUpload(view)}>
                 {viewLabel(view)}
               </button>
             ))}
-            <button className="chip plain" onClick={() => placeUpload(null)}>
+            <button className="quick-reply dim" onClick={() => placeUpload(null)}>
               {t('ref.upload.sample')}
             </button>
           </div>
@@ -585,10 +584,11 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       return (
         <>
           {fixing && <p>{t('ref.fix.ask')}</p>}
-          <div className="row wrap ref-buttons">
+          {/* Ready answers in the gold of the chat's source numbers (owner's notes 27.11, item 21). */}
+          <div className="quick-replies">
             {stepChoices.length > 1 && (
               <button
-                className="btn ghost small icon"
+                className="quick-reply"
                 title={t('generate.step.prev_view')}
                 aria-label={t('generate.step.prev_view')}
                 onClick={() => leaf(-1)}
@@ -596,8 +596,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
                 ‹
               </button>
             )}
-            <button className="btn primary small" onClick={goOn}>
-              <CheckIcon />
+            <button className="quick-reply" onClick={goOn}>
               {stepNext
                 ? t('generate.step.next', { view: viewLabel(stepNext) })
                 : stepLook
@@ -606,7 +605,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
             </button>
             {stepChoices.length > 1 && (
               <button
-                className="btn ghost small icon"
+                className="quick-reply"
                 title={t('generate.step.next_view')}
                 aria-label={t('generate.step.next_view')}
                 onClick={() => leaf(1)}
@@ -615,16 +614,15 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
               </button>
             )}
             <button
-              className="btn ghost small"
+              className="quick-reply"
               onClick={() => {
                 setFixing(true)
                 field.current?.focus()
               }}
             >
-              <PencilIcon />
               {t('ref.fix')}
             </button>
-            <button className="btn ghost small" onClick={drop}>
+            <button className="quick-reply dim" onClick={drop}>
               {t('ref.drop')}
             </button>
           </div>
@@ -632,12 +630,11 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       )
     if (promptReady)
       return (
-        <div className="row wrap ref-buttons">
-          <button className="btn primary small" disabled={!hasStyle || !prompt.trim()} onClick={draw}>
-            <SparklesIcon />
+        <div className="quick-replies">
+          <button className="quick-reply" disabled={!hasStyle || !prompt.trim()} onClick={draw}>
             {t('ref.draw', { view: viewLabel(upNext) })}
           </button>
-          <button className="btn ghost small" onClick={() => collect()}>
+          <button className="quick-reply dim" onClick={() => collect()}>
             {t('ref.collect.again')}
           </button>
           {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
@@ -649,9 +646,11 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         <>
           <p>{t('ref.done')}</p>
           {after && (
-            <button className="btn ghost small" onClick={() => chooseLook(after.key)}>
-              {t('generate.step.next_look', { look: after.label })}
-            </button>
+            <div className="quick-replies">
+              <button className="quick-reply" onClick={() => chooseLook(after.key)}>
+                {t('generate.step.next_look', { look: after.label })}
+              </button>
+            </div>
           )}
         </>
       )
@@ -673,9 +672,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
             ))}
           </div>
         )}
-        <div className="row wrap ref-buttons">
-          <button className="btn primary small" onClick={() => collect()}>
-            <SparklesIcon />
+        <div className="quick-replies">
+          <button className="quick-reply" onClick={() => collect()}>
             {t('ref.collect')}
           </button>
           {samples.length > 0 && <span className="faint small">{t('ref.samples', { n: samples.length })}</span>}
@@ -736,66 +734,37 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           <div ref={end} />
         </div>
         {error && <p className="error small">{error}</p>}
-        <div className="row ref-input">
-          <input
-            ref={clip}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            hidden
-            onChange={(e) => putIn(e.target.files)}
-          />
-          <button
-            className="btn ghost small icon"
-            disabled={off || !!pending || !!upload}
-            title={t('ref.clip')}
-            aria-label={t('ref.clip')}
-            onClick={() => clip.current?.click()}
-          >
-            <UploadIcon />
-          </button>
-          <textarea
-            ref={field}
-            className="input grow"
-            rows={2}
-            value={text}
-            maxLength={1000}
-            placeholder={t(pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
-            disabled={off || !!upload || !!found}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
-          />
-          <MicButton
-            disabled={off}
-            onText={(spoken) => setText((now) => (now.trim() ? `${now.trim()} ${spoken}` : spoken))}
-            onError={setError}
-          />
-          <button
-            className="btn primary icon"
-            disabled={off || !text.trim()}
-            title={t('images.send')}
-            aria-label={t('images.send')}
-            onClick={send}
-          >
-            <SparklesIcon />
-          </button>
-        </div>
-        <select
-          className="input small ref-size"
-          value={size}
-          aria-label={t('generate.size')}
-          onChange={(e) => setSize(e.target.value as ImageSize)}
-        >
-          {IMAGE_SIZES.map((option) => (
-            <option key={option} value={option}>
-              {t(`generate.size.${option}`)}
-            </option>
-          ))}
-        </select>
+        <input
+          ref={clip}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          hidden
+          onChange={(e) => putIn(e.target.files)}
+        />
+        {/* The same field as in every dialogue (owner's notes 27.11, items 21 and 30). */}
+        <Composer
+          value={text}
+          onChange={setText}
+          onSend={send}
+          placeholder={t(pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
+          disabled={off || !!upload || !!found}
+          sendDisabled={!text.trim()}
+          maxLength={1000}
+          fieldRef={field}
+          onError={setError}
+          size={{ value: size, onChange: setSize }}
+          tools={
+            <button
+              className="btn ghost small icon"
+              disabled={off || !!pending || !!upload}
+              title={t('ref.clip')}
+              aria-label={t('ref.clip')}
+              onClick={() => clip.current?.click()}
+            >
+              <UploadIcon />
+            </button>
+          }
+        />
       </div>
     </div>
   )

@@ -869,7 +869,8 @@ export const api = {
   /** The user's words: the model answers with a question or a plan; nothing is drawn yet. */
   askIllustration: (id: string, text: string) =>
     request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),
-  drawIllustration: (id: string) => request<Illustration>('POST', `/illustrations/${id}/draw`),
+  drawIllustration: (id: string, size: ImageSize | '' = '') =>
+    request<Illustration>('POST', `/illustrations/${id}/draw`, { size }),
   /** "Pick from the book": moments of a chapter worth a picture (3 to 20). */
   pictureIdeas: (projectId: string, chapterId: string) =>
     request<PictureIdea[]>('POST', `/projects/${projectId}/chapters/${chapterId}/picture-ideas`),

@@ -13,7 +13,7 @@ import {
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 import AiNotice, { useTextModelReady } from './AiNotice'
-import { MicButton } from './MicButton'
+import { Composer } from './Composer'
 import { BoldPlusIcon, CloseIcon, GearIcon, SaveIcon, TrashIcon } from './icons'
 
 interface Props {
@@ -150,8 +150,8 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, 
     reloadThreads().catch(() => {})
   }
 
-  const send = async (event: FormEvent) => {
-    event.preventDefault()
+  const send = async (event?: FormEvent) => {
+    event?.preventDefault()
     const text = question.trim()
     if (!text || waiting) return
     asked.current = true
@@ -332,35 +332,18 @@ export default function ChatPanel({ projectId, chapters, chapterId, canSuggest, 
           {t('chat.suggest')}
         </button>
       )}
-      <form className="chat-form" onSubmit={send}>
-        <textarea
-          className="input"
-          rows={2}
-          value={question}
-          placeholder={t('chat.placeholder')}
-          maxLength={4000}
-          // No typing while the agent works: the next question waits for this answer.
-          disabled={waiting || !!resumed}
-          ref={input}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) send(e)
-          }}
-        />
-        <MicButton
-          disabled={waiting || !!resumed}
-          onText={(text) => {
-            setError('')
-            setQuestion((now) => (now.trim() ? `${now.trim()} ${text}` : text))
-            input.current?.focus()
-          }}
-          onError={setError}
-        />
-        {/* Stays bright with an empty field too: a dim button reads as broken. */}
-        <button className="btn primary" disabled={waiting || !!resumed}>
-          {t('chat.send')}
-        </button>
-      </form>
+      {/* The same field as in every dialogue (owner's notes 27.11, item 21). */}
+      <Composer
+        value={question}
+        onChange={setQuestion}
+        onSend={() => send()}
+        placeholder={t('chat.placeholder')}
+        // No typing while the agent works: the next question waits for this answer.
+        disabled={waiting || !!resumed}
+        sendDisabled={!question.trim()}
+        fieldRef={input}
+        onError={setError}
+      />
     </div>
   )
 }

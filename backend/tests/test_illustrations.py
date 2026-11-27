@@ -57,12 +57,14 @@ def test_a_picture_is_planned_in_a_dialogue_and_drawn_from_card_references(
             pass
 
         def generate(self, prompt, references, size=""):
-            drawn.append((prompt, len(references)))
+            drawn.append((prompt, len(references), size))
             return type("Result", (), {"data": PNG, "mime": "image/png"})()
 
     monkeypatch.setattr("app.api.illustrations.ImageModel", Painter)
-    done = client.post(f"{url}/draw").json()
-    assert drawn == [(planned["prompt"], 1)]
+    # The aspect ratio is chosen in the dialogue's field (owner's notes 27.11, item 30).
+    assert client.post(f"{url}/draw", json={"size": "7:5"}).status_code == 422
+    done = client.post(f"{url}/draw", json={"size": "3:2"}).json()
+    assert drawn == [(planned["prompt"], 1, "3:2")]
     assert done["messages"][-1]["image_url"] == done["cover"] != ""
     # Named after the request the picture was drawn from (owner's notes 27.11, item 15).
     assert done["title"] == "Лана у мельницы, встреча"
