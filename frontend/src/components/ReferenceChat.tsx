@@ -11,14 +11,13 @@ import {
   type Variant,
 } from '../api'
 import { ask } from '../dialogs'
-import { errorText, useI18n } from '../i18n'
+import { errorText, useI18n, type MessageKey } from '../i18n'
 import { useTwoLang } from '../twoLang'
 import { HelpButton } from './HelpButton'
-import { CheckIcon, CopyIcon, UploadIcon } from './icons'
+import { CheckIcon, CopyIcon, RefreshIcon, TrashIcon, UploadIcon } from './icons'
 import { zoomLink } from './Lightbox'
 import { Composer } from './Composer'
 import { latest, orderOf, padTo } from './refViews'
-import { TwoLangPrompt } from './TwoLangPrompt'
 
 interface Props {
   projectId: string
@@ -39,6 +38,22 @@ const FIRST_NOTE: Record<EntityKind, string> = {
   character: '',
   location: 'A general view of the whole place, seen from a distance.',
   item: 'The whole object seen from the front, on a plain background.',
+}
+
+// A place or object without its general picture: a few ways to see it first (owner's notes
+// 27.11, item 44); each is the general picture, drawn from another side.
+const FIRST_CHOICES: Record<EntityKind, { label: MessageKey; note: string }[]> = {
+  character: [],
+  location: [
+    { label: 'ref.first.location.far', note: FIRST_NOTE.location },
+    { label: 'ref.first.location.inside', note: 'The place seen from inside, at eye level, close enough to show its details.' },
+    { label: 'ref.first.location.above', note: 'The whole place seen from above, at a high angle.' },
+  ],
+  item: [
+    { label: 'ref.first.item.front', note: FIRST_NOTE.item },
+    { label: 'ref.first.item.side', note: 'The whole object seen from the side, on a plain background.' },
+    { label: 'ref.first.item.angle', note: 'The whole object seen at three quarters, slightly from above, on a plain background.' },
+  ],
 }
 
 type Busy = '' | 'prompt' | 'image' | 'upload' | 'variants' | 'views'
@@ -82,6 +97,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const [found, setFound] = useState<Variant[] | null>(null)
   const [looksChecked, setLooksChecked] = useState(true)
   const [placeViews, setPlaceViews] = useState<PlaceView[]>([])
+  // Which half of the two-language prompt is shown.
+  const [half, setHalf] = useState<'english' | 'local'>('local')
   const clip = useRef<HTMLInputElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
   const end = useRef<HTMLDivElement>(null)
@@ -146,6 +163,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const nextLook = () =>
     variants.find((v) => v.key !== variant?.key && orderOf(v.shape).some((view) => !has(view, v.key))) ?? null
 
+  // Lines shown at once and saved in the background; the next save waits for them.
   const say = async (add: RefLineIn[]) => {
     try {
       setLines(await api.addRefChat(entityId, add))
@@ -153,6 +171,35 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       fail(e)
     }
   }
+  // A press on a link: the offer and the pick stay where they were, the model's progress
+  // comes under them (owner's notes 27.11, item 37). They are shown now and saved with the
+  // answer (or alone, if the model fails).
+  const keep = (offer: string, pick: string): RefLineIn[] => {
+    const add: RefLineIn[] = [
+      ...(offer ? [{ role: 'assistant' as const, kind: 'offer' as const, text: offer }] : []),
+      { role: 'user', kind: 'text', text: pick },
+    ]
+    const blank = { kind: 'text', text: '', prompt: '', image_id: '', view: '', image_url: '' } as const
+    setLines((now) => [...(now ?? []), ...add.map((l) => ({ ...blank, ...l }) as RefLine)])
+    return add
+  }
+
+  // A picture put in "as a sample" only helps the drawing here: it never stays among the
+  // card's pictures (owner's notes 27.11, item 40), so it goes when the window closes.
+  const sampleIds = useRef<string[]>([])
+  const changedRef = useRef(onChanged)
+  useEffect(() => {
+    changedRef.current = onChanged
+  }, [onChanged])
+  useEffect(
+    () => () => {
+      const ids = sampleIds.current
+      sampleIds.current = []
+      if (!ids.length) return
+      void Promise.allSettled(ids.map((id) => api.deleteImage(id))).then(() => changedRef.current())
+    },
+    [],
+  )
 
   const generate = (view: string, english: string, references: string[], lookKey: string) =>
     api.generateImage(entityId, {
@@ -169,12 +216,12 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
 
   // A picture drawn: it waits for "OK, next" or "Fix", and a place gets its views after its
   // first picture so that "OK, next" has something to offer.
-  const drawn = async (made: ImageInfo, view: string, references: string[], lookKey: string) => {
+  const drawn = async (made: ImageInfo, view: string, references: string[], lookKey: string, before: RefLineIn[] = []) => {
     onChanged()
     setDrawnHere((had) => [...had, `${lookKey}:${view}`])
     setPending({ image: made, references })
     setNextView(openViews(view)[0] ?? '')
-    await say([{ role: 'assistant', kind: 'image', image_id: made.id, view }])
+    await say([...before, { role: 'assistant', kind: 'image', image_id: made.id, view }])
     if (!withAngles && !placeViews.length) {
       setBusy('views')
       try {
@@ -188,9 +235,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   }
 
   /** The text model writes the prompt of the next picture; `words` are the user's own. */
-  const collect = async (words = '', view = upNext) => {
+  const collect = async (words = '', view = upNext, note = '', before: RefLineIn[] = []) => {
     setError('')
     let lookKey = variant?.key ?? ''
+    const said: RefLineIn[] = [...before, ...(words ? [{ role: 'user' as const, text: words }] : [])]
     // The first drawing of a character asks once whether it has several outward looks.
     if (withAngles && !looksChecked && !variants.length) {
       setBusy('variants')
@@ -199,7 +247,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         setLooksChecked(true)
         if (list.length > 1) {
           setFound(list)
-          if (words) await say([{ role: 'user', text: words }])
+          if (said.length) await say(said)
           return setBusy('')
         }
         // One look that is not a person (an animal, a thing) is kept: it has its own views.
@@ -212,6 +260,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         }
       } catch (e) {
         fail(e)
+        if (before.length) await say(before)
         return setBusy('')
       }
     }
@@ -227,18 +276,16 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           // One prompt serves every view; the view is put in front of it when drawn.
           view_free: true,
           reference_ids: [],
-          note: withAngles ? '' : words || (first ? FIRST_NOTE[kind] : ''),
+          note: withAngles ? '' : words || note || (first ? FIRST_NOTE[kind] : ''),
         })
       ).prompt
       if (withAngles && words) written = (await api.refineImagePrompt(entityId, written, words)).text
       setPrompt(written)
       setPromptReady(true)
-      await say([
-        ...(words ? [{ role: 'user' as const, text: words }] : []),
-        { role: 'assistant', kind: 'prompt', prompt: written, view },
-      ])
+      await say([...said, { role: 'assistant', kind: 'prompt', prompt: written, view }])
     } catch (e) {
       fail(e)
+      if (before.length) await say(before)
     }
     setBusy('')
   }
@@ -299,16 +346,17 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         { role: 'assistant', text: after ? t('ref.look_next', { look: after.label }) : t('ref.done') },
       ])
     }
-    await say([{ role: 'user', text: t('generate.step.next', { view: viewLabel(view) }) }])
+    const before = keep('', viewLabel(view))
     setError('')
     setBusy('image')
     const lookKey = pending.image.variant || ''
     try {
       const made = await generate(view, await twoLang.flush(), pending.references, lookKey)
-      await drawn(made, view, pending.references, lookKey)
+      await drawn(made, view, pending.references, lookKey, before)
     } catch (e) {
       setPending(null)
       fail(e)
+      await say(before)
     }
     setBusy('')
   }
@@ -437,8 +485,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     if (!upload) return
     const { id, file } = upload
     setUpload(null)
+    // Named a view but in another style: it stays with the card as before, and helps as a sample.
     const asSample = () => setSamples((had) => [...had, id].slice(-3))
     if (view === null) {
+      sampleIds.current.push(id)
       asSample()
       return say([
         { role: 'user', text: t('ref.upload.sample') },
@@ -509,7 +559,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const stepLook = pending && !stepChoices.length && withAngles ? nextLook() : null
   // Two or three views to choose the next picture from (owner's notes 27.11, item 29).
   // Nothing drawn yet: a character starts from the front face, the rest lean on it.
-  const offerViews = first || !bases.length ? [upNext] : [upNext, ...open.filter((v) => v !== upNext)].slice(0, 3)
+  // About six at once (item 37), the usual next one first.
+  const offerViews = [upNext, ...open.filter((v) => v !== upNext)].filter((v) => v !== '' || !withAngles).slice(0, 6)
   // The views a put in picture can take: the open ones, and a place's general picture.
   const uploadViews = withAngles ? open : [...(first ? [''] : []), ...open]
   // The finished views of this look, small, above the dialogue.
@@ -521,39 +572,55 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
 
   const line = (m: RefLine, n: number): ReactNode => {
     if (m.kind === 'prompt') {
-      const live = n === lastPrompt && promptReady && !pending
+      const title = `${t('ref.prompt')}${m.view ? ` · ${viewLabel(m.view)}` : ''}`
+      if (!(n === lastPrompt && promptReady && !pending))
+        return (
+          <details>
+            <summary className="small muted">{title}</summary>
+            <p className="prompt-full">{m.prompt}</p>
+          </details>
+        )
+      // The prompt waiting for "Draw": plain text across the line, the language switch, "build
+      // again" and "copy" on the right of its title (owner's notes 27.11, items 37, 39, 44).
+      // Typed words change it.
+      const showLocal = twoLang.both && half === 'local' && twoLang.local.trim() !== ''
       return (
-        <details open={live}>
-          <summary className="small muted">
-            {t('ref.prompt')}
-            {m.view ? ` · ${viewLabel(m.view)}` : ''}
-          </summary>
-          {live ? (
-            <div className="stack ref-prompt">
-              <div className="prompt-box">
-                <TwoLangPrompt
-                  english={prompt}
-                  onEnglish={setPrompt}
-                  local={twoLang.local}
-                  onLocal={twoLang.setLocal}
-                  both={twoLang.both}
-                  busy={twoLang.busy}
-                  disabled={off}
-                />
+        <>
+          <div className="row bubble-head">
+            <p className="grow">{title}</p>
+            {twoLang.both && (
+              <div className="segmented small" role="group" aria-label={t('generate.prompt.lang')}>
+                <button className={half === 'english' ? 'active' : ''} aria-pressed={half === 'english'} onClick={() => setHalf('english')}>
+                  EN
+                </button>
+                <button className={half === 'local' ? 'active' : ''} aria-pressed={half === 'local'} onClick={() => setHalf('local')}>
+                  {t('generate.prompt.lang.local')}
+                </button>
               </div>
-              <button
-                className="btn ghost small icon"
-                title={t('generate.copy')}
-                aria-label={t('generate.copy')}
-                onClick={() => navigator.clipboard.writeText(prompt)}
-              >
-                <CopyIcon />
-              </button>
-            </div>
-          ) : (
-            <p className="small prompt-last">{m.prompt}</p>
+            )}
+            <button
+              className="btn ghost small icon"
+              disabled={off}
+              title={t('ref.collect.again')}
+              aria-label={t('ref.collect.again')}
+              onClick={() => collect()}
+            >
+              <RefreshIcon />
+            </button>
+            <button
+              className="btn ghost small icon"
+              title={t('generate.copy')}
+              aria-label={t('generate.copy')}
+              onClick={() => navigator.clipboard.writeText(prompt)}
+            >
+              <CopyIcon />
+            </button>
+          </div>
+          <p className="prompt-full">{showLocal ? twoLang.local : prompt}</p>
+          {twoLang.both && half === 'local' && !showLocal && twoLang.busy && (
+            <p className="chat-progress">{t('generate.prompt.translating')}</p>
           )}
-        </details>
+        </>
       )
     }
     if (m.kind === 'image' || m.kind === 'upload') {
@@ -572,7 +639,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const live = (): ReactNode => {
     if (busy)
       return (
-        <p className="muted">
+        <p className="chat-progress">
           {t(
             busy === 'prompt'
               ? 'generate.prompt.busy'
@@ -636,13 +703,13 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       return (
         <>
           {fixing && <p>{t('ref.fix.ask')}</p>}
-          {/* Ready answers in the gold of the chat's source numbers (owner's notes 27.11, item 21). */}
+          {/* The next views as links, just their names; a press draws it. A remark on this
+              picture is typed in the field; the bin removes it (owner's notes 27.11, item 38). */}
           <div className="quick-replies">
-            {/* Two or three next views at once (owner's notes 27.11, item 29); a press draws it. */}
             {stepChoices.length > 0 ? (
-              stepChoices.slice(0, 3).map((view) => (
+              stepChoices.slice(0, 6).map((view) => (
                 <button key={view} className="quick-reply" onClick={() => goOn(view)}>
-                  {t('generate.step.next', { view: viewLabel(view) })}
+                  {viewLabel(view)}
                 </button>
               ))
             ) : (
@@ -650,17 +717,9 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
                 {stepLook ? t('generate.step.next_look', { look: stepLook.label }) : t('generate.step.done')}
               </button>
             )}
-            <button
-              className="quick-reply"
-              onClick={() => {
-                setFixing(true)
-                field.current?.focus()
-              }}
-            >
-              {t('ref.fix')}
-            </button>
-            <button className="quick-reply dim" onClick={drop}>
-              {t('ref.drop')}
+            <span className="spacer" />
+            <button className="btn ghost small icon" title={t('ref.drop')} aria-label={t('ref.drop')} onClick={drop}>
+              <TrashIcon />
             </button>
           </div>
         </>
@@ -670,9 +729,6 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         <div className="quick-replies">
           <button className="quick-reply" disabled={!hasStyle || !prompt.trim()} onClick={draw}>
             {t('ref.draw', { view: viewLabel(upNext) })}
-          </button>
-          <button className="quick-reply dim" onClick={() => collect()}>
-            {t('ref.collect.again')}
           </button>
           {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
         </div>
@@ -692,9 +748,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         </>
       )
     }
+    const offerText = t(bases.length ? 'ref.offer.pick' : 'ref.offer.start')
     return (
       <>
-        <p>{offerViews.length > 1 ? t('ref.offer.pick') : t('ref.offer', { view: viewLabel(upNext) })}</p>
+        <p>{offerText}</p>
         {refLooks.length > 0 && (
           <div className="row wrap" title={t('variants.ref.hint')}>
             <span className="small muted">{t('variants.ref')}</span>
@@ -709,25 +766,30 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
             ))}
           </div>
         )}
+        {/* About six views as links at once; a press collects the prompt (item 37). */}
         <div className="quick-replies">
-          {offerViews.length > 1 ? (
-            offerViews.map((view) => (
-              <button
-                key={view}
-                className="quick-reply"
-                onClick={() => {
-                  setNextView(view)
-                  collect('', view)
-                }}
-              >
-                {viewLabel(view)}
-              </button>
-            ))
-          ) : (
-            <button className="quick-reply" onClick={() => collect()}>
-              {t('ref.collect')}
-            </button>
-          )}
+          {first
+            ? FIRST_CHOICES[kind].map((c) => (
+                <button
+                  key={c.label}
+                  className="quick-reply"
+                  onClick={() => void collect('', '', c.note, keep(offerText, t(c.label)))}
+                >
+                  {t(c.label)}
+                </button>
+              ))
+            : offerViews.map((view) => (
+                <button
+                  key={view}
+                  className="quick-reply"
+                  onClick={() => {
+                    setNextView(view)
+                    void collect('', view, '', keep(offerText, viewLabel(view)))
+                  }}
+                >
+                  {viewLabel(view)}
+                </button>
+              ))}
           {samples.length > 0 && <span className="faint small">{t('ref.samples', { n: samples.length })}</span>}
         </div>
       </>
@@ -788,11 +850,12 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         <div className="stack illustration-log ref-tape">
           {lines === null && <p className="muted">{t('app.loading')}</p>}
           {lines?.map((m, n) => (
-            <div key={n} className={`illustration-bubble ${m.role}`}>
+            <div key={n} className={`illustration-bubble ${m.role}${m.kind === 'prompt' ? ' wide' : ''}`}>
               {line(m, n)}
             </div>
           ))}
-          {lines !== null && <div className="illustration-bubble assistant">{live()}</div>}
+          {/* While the model works, only a grey line at the end (item 37). */}
+          {lines !== null && (busy ? live() : <div className="illustration-bubble assistant">{live()}</div>)}
           <div ref={end} />
         </div>
         {error && <p className="error small">{error}</p>}
