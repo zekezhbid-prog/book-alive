@@ -912,12 +912,13 @@ export const api = {
   scene: (id: string) => request<Scene>('GET', `/scenes/${id}`),
   deleteScene: (id: string) => request<void>('DELETE', `/scenes/${id}`),
   splitEstimate: (chapterId: string) =>
-    request<{ input_tokens: number; output_tokens: number; existing: number }>(
+    request<{ input_tokens: number; output_tokens: number; existing: number; first_scene_id: string }>(
       'GET',
       `/chapters/${chapterId}/scenes/estimate`,
     ),
-  splitScenes: (chapterId: string) =>
-    request<SceneBrief[]>('POST', `/chapters/${chapterId}/scenes/split`),
+  /** `again`: the chapter is split anew though it has scenes (the user confirmed it). */
+  splitScenes: (chapterId: string, again = false) =>
+    request<SceneBrief[]>('POST', `/chapters/${chapterId}/scenes/split${again ? '?again=true' : ''}`),
   markScene: (chapterId: string, from: number, to: number) =>
     request<SceneBrief>('POST', `/chapters/${chapterId}/scenes`, {
       paragraph_from: from,

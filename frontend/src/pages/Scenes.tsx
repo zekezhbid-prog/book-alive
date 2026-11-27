@@ -24,6 +24,7 @@ import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
 import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
+import { chooseSplit } from '../sceneSplit'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import {
   CheckIcon,
@@ -196,15 +197,11 @@ function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
   const start = async () => {
     setError('')
     try {
-      const estimate = await api.splitEstimate(chapterId)
-      const question =
-        t('scenes.split.confirm', {
-          input: estimate.input_tokens.toLocaleString(),
-          output: estimate.output_tokens.toLocaleString(),
-        }) + (estimate.existing ? t('scenes.split.replace', { n: estimate.existing }) : '')
-      if (!(await ask(question))) return
+      const choice = await chooseSplit(t, chapterId)
+      if (!choice) return
+      if ('show' in choice) return onDone(choice.show)
       setBusy(true)
-      const scenes = await api.splitScenes(chapterId)
+      const scenes = await api.splitScenes(chapterId, choice.again)
       onDone(scenes[0]?.id)
     } catch (e) {
       setError(errorText(t, e))
@@ -232,7 +229,7 @@ function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
           <button className="btn" disabled={busy} onClick={onClose}>
             {t('app.cancel')}
           </button>
-          <button className="btn primary" disabled={busy || !chapterId || aiReady === false} onClick={start}>
+          <button className="btn primary" disabled={busy || !chapterId} onClick={start}>
             {busy ? t('scenes.split.busy') : t('scenes.split')}
           </button>
         </div>

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, sectionOf, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n, type MessageKey } from '../i18n'
 import { markMatches } from '../markMatches'
-import { ask } from '../dialogs'
+import { chooseSplit } from '../sceneSplit'
 import { ChevronIcon, CloseIcon, LockIcon } from './icons'
 
 export interface NamedEntity {
@@ -65,15 +65,11 @@ export default function ChapterReader({
 
   const splitIntoScenes = async () => {
     try {
-      const estimate = await api.splitEstimate(chapter.id)
-      const question =
-        t('scenes.split.confirm', {
-          input: estimate.input_tokens.toLocaleString(),
-          output: estimate.output_tokens.toLocaleString(),
-        }) + (estimate.existing ? t('scenes.split.replace', { n: estimate.existing }) : '')
-      if (!(await ask(question))) return
+      const choice = await chooseSplit(t, chapter.id)
+      if (!choice) return
+      if ('show' in choice) return navigate(`/projects/${project.id}/scenes/${choice.show}`)
       setSplitting(true)
-      const scenes = await api.splitScenes(chapter.id)
+      const scenes = await api.splitScenes(chapter.id, choice.again)
       navigate(`/projects/${project.id}/scenes/${scenes[0]?.id ?? ''}`)
     } catch (e) {
       onError(e)

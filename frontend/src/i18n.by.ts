@@ -639,6 +639,9 @@ export const by: Record<string, string> = {
     'Разбіць раздзел на сцэны? Прыкладна {input} токенаў на ўваход і {output} на выхад.',
   'scenes.split.replace':
     ' Ранейшая аўтаматычная разбіўка гэтага раздзела ({n}) будзе заменена; сцэны, адзначаныя ўручную, застануцца.',
+  'scenes.split.exists': 'Раздзел ужо разбіты на сцэны ({n}). Паказаць іх?',
+  'scenes.split.show': 'Паказаць сцэны',
+  'scenes.split.again': 'Разбіць нанова',
   'scenes.mark': 'Зрабіць сцэнай: абзацы {from}–{to}',
   'scene.delete': 'Выдаліць сцэну',
   'scene.delete.confirm': 'Выдаліць гэтую сцэну разам з яе промптам? Кадры застануцца.',
@@ -799,6 +802,7 @@ export const by: Record<string, string> = {
   'error.no_prompt_yet': 'Спачатку збярыце промпт для відэа.',
   'error.scene_not_found': 'Такой сцэны больш няма.',
   'error.empty_chapter': 'У раздзеле няма тэксту.',
+  'error.scenes_already_split': 'Раздзел ужо разбіты на сцэны. Адкрыйце іх або разбіце нанова.',
   'error.wrong_password': 'Няправільны пароль.',
   'error.too_many_attempts': 'Занадта шмат няправільных спроб. Пачакайце некалькі хвілін.',
   'error.login_required': 'Трэба ўвайсці нанова.',

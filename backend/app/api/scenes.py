@@ -88,6 +88,7 @@ class SplitEstimate(BaseModel):
     input_tokens: int
     output_tokens: int
     existing: int  # automatic scenes that a new split will replace
+    first_scene_id: str = ""  # the first of them, to show instead of splitting again
 
 
 class PromptRequest(BaseModel):
@@ -219,24 +220,37 @@ def split_estimate(chapter_id: str, session: SessionDep) -> SplitEstimate:
         overhead = TextModel(session, chapter.project_id, "prompts").request_overhead
     except ModelNotConfigured:
         pass
-    existing = session.scalars(
-        select(Scene).where(Scene.chapter_id == chapter.id, Scene.origin == "auto")
-    ).all()
+    existing = _auto_scenes(session, chapter)
     tokens = estimate_tokens(chapter.text)
     return SplitEstimate(
         input_tokens=tokens + estimate_tokens(service.SPLIT_SYSTEM) + overhead,
         output_tokens=max(300, tokens // 8),
         existing=len(existing),
+        first_scene_id=existing[0].id if existing else "",
+    )
+
+
+def _auto_scenes(session: SessionDep, chapter: Chapter) -> list[Scene]:
+    return list(
+        session.scalars(
+            select(Scene)
+            .where(Scene.chapter_id == chapter.id, Scene.origin == "auto")
+            .order_by(Scene.paragraph_from)
+        ).all()
     )
 
 
 @router.post("/chapters/{chapter_id}/scenes/split")
-def split(chapter_id: str, session: SessionDep) -> list[SceneBrief]:
+def split(chapter_id: str, session: SessionDep, again: bool = False) -> list[SceneBrief]:
+    """A chapter already split is not split again unless the user confirmed it (`again`):
+    a second press used to make its scenes anew (owner's notes 27.11)."""
     chapter = _chapter(session, chapter_id)
     if not chapter.text.strip():
         raise HTTPException(422, "empty_chapter")
     if chapter.private:
         raise HTTPException(403, "chapter_private")
+    if not again and _auto_scenes(session, chapter):
+        raise HTTPException(409, "scenes_already_split")
     # Scenes are the light model's work, like their prompts (owner's notes 25.11).
     model = _text_model(session, chapter.project_id, "prompts")
     try:

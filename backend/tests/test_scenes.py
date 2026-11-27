@@ -376,3 +376,29 @@ def test_the_user_picks_the_scene_references_by_hand(client, book):
     # An empty choice goes back to the fixed rules.
     back = client.put(url, json={"image_ids": []}).json()
     assert [r["image_id"] for r in back["references"]] == [main, look]
+
+
+def test_a_split_chapter_shows_its_scenes_and_splits_again_only_when_asked(
+    client, book, monkeypatch
+):
+    # Owner's notes 27.11 (14): a second press made the scenes again; now the chapter's
+    # scenes are shown, and a new split needs `again` (the user confirmed it).
+    model = FakeModel([{"from": 0, "to": 4, "title": "Мельница"}])
+    monkeypatch.setattr("app.api.scenes._text_model", lambda *a: model)
+    url = f"/api/chapters/{book.mill.id}/scenes"
+    estimate = client.get(f"{url}/estimate").json()
+    assert (estimate["existing"], estimate["first_scene_id"]) == (0, "")
+
+    made = client.post(f"{url}/split").json()
+    estimate = client.get(f"{url}/estimate").json()
+    assert (estimate["existing"], estimate["first_scene_id"]) == (len(made), made[0]["id"])
+
+    again = client.post(f"{url}/split")
+    assert again.status_code == 409 and again.json()["detail"] == "scenes_already_split"
+    listed = client.get(f"/api/projects/{book.id}/scenes").json()
+    assert [s["id"] for s in listed] == [s["id"] for s in made]  # nothing made twice
+
+    remade = client.post(f"{url}/split", params={"again": True})
+    assert remade.status_code == 200
+    listed = client.get(f"/api/projects/{book.id}/scenes").json()
+    assert [s["id"] for s in listed] == [s["id"] for s in remade.json()]
