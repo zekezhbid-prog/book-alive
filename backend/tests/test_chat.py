@@ -15,12 +15,12 @@ from app.rag import agent, chat, jobs
 from app.rag.index import index_project, search, split_chunks
 
 MILL = (
-    "Рыхташ вошёл в старую мельницу у реки.\n\n"
+    "Ростан вошёл в старую мельницу у реки.\n\n"
     "На стене висел ржавый серп, а в углу стоял дубовый сундук.\n\n"
     "Мельник достал из сундука серебряный ключ и спрятал его за пазуху."
 )
 ROAD = (
-    "Люта шла по лесной дороге к замку князя.\n\n"
+    "Лана шла по лесной дороге к замку князя.\n\n"
     "В руках у неё был посох из орешника, на плечах красный платок."
 )
 
@@ -84,7 +84,7 @@ def test_index_is_incremental(session, project):
 
 def test_search_finds_the_passage_by_its_words(session, project):
     index_project(session, project)
-    passages = search(session, project.id, "Что было в руках у Люты?")
+    passages = search(session, project.id, "Что было в руках у Ланы?")
     assert passages[0].chapter_title == "Дорога"
     assert "посох из орешника" in passages[0].text
     assert passages[0].paragraph == 0  # the passage starts at the chapter's first paragraph
@@ -101,7 +101,7 @@ def test_answer_keeps_only_citations_that_check_out(session, project):
             ],
         }
     )
-    asked, reply = chat.ask(session, project, model, "Что было в руках у Люты?")
+    asked, reply = chat.ask(session, project, model, "Что было в руках у Ланы?")
     assert asked.role == "user"
     assert "[1] (Дорога, passage)" in model.prompts[0]
     assert [c["n"] for c in reply.citations] == [1]
@@ -121,7 +121,7 @@ def test_invented_quote_is_not_shown_as_a_source(session, project):
             "citations": [{"source": 1, "quote": "она несла волшебный жезл"}],
         }
     )
-    _, reply = chat.ask(session, project, model, "Что несла Люта по дороге?")
+    _, reply = chat.ask(session, project, model, "Что несла Лана по дороге?")
     assert reply.citations[0]["quote"] == ""
     assert reply.citations[0]["paragraph"] == 0  # still links to where the passage starts
 
@@ -221,7 +221,7 @@ def _stream(client, project_id: str, question: str) -> list[dict]:
 
 def test_chat_stream_reports_steps_then_messages(client, project, stream_model):
     stream_model["model"] = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
-    lines = _stream(client, project.id, "Что несла Люта?")
+    lines = _stream(client, project.id, "Что несла Лана?")
     assert [(line["type"], line["code"]) for line in lines[:3]] == [
         ("status", "index"),
         ("status", "search"),
@@ -237,7 +237,7 @@ def test_chat_stream_reports_a_model_failure_as_its_last_line(client, project, s
             raise RuntimeError("rate limit")
 
     stream_model["model"] = BrokenModel()
-    lines = _stream(client, project.id, "Что несла Люта?")
+    lines = _stream(client, project.id, "Что несла Лана?")
     assert lines[0]["type"] == "status"  # the response had already begun
     # The reader gets a plain message; the details stay in the server log.
     assert (lines[-1]["type"], lines[-1]["detail"]) == ("error", "chat_failed")
@@ -261,7 +261,7 @@ def test_chat_api_threads(client, project):
     assert client.get(f"{base}/{thread}/messages").json() == []
     changed = client.patch(f"{base}/{thread}", json={"title": " Про  ключ ", "chapter_ids": []})
     assert (changed.json()["title"], changed.json()["chapter_ids"]) == ("Про ключ", [])
-    response = client.post(f"{base}/{thread}/ask", json={"question": "Кто такая Люта?"})
+    response = client.post(f"{base}/{thread}/ask", json={"question": "Кто такая Лана?"})
     assert (response.status_code, response.json()["detail"]) == (409, "text_model_not_configured")
     assert client.get(f"/api/projects/{project.id}/chats/missing/messages").status_code == 404
     assert client.delete(f"{base}/{thread}").status_code == 204
@@ -275,9 +275,9 @@ def test_threads_keep_their_own_history(session, project):
     assert first.title == "Что мельник достал из сундука?"
     second = chat.new_thread(project)
     model = FakeModel(answer)
-    chat.ask(session, project, model, "Что несла Люта?", thread=second)
+    chat.ask(session, project, model, "Что несла Лана?", thread=second)
     assert "мельник" not in model.prompts[0]
-    assert chat.history(session, second.id)[0].content == "Что несла Люта?"
+    assert chat.history(session, second.id)[0].content == "Что несла Лана?"
     # Without a thread the latest one is used.
     assert chat.threads(session, project.id)[0].id == second.id
 
@@ -305,16 +305,16 @@ def test_thread_limited_to_chapters_searches_and_reads_only_them(session, projec
 def test_plot_suggestions_for_the_writer(session, project):
     options = {
         "options": [
-            {"title": "Погоня", "text": "Стражник узнаёт Люту."},
+            {"title": "Погоня", "text": "Стражник узнаёт Лану."},
             {"title": "Обман", "text": "Она выдаёт себя за служанку."},
-            {"title": "Ночь", "text": "Люта ждёт темноты у стены."},
+            {"title": "Ночь", "text": "Лана ждёт темноты у стены."},
         ]
     }
     model = FakeModel(options)
     road = project.chapters[1]
     asked, reply = chat.suggest(session, project, model, "Предложи развитие событий", road.id)
     assert asked.content == "Предложи развитие событий"
-    assert reply.content.startswith("1. Погоня\nСтражник узнаёт Люту.\n\n2. Обман")
+    assert reply.content.startswith("1. Погоня\nСтражник узнаёт Лану.\n\n2. Обман")
     assert reply.citations == []
     # The prompt carries the end of the open chapter and passages from elsewhere in the book.
     assert "посох из орешника" in model.prompts[0]
@@ -351,7 +351,7 @@ class ReleasingModel(FakeModel):
 def test_chat_holds_no_connection_while_the_model_answers(session, project):
     answer = {"found": True, "answer": "Посох [1].", "citations": []}
     model = ReleasingModel(session, answer)
-    asked, reply = chat.ask(session, project, model, "Что было в руках у Люты?")
+    asked, reply = chat.ask(session, project, model, "Что было в руках у Ланы?")
     assert model.held and not any(model.held)
     assert asked.created_at <= reply.created_at
     roles = [m.role for m in chat.history(session, asked.thread_id)]
@@ -366,11 +366,11 @@ def test_plot_suggestions_hold_no_connection_while_the_model_answers(session, pr
 
 
 def test_question_in_another_language_is_put_into_the_books_language():
-    belarusian = "Уцей мімаволі падаўся бліжэй і раптам зразумеў, што не так з дзяўчынай."
-    assert chat.needs_translation("где встретились Уцей и Люта?", belarusian)
-    assert not chat.needs_translation("дзе сустрэліся Уцей і Люта?", belarusian)
+    belarusian = "Узей мімаволі падаўся бліжэй і раптам зразумеў, што не так з дзяўчынай."
+    assert chat.needs_translation("где встретились Узей и Лана?", belarusian)
+    assert not chat.needs_translation("дзе сустрэліся Узей і Лана?", belarusian)
     assert chat.needs_translation("where did they meet", belarusian)
-    assert not chat.needs_translation("Что несла Люта?", "Люта несла корзину. Что это было?")
+    assert not chat.needs_translation("Что несла Лана?", "Лана несла корзину. Что это было?")
 
 
 def test_agent_reads_a_chapter_before_saying_the_book_does_not_answer(session, project):
@@ -409,7 +409,7 @@ def test_one_unreadable_reply_is_tried_again(session, project):
             return super().invoke_json(operation, messages, schema)
 
     model = OnceBroken({"found": True, "answer": "Посох [1].", "citations": []})
-    _, reply = chat.ask(session, project, model, "Что несла Люта?")
+    _, reply = chat.ask(session, project, model, "Что несла Лана?")
     assert reply.content == "Посох [1]."
 
 
@@ -433,14 +433,14 @@ def test_answer_is_finished_and_saved_when_nobody_waits_for_it(client, session, 
             own,
             own.get(Project, project.id),
             model,
-            "Что несла Люта?",
+            "Что несла Лана?",
             "",
             own.get(ChatThread, thread.id),
         )
 
-    jobs.start(thread.id, "Что несла Люта?", work)  # nobody reads its events
+    jobs.start(thread.id, "Что несла Лана?", work)  # nobody reads its events
     base = f"/api/projects/{project.id}/chats/{thread.id}"
-    assert client.get(base).json()["pending_question"] == "Что несла Люта?"
+    assert client.get(base).json()["pending_question"] == "Что несла Лана?"
     with pytest.raises(jobs.Busy):
         jobs.start(thread.id, "Ещё вопрос", work)
     gate.set()
@@ -454,31 +454,31 @@ def test_answer_is_finished_and_saved_when_nobody_waits_for_it(client, session, 
 
 def test_agent_looks_at_a_card_to_learn_who_to_look_for(session, project):
     mill = project.chapters[0]
-    lyuta = Entity(project_id=project.id, kind="character", name="Люта", aliases=[])
-    lyuta.facts.append(
+    lana = Entity(project_id=project.id, kind="character", name="Лана", aliases=[])
+    lana.facts.append(
         EntityFact(
             chapter_id=mill.id,
             chapter_hash=mill.content_hash,
             category="profile",
-            text="Её служанка — Рымка.",
+            text="Её служанка — Ринка.",
         )
     )
-    session.add(lyuta)
+    session.add(lana)
     session.commit()
     model = FakeModel(
-        {"action": "card", "name": "Люты"},  # another case ending of the name
-        {"action": "card", "name": "Цмок"},
+        {"action": "card", "name": "Ланы"},  # another case ending of the name
+        {"action": "card", "name": "Цирон"},
         {"found": True, "answer": "Посох [1].", "citations": []},
     )
     statuses = [
         (e.code, e.detail)
-        for e in chat.ask_events(session, project, model, "Кто служанка Люты?")
+        for e in chat.ask_events(session, project, model, "Кто служанка Ланы?")
         if isinstance(e, chat.Status)
     ]
-    assert ("card", "Люты") in statuses
+    assert ("card", "Ланы") in statuses
     assert "Cards (not sources, do not cite)" in model.prompts[1]
-    assert "chapter 1 (Мельница): Её служанка — Рымка." in model.prompts[1]
-    assert 'card "Цмок": no such card' in model.prompts[2]
+    assert "chapter 1 (Мельница): Её служанка — Ринка." in model.prompts[1]
+    assert 'card "Цирон": no such card' in model.prompts[2]
 
 
 def test_chat_model_falls_back_when_temperature_is_refused(session, project, monkeypatch):
@@ -513,27 +513,27 @@ def test_mentions_bring_every_place_a_name_occurs(session, project):
     index_project(session, project)
     from app.rag.index import mentions
 
-    found = mentions(session, project.id, "служанка Люты")  # another case ending
-    assert any("Люта шла" in p.text for p in found)
+    found = mentions(session, project.id, "служанка Ланы")  # another case ending
+    assert any("Лана шла" in p.text for p in found)
     assert mentions(session, project.id, "служанка") == []  # no name, nothing extra
 
 
 def test_first_search_includes_the_places_of_the_names(session, project):
     model = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
-    chat.ask(session, project, model, "Чем занят Рыхташ?")
-    assert "Рыхташ вошёл в старую мельницу" in model.prompts[0]
+    chat.ask(session, project, model, "Чем занят Ростан?")
+    assert "Ростан вошёл в старую мельницу" in model.prompts[0]
 
 
 def test_names_without_a_card_are_reported(session, project):
     model = FakeModel({"found": True, "answer": "Посох [1].", "citations": []})
     replies = [
         e
-        for e in chat.ask_events(session, project, model, "Что несла Люта? Где был Рыхташ?")
+        for e in chat.ask_events(session, project, model, "Что несла Лана? Где был Ростан?")
         if isinstance(e, chat.Reply)
     ]
     # Both occur in the book once only: too rare to ask for a card search.
     assert replies[0].missing_cards == []
-    assert chat._capitalised("Расскажи про Журэю. Где Люта?", True) == ["Журэю", "Люта"]
+    assert chat._capitalised("Расскажи про Журэю. Где Лана?", True) == ["Журэю", "Лана"]
 
 
 def test_answer_in_another_language_than_the_question_is_translated(session, project):
@@ -541,9 +541,9 @@ def test_answer_in_another_language_than_the_question_is_translated(session, pro
         {"found": True, "answer": "Яна несла посах і хустку [1].", "citations": []},
         {"answer": "Она несла посох и платок [1]."},
     )
-    _, reply = chat.ask(session, project, model, "Что Люта несла в руках и на плечах?")
+    _, reply = chat.ask(session, project, model, "Что Лана несла в руках и на плечах?")
     assert reply.content == "Она несла посох и платок [1]."
-    assert not chat.other_language("Что несла Люта?", "Посох «і хустку» [1].")
+    assert not chat.other_language("Что несла Лана?", "Посох «і хустку» [1].")
 
 
 def _book(session, chapters):
@@ -569,21 +569,21 @@ def test_mentions_find_a_three_letter_name_but_not_a_question_word(session):
     book = _book(
         session,
         [
-            "Кто там стоит? Это воевода Зур с дружиной.\n\nКто знает дорогу? Никто.",
-            "Князь велел, и воевода Зур собирал охотников в поход.",
+            "Кто там стоит? Это воевода Зан с дружиной.\n\nКто знает дорогу? Никто.",
+            "Князь велел, и воевода Зан собирал охотников в поход.",
         ],
     )
-    found = mentions(session, book.id, "Кто такой Зур")
-    assert any("Зур собирал" in p.text for p in found)
+    found = mentions(session, book.id, "Кто такой Зан")
+    assert any("Зан собирал" in p.text for p in found)
     assert mentions(session, book.id, "Кто знает") == []  # capitalised only at sentence starts
 
 
 def test_mentions_reach_every_chapter_of_a_name(session):
     from app.rag.index import MENTION_CHUNKS, mentions
 
-    early = "\n\n".join(f"Лютава ішла па дарозе {n}. " + "Далей лес. " * 30 for n in range(40))
-    book = _book(session, [early, "Тут Лютава атрымала даручэнне вызваліць вязняў."])
-    found = mentions(session, book.id, "Лютава")
+    early = "\n\n".join(f"Ланава ішла па дарозе {n}. " + "Далей лес. " * 30 for n in range(40))
+    book = _book(session, [early, "Тут Ланава атрымала даручэнне вызваліць вязняў."])
+    found = mentions(session, book.id, "Ланава")
     assert any("даручэнне" in p.text for p in found)
     assert len(found) <= MENTION_CHUNKS
 
@@ -597,8 +597,8 @@ def test_translated_query_is_the_same_on_a_repeat(monkeypatch):
 
     monkeypatch.setattr(chat, "_translate_once", once)
     chat.TRANSLATIONS.clear()
-    assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
-    assert chat._translate(None, "Кто такой Зур?", "кніга") == "пераклад 1"
+    assert chat._translate(None, "Кто такой Зан?", "кніга") == "пераклад 1"
+    assert chat._translate(None, "Кто такой Зан?", "кніга") == "пераклад 1"
     assert len(calls) == 1
 
 
@@ -607,7 +607,7 @@ def test_a_crowded_chapter_lists_everyone_main_characters_first(session, project
     from app.rag import agent
 
     first, second = project.chapters
-    hero = Entity(project_id=project.id, kind="character", name="Цмок", aliases=[])
+    hero = Entity(project_id=project.id, kind="character", name="Цирон", aliases=[])
     for chapter in (first, second):
         hero.facts.append(
             EntityFact(chapter_id=chapter.id, chapter_hash="", category="mention", text="")
@@ -621,7 +621,7 @@ def test_a_crowded_chapter_lists_everyone_main_characters_first(session, project
         session.add(extra)
     session.commit()
     line = agent.contents(session, project).split("\n")[1]
-    assert "characters: Цмок, " in line
+    assert "characters: Цирон, " in line
     assert "А39" in line  # the 41st name is there too
 
 
@@ -646,7 +646,7 @@ def test_a_card_shows_where_the_story_of_someone_ends(session, project):
     from app.rag import agent
 
     first, second = project.chapters
-    hero = Entity(project_id=project.id, kind="character", name="Цмок", aliases=[])
+    hero = Entity(project_id=project.id, kind="character", name="Цирон", aliases=[])
     for n in range(agent.CARD_FACTS + 10):
         hero.facts.append(
             EntityFact(chapter_id=first.id, chapter_hash="", category="profile", text=f"факт {n}")

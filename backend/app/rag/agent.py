@@ -325,11 +325,11 @@ def find_card(session: Session, project: Project, name: str) -> Entity | None:
         return exact[0]
 
     def similar(a: str, b: str) -> bool:
-        """Same word up to a case ending: "Журэі" ~ "Журэя", "Люты" ~ "Люта"."""
+        """Same word up to a case ending: "Марыі" ~ "Марыя", "Анны" ~ "Анна"."""
         common = len(os.path.commonprefix([a, b]))
         return common >= max(3, min(len(a), len(b)) - 2)
 
-    def words(card: Entity) -> list[str]:  # "князь Цмок" is found by "Цмока" too
+    def words(card: Entity) -> list[str]:  # "князь Тарас" is found by "Тараса" too
         return [w for n in names(card) for w in [n, *n.split()] if len(w) >= 3]
 
     close = [c for c in cards if any(similar(w, wanted) for w in words(c))]

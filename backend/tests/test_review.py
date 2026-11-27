@@ -5,8 +5,8 @@ from app.db import get_engine
 from app.models import Chapter, ChapterExtraction, Entity, EntityFact, Project, text_hash
 from app.review import checks, continuity, prompts, service, typography
 
-FIRST = "Люта шла по дороге.\n\nУ неё были голубые глаза и красный платок."
-SECOND = "Люта вошла в дом.\n\nЕё карие глаза блестели."
+FIRST = "Лана шла по дороге.\n\nУ неё были голубые глаза и красный платок."
+SECOND = "Лана вошла в дом.\n\nЕё карие глаза блестели."
 
 
 class FakeModel:
@@ -68,7 +68,7 @@ def test_long_chapter_goes_in_several_calls():
 
 
 def test_contradictions_cite_both_chapters(session, book):
-    hero = Entity(project_id=book.id, kind="character", name="Люта")
+    hero = Entity(project_id=book.id, kind="character", name="Лана")
     for chapter, text, quote in [
         (book.chapters[0], "голубые глаза", "голубые глаза"),
         (book.chapters[1], "карие глаза", "карие глаза"),
@@ -119,9 +119,9 @@ def test_review_api_needs_a_configured_model(client, book):
 
 
 def test_language_is_found_from_the_letters():
-    assert checks.detect_language("Люта шла по дороге и щурилась. " * 5) == "ru"
-    assert checks.detect_language("Люта ішла па дарозе і ўсміхалася. " * 5) == "be"
-    assert checks.detect_language("Luta walked down the road. " * 5) == "en"
+    assert checks.detect_language("Лана шла по дороге и щурилась. " * 5) == "ru"
+    assert checks.detect_language("Лана ішла па дарозе і ўсміхалася. " * 5) == "be"
+    assert checks.detect_language("Lana walked down the road. " * 5) == "en"
     assert checks.detect_language("12345") == "ru"  # too little text: the default
 
 
@@ -278,18 +278,18 @@ def test_timeline_compares_notes_of_both_chapters(session, book):
 
 
 def test_name_variants_need_both_spellings_in_the_text(session, book):
-    book.chapters[1].text = "Лютa вошла в дом.\n\nЛюте было весело. Люта Гельга."
-    session.add(Entity(project_id=book.id, kind="character", name="Люта", aliases=["Лютта"]))
+    book.chapters[1].text = "Ланa вошла в дом.\n\nЛане было весело. Лана Гельга."
+    session.add(Entity(project_id=book.id, kind="character", name="Лана", aliases=["Ланта"]))
     session.commit()
     model = FakeModel(
         {
             "variants": [
-                {"names": ["Люта", "Лютта"], "problem": "два написания"},  # Лютта not in text
+                {"names": ["Лана", "Ланта"], "problem": "два написания"},  # Ланта not in text
             ]
         }
     )
     assert service.check_contradictions(session, model, book, _items("name_variants")) == []
-    book.chapters[0].text = "Лютта шла по дороге."
+    book.chapters[0].text = "Ланта шла по дороге."
     session.commit()
     remarks = service.check_contradictions(session, model, book, _items("name_variants"))
     assert [p.chapter_title for p in remarks[0].places] == ["Дом", "Дорога"]
@@ -345,7 +345,7 @@ class FakeTextModel:
 
 def test_beta_review_is_kept_with_the_chapter(client, session, book, monkeypatch):
     session.add(
-        Entity(project_id=book.id, kind="character", name="Люта", summary="Княжна. Смелая.")
+        Entity(project_id=book.id, kind="character", name="Лана", summary="Княжна. Смелая.")
     )
     session.commit()
     fake = FakeTextModel("## Что понравилось\n**Платок** запомнился.")
@@ -367,7 +367,7 @@ def test_beta_review_is_kept_with_the_chapter(client, session, book, monkeypatch
     system, human = fake.messages[0]
     assert "critic" in system.content and "what you liked" in system.content
     assert "boring" not in system.content
-    assert "chapter 2 of 2" in human.content and "Люта: Княжна" in human.content
+    assert "chapter 2 of 2" in human.content and "Лана: Княжна" in human.content
     assert "Дорога" in human.content  # the title of the chapter before
 
     chapter.text += "\n\nНовое."
@@ -438,16 +438,16 @@ def test_dialogue_counts_the_lines_but_not_the_authors_words():
 
 def test_chapter_numbers_skip_service_words():
     text = (
-        "Люта шла по дороге и думала о доме. Дорога была длинной.\n\n"
-        "— Люта, иди сюда, — позвал отец. — Дорога ждёт.\n\n"
-        "И она пошла по дороге, потому что дорога вела домой, и Люта это знала давно."
+        "Лана шла по дороге и думала о доме. Дорога была длинной.\n\n"
+        "— Лана, иди сюда, — позвал отец. — Дорога ждёт.\n\n"
+        "И она пошла по дороге, потому что дорога вела домой, и Лана это знала давно."
     )
     chapter, _ = stats.chapter_stats("c1", "Дорога", text, "ru")
     assert chapter.paragraphs == 3
     assert chapter.sentences == 5
     assert chapter.longest[0].paragraph == 2
     top = {w.word: w.count for w in chapter.top_words}
-    assert top["люта"] == 3
+    assert top["лана"] == 3
     assert "что" not in top and "она" not in top
     assert 0 < chapter.dialogue < 0.3
 

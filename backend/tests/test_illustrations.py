@@ -7,9 +7,9 @@ ANSWERS = [
     {"question": "Какой момент: встреча или прощание?"},
     {
         "chapter": "Мельница",
-        "cast": ["Люта", "Никто"],
-        "say": "Рисую Люту у мельницы.",
-        "prompt": "[[Люта]] stands by the mill wheel at dawn. Style.",
+        "cast": ["Лана", "Никто"],
+        "say": "Рисую Лану у мельницы.",
+        "prompt": "[[Лана]] stands by the mill wheel at dawn. Style.",
     },
 ]
 
@@ -38,15 +38,15 @@ def test_a_picture_is_planned_in_a_dialogue_and_drawn_from_card_references(
     made = client.post(f"/api/projects/{project.id}/illustrations").json()
     assert made["messages"] == [] and made["title"] == ""
     url = f"/api/illustrations/{made['id']}"
-    asked = client.post(f"{url}/ask", json={"text": "Люта у мельницы"}).json()
-    assert asked["title"] == "Люта у мельницы"
+    asked = client.post(f"{url}/ask", json={"text": "Лана у мельницы"}).json()
+    assert asked["title"] == "Лана у мельницы"
     assert asked["messages"][-1]["text"] == "Какой момент: встреча или прощание?"
     assert client.post(f"{url}/draw").status_code == 409  # nothing planned yet
 
     planned = client.post(f"{url}/ask", json={"text": "встреча"}).json()["messages"][-1]
     # The card named in the request is offered with its pictures; the unknown name is dropped.
-    assert "Люта (character, has pictures)" in Planner.seen
-    assert planned["cast"] == ["Люта"]
+    assert "Лана (character, has pictures)" in Planner.seen
+    assert planned["cast"] == ["Лана"]
     assert planned["prompt"].startswith("the figure from reference 1 stands")
     assert planned["reference_urls"] == [face["url"]]
 

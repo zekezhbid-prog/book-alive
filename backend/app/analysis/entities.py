@@ -354,7 +354,7 @@ def apply_extraction(session: Session, project_id: str, kind: str, chapter: Chap
             for a in item.aliases
             if _is_proper(a) and norm(a) not in own_names - {norm(name)}
         ]
-        # "The old man (also: Rykhtash)": the model put the word first and the name second.
+        # "The old man (also: Taras)": the model put the word first and the name second.
         if proper and (not item.named or not _is_proper(name)):
             name, proper = proper[0], proper[1:]
         names = [name, *proper]

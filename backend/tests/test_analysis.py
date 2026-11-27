@@ -19,16 +19,16 @@ from app.models import (
 )
 
 CHAPTER_1 = (
-    "Рыхташ вошёл в мельницу. На нём был чёрный плащ.\n\n"
+    "Ростан вошёл в мельницу. На нём был чёрный плащ.\n\n"
     "У старика была длинная седая борода и шрам через левую бровь."
 )
-CHAPTER_2 = "Дед снял плащ и надел кольчугу.\n\nЛюта стояла у окна в красном платье."
+CHAPTER_2 = "Дед снял плащ и надел кольчугу.\n\nЛана стояла у окна в красном платье."
 
 ANSWERS = {
     "Мельница": {
         "entities": [
             {
-                "name": "Рыхташ",
+                "name": "Ростан",
                 "aliases": ["старик", "Мельник"],
                 "facts": [
                     {
@@ -53,7 +53,7 @@ ANSWERS = {
                 "named": False,
                 "facts": [{"category": "state", "text": "кольчуга", "quote": "надел кольчугу"}],
             },
-            {"name": "Люта", "facts": []},
+            {"name": "Лана", "facts": []},
         ]
     },
 }
@@ -92,7 +92,7 @@ class FakeModel:
             self.bad_json_times -= 1
             raise BadModelOutput("Expecting property name enclosed in double quotes")
         if schema is analysis.Groups:
-            # "Дед" and "Рыхташ" are the same man: entries 1 and 3 in name order.
+            # "Дед" and "Ростан" are the same man: entries 1 and 3 in name order.
             return analysis.Groups(groups=[[1, 3]])
         title = next(t for t in ANSWERS if f'Chapter "{t}"' in messages[-1].content)
         if title == self.fail_on:
@@ -152,26 +152,26 @@ def test_full_run_builds_cards_with_verified_quotes(session, project):
         "merge_characters",
         "summarize_characters",
         "check_characters",
-        "looks_characters",  # one per card that has looks: only Рыхташ
+        "looks_characters",  # one per card that has looks: only Ростан
     ]
 
     people = cast(session, project)
-    assert set(people) == {"Рыхташ", "Люта"}  # "Дед" was merged into "Рыхташ"
-    assert record.report == {"merged": [["Дед", "Рыхташ"]], "adopted": []}  # shown at the end
+    assert set(people) == {"Ростан", "Лана"}  # "Дед" was merged into "Ростан"
+    assert record.report == {"merged": [["Дед", "Ростан"]], "adopted": []}  # shown at the end
     assert record.finished_at is not None  # how long it took is shown too
     assert (
         record.stage == "looks" and record.stage_done == record.stage_total
     )  # last step shown, finished
-    rykhtash = people["Рыхташ"]
+    rostan = people["Ростан"]
     # "старик" is a common noun, not a name: it is not kept as an alias.
-    assert set(rykhtash.aliases) == {"Мельник", "Дед"}
-    facts = {f.text: f for f in rykhtash.facts if f.category != analysis.FACT_MENTION}
+    assert set(rostan.aliases) == {"Мельник", "Дед"}
+    facts = {f.text: f for f in rostan.facts if f.category != analysis.FACT_MENTION}
     # "хромает" came with a quote that is not in the chapter: an unsupported fact is dropped.
     assert set(facts) == {"длинная седая борода", "чёрный плащ", "кольчуга"}
     assert facts["длинная седая борода"].paragraph == 1
     assert facts["чёрный плащ"].paragraph == 0
     # Present in both chapters, one mention each.
-    mentions = [f for f in rykhtash.facts if f.category == analysis.FACT_MENTION]
+    mentions = [f for f in rostan.facts if f.category == analysis.FACT_MENTION]
     assert len(mentions) == 2
 
 
@@ -182,7 +182,7 @@ def test_failed_run_resumes_without_paying_twice(session, project):
     assert record.status == "failed"
     assert "rate limit" in record.error
     assert len(record.done_chapter_ids) == 1
-    assert set(cast(session, project)) == {"Рыхташ"}
+    assert set(cast(session, project)) == {"Ростан"}
 
     model.fail_on = None
     model.calls.clear()
@@ -231,13 +231,13 @@ def test_estimate_skips_chapters_already_read(session, project):
 def test_api_reports_stale_cards_after_an_edit(client, session, project):
     run(session, project, FakeModel())
     cards = client.get(f"/api/projects/{project.id}/entities", params={"kind": "character"}).json()
-    assert [c["name"] for c in cards] == ["Рыхташ", "Люта"]  # most chapters first
+    assert [c["name"] for c in cards] == ["Ростан", "Лана"]  # most chapters first
     assert not any(c["stale"] for c in cards)
 
     first = project.chapters[0].id
     client.patch(f"/api/chapters/{first}", json={"text": CHAPTER_1 + "\n\nПравка."})
     cards = client.get(f"/api/projects/{project.id}/entities", params={"kind": "character"}).json()
-    assert {c["name"]: c["stale"] for c in cards} == {"Рыхташ": True, "Люта": False}
+    assert {c["name"]: c["stale"] for c in cards} == {"Ростан": True, "Лана": False}
 
     card = client.get(f"/api/entities/{cards[0]['id']}").json()
     assert [f["text"] for f in card["permanent"]] == ["длинная седая борода"]
@@ -264,36 +264,36 @@ def test_token_estimate_counts_cyrillic_denser():
 
 def test_user_can_split_a_wrongly_merged_name_and_merge_it_back(client, session, project):
     run(session, project, FakeModel())
-    rykhtash = cast(session, project)["Рыхташ"]
-    assert "Дед" in rykhtash.aliases
+    rostan = cast(session, project)["Ростан"]
+    assert "Дед" in rostan.aliases
 
     # "Дед" is someone else: he gets his own card with the facts the book gives under that name.
-    separate = client.post(f"/api/entities/{rykhtash.id}/split", json={"name": "Дед"}).json()
+    separate = client.post(f"/api/entities/{rostan.id}/split", json={"name": "Дед"}).json()
     assert separate["name"] == "Дед"
     assert [f["text"] for f in separate["timeline"][0]["facts"]] == ["кольчуга"]
     people = cast(session, project)
-    assert "Дед" not in people["Рыхташ"].aliases
-    assert "кольчуга" not in {f.text for f in people["Рыхташ"].facts}
+    assert "Дед" not in people["Ростан"].aliases
+    assert "кольчуга" not in {f.text for f in people["Ростан"].facts}
 
     # A later run over the whole book does not undo the user's decision.
     model = FakeModel()
     run(session, project, model)
     people = cast(session, project)
-    assert set(people) == {"Рыхташ", "Люта", "Дед"}
-    assert "Дед" not in people["Рыхташ"].aliases
+    assert set(people) == {"Ростан", "Лана", "Дед"}
+    assert "Дед" not in people["Ростан"].aliases
 
     # And the opposite decision: the user merges them, which also survives a full run.
-    client.post(f"/api/entities/{people['Рыхташ'].id}/merge", json={"other_id": people["Дед"].id})
+    client.post(f"/api/entities/{people['Ростан'].id}/merge", json={"other_id": people["Дед"].id})
     run(session, project, FakeModel())
     people = cast(session, project)
-    assert set(people) == {"Рыхташ", "Люта"}
-    assert "Дед" in people["Рыхташ"].aliases
-    assert "кольчуга" in {f.text for f in people["Рыхташ"].facts}
+    assert set(people) == {"Ростан", "Лана"}
+    assert "Дед" in people["Ростан"].aliases
+    assert "кольчуга" in {f.text for f in people["Ростан"].facts}
 
 
 def test_merge_rejects_cards_of_different_kinds(client, session, project):
     run(session, project, FakeModel())
-    person = cast(session, project)["Люта"]
+    person = cast(session, project)["Лана"]
     assert (
         client.post(f"/api/entities/{person.id}/merge", json={"other_id": person.id}).status_code
         == 422
@@ -322,7 +322,7 @@ def test_stale_chapters_are_listed_and_deleted_ones_forgotten(client, session, p
         "chapter_ids": [],
         "orphaned_facts": 0,
     }
-    assert set(cast(session, project)) == {"Рыхташ"}  # "Люта" lived only in the deleted chapter
+    assert set(cast(session, project)) == {"Ростан"}  # "Лана" lived only in the deleted chapter
 
 
 class ProfileModel(FakeModel):
@@ -332,7 +332,7 @@ class ProfileModel(FakeModel):
         result = super().invoke_json(operation, messages, schema)
         if schema is analysis.ChapterEntities and 'Chapter "Мельница"' in messages[-1].content:
             for item in result.entities:
-                if item.name == "Рыхташ":
+                if item.name == "Ростан":
                     item.facts.append(
                         analysis.ExtractedFact(
                             category="profile",
@@ -345,8 +345,8 @@ class ProfileModel(FakeModel):
 
 def test_profile_facts_go_to_the_top_of_the_card_not_to_looks_or_timeline(session, project, client):
     run(session, project, ProfileModel())
-    rykhtash = cast(session, project)["Рыхташ"]
-    card = client.get(f"/api/entities/{rykhtash.id}").json()
+    rostan = cast(session, project)["Ростан"]
+    card = client.get(f"/api/entities/{rostan.id}").json()
     assert [f["text"] for f in card["profile"]] == ["старый мельник, живёт один"]
     assert "старый мельник, живёт один" not in [f["text"] for f in card["permanent"]]
     assert all(
@@ -380,11 +380,11 @@ def test_run_gives_up_after_repeated_failures(session, project):
 def test_finished_run_writes_a_coherent_description_of_each_card(session, project, client):
     run(session, project, FakeModel())
     people = cast(session, project)
-    assert people["Рыхташ"].summary.startswith("Связный рассказ")
-    # Люта has no facts but her name: there is nothing to tell about her yet.
-    assert people["Люта"].summary == ""
-    card = client.get(f"/api/entities/{people['Рыхташ'].id}").json()
-    assert card["summary"] == people["Рыхташ"].summary
+    assert people["Ростан"].summary.startswith("Связный рассказ")
+    # Лана has no facts but her name: there is nothing to tell about her yet.
+    assert people["Лана"].summary == ""
+    card = client.get(f"/api/entities/{people['Ростан'].id}").json()
+    assert card["summary"] == people["Ростан"].summary
 
 
 def test_cancelled_run_describes_what_was_found_so_far(session, project):
@@ -400,22 +400,22 @@ def test_cancelled_run_describes_what_was_found_so_far(session, project):
     record = run(session, project, Cancelling())
     assert record.status == "cancelled", record.error
     assert len(record.done_chapter_ids) == 1
-    assert cast(session, project)["Рыхташ"].summary
+    assert cast(session, project)["Ростан"].summary
 
 
 def test_rescan_from_scratch_reads_again_and_forgets_old_cards(session, project):
     run(session, project, FakeModel())
     people = cast(session, project)
-    people["Люта"].standalone = True  # the user's own decision: the card stays
+    people["Лана"].standalone = True  # the user's own decision: the card stays
     session.commit()
 
     class Forgetful(FakeModel):
-        """The new prompt no longer finds "Люта" nor the old man in the second chapter."""
+        """The new prompt no longer finds "Лана" nor the old man in the second chapter."""
 
         def invoke_json(self, operation, messages, schema):
             answer = super().invoke_json(operation, messages, schema)
             if isinstance(answer, analysis.ChapterEntities):
-                answer.entities = [e for e in answer.entities if e.name == "Рыхташ"]
+                answer.entities = [e for e in answer.entities if e.name == "Ростан"]
             return answer
 
     assert analysis.estimate(session, project.chapters, "character", fresh=True).cached == 0
@@ -426,9 +426,9 @@ def test_rescan_from_scratch_reads_again_and_forgets_old_cards(session, project)
     # Both chapters are read again although their text did not change.
     assert model.calls.count("find_characters") == 2
     people = cast(session, project)
-    assert set(people) == {"Рыхташ", "Люта"}
-    assert people["Люта"].facts == []  # kept, but nothing from the old run is left on it
-    assert "Дед" not in people["Рыхташ"].aliases  # nothing carried over from the old run
+    assert set(people) == {"Ростан", "Лана"}
+    assert people["Лана"].facts == []  # kept, but nothing from the old run is left on it
+    assert "Дед" not in people["Ростан"].aliases  # nothing carried over from the old run
 
 
 def test_api_rescan_from_scratch_drops_stored_answers(client, session, project, monkeypatch):
@@ -522,7 +522,7 @@ def test_items_have_their_own_list(client, session, project):
 
 
 def test_a_card_moves_to_another_kind_and_joins_a_namesake_there(client, session, project):
-    mill = Entity(project_id=project.id, kind="location", name="Меч Цмока", aliases=["Клинок"])
+    mill = Entity(project_id=project.id, kind="location", name="Меч Цирона", aliases=["Клинок"])
     mill.facts.append(
         EntityFact(chapter_id="c1", chapter_hash="", category="permanent", text="стальной")
     )
@@ -574,14 +574,14 @@ def test_a_wrong_alias_does_not_swallow_another_character(session, project):
                 text = messages[-1].content
                 if 'Chapter "Мельница"' in text:
                     return schema.model_validate(
-                        {"entities": [{"name": "Рыхташ", "aliases": ["Люта"], "facts": []}]}
+                        {"entities": [{"name": "Ростан", "aliases": ["Лана"], "facts": []}]}
                     )
-                assert "Люта" not in text.split("Chapter")[0]  # not fed back as known
+                assert "Лана" not in text.split("Chapter")[0]  # not fed back as known
                 return schema.model_validate(
                     {
                         "entities": [
-                            {"name": "Рыхташ", "aliases": ["Люта"], "facts": []},
-                            {"name": "Люта", "facts": []},
+                            {"name": "Ростан", "aliases": ["Лана"], "facts": []},
+                            {"name": "Лана", "facts": []},
                         ]
                     }
                 )
@@ -591,8 +591,8 @@ def test_a_wrong_alias_does_not_swallow_another_character(session, project):
 
     run(session, project, Confused())
     people = cast(session, project)
-    assert set(people) == {"Рыхташ", "Люта"}
-    assert people["Рыхташ"].aliases == []
+    assert set(people) == {"Ростан", "Лана"}
+    assert people["Ростан"].aliases == []
 
 
 def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, session, project):
@@ -602,7 +602,7 @@ def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, sessi
                 text = messages[-1].content
                 assert "Купцы" not in text.split("Chapter")[0]
                 entries = [
-                    {"name": "Рыхташ", "facts": []},
+                    {"name": "Ростан", "facts": []},
                     {"name": "Стары", "named": False, "facts": []},
                     {"name": "Купцы", "group": True, "facts": [{"text": "в шубах"}]},
                     {"name": "птушка", "facts": []},  # a bare mention, lower case
@@ -624,7 +624,7 @@ def test_unnamed_and_group_entries_are_kept_apart_and_not_fed_back(client, sessi
     }
     # "Стары" was named in the second chapter, so it is a character after all.
     # "птушка" was only mentioned: no card. "стары (also Дед)" took the proper name.
-    assert cards == {"Рыхташ": False, "Стары": False, "Купцы": True, "Дед": False}
+    assert cards == {"Ростан": False, "Стары": False, "Купцы": True, "Дед": False}
 
 
 def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(session, project):
@@ -634,7 +634,7 @@ def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(ses
                 text = messages[-1].content
                 if 'Chapter "Мельница"' in text:
                     entry = {
-                        "name": "Рыхташ",
+                        "name": "Ростан",
                         "facts": [
                             {
                                 "category": "permanent",
@@ -644,10 +644,10 @@ def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(ses
                         ],
                     }
                 else:
-                    assert "- Рыхташ - седая борода" in text  # known, with a hint
+                    assert "- Ростан - седая борода" in text  # known, with a hint
                     entry = {
                         "name": "Дзед",
-                        "aliases": ["Рыхташ"],
+                        "aliases": ["Ростан"],
                         "facts": [{"text": "кольчуга", "quote": "надел кольчугу"}],
                     }
                 return schema.model_validate({"entities": [entry]})
@@ -657,13 +657,13 @@ def test_a_chapter_calling_a_known_card_by_a_word_joins_it_through_the_alias(ses
 
     run(session, project, Words())
     people = cast(session, project)
-    assert set(people) == {"Рыхташ"}
-    assert {f.text for f in people["Рыхташ"].facts if f.text} == {"седая борода", "кольчуга"}
+    assert set(people) == {"Ростан"}
+    assert {f.text for f in people["Ростан"].facts if f.text} == {"седая борода", "кольчуга"}
 
 
 def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
     run(session, project, FakeModel())
-    card = cast(session, project)["Рыхташ"]
+    card = cast(session, project)["Ростан"]
     card.summary = "Старый мельник, связной князя."
     card.facts.append(
         EntityFact(
@@ -683,15 +683,15 @@ def test_new_summary_builds_on_the_old_one_and_skips_moments(session, project):
 
     analysis.summarize_cards(session, Watching(), project.id, "character")
     listing = next(
-        text for schema, text in seen if schema is analysis.Summaries and "Рыхташ" in text
+        text for schema, text in seen if schema is analysis.Summaries and "Ростан" in text
     )
     assert "description so far: Старый мельник, связной князя." in listing
     # One chapter's state is not a lasting fact: not in the description, only in the looks.
     assert "Сегодня злой" not in listing
-    looks = next(text for schema, text in seen if schema is analysis.Looks and "Рыхташ" in text)
+    looks = next(text for schema, text in seen if schema is analysis.Looks and "Ростан" in text)
     assert "] Сегодня злой и в мокром плаще (this chapter)" in looks
-    assert "Люта" not in looks  # one card per request: nothing crosses over
-    assert card.appearance.startswith("Облик: Рыхташ")
+    assert "Лана" not in looks  # one card per request: nothing crosses over
+    assert card.appearance.startswith("Облик: Ростан")
 
 
 def test_summary_facts_come_from_every_chapter_in_turn():
@@ -719,9 +719,9 @@ def test_a_card_without_a_name_joins_the_named_one_it_matches(session, project):
         session.add(entity)
         return entity
 
-    named = card("Рыхташ", first, "седая борода")
-    card("Люта", second, "красное платье")
-    card("Люта", first, "рыжая").name = "Зіхцінка"
+    named = card("Ростан", first, "седая борода")
+    card("Лана", second, "красное платье")
+    card("Лана", first, "рыжая").name = "Зинка"
     old = card("старик", second, "седая борода", uncertain=True)
     session.commit()
     asked = []
@@ -734,19 +734,19 @@ def test_a_card_without_a_name_joins_the_named_one_it_matches(session, project):
     analysis.adopt_uncertain(session, Judge(), project.id, "character")
     listing = asked[0]
     # The candidates are the named ones sharing its chapters or its company, best first.
-    assert listing.startswith("[1] старик (no proper name)") and "A) Люта" in listing
+    assert listing.startswith("[1] старик (no proper name)") and "A) Лана" in listing
     assert session.get(Entity, old.id) is None
-    lyuta = next(
-        e for e in analysis._entities(session, project.id, "character") if e.name == "Люта"
+    lana = next(
+        e for e in analysis._entities(session, project.id, "character") if e.name == "Лана"
     )
-    assert "старик" in lyuta.aliases and named.id
+    assert "старик" in lana.aliases and named.id
 
 
 def test_general_check_takes_out_one_chapter_and_never_adds(session, project):
     run(session, project, FakeModel())
     people = cast(session, project)
-    people["Рыхташ"].summary = "Старый мельник, связной князя. Он напоминает ей поесть."
-    people["Люта"].summary = "Княжна."
+    people["Ростан"].summary = "Старый мельник, связной князя. Он напоминает ей поесть."
+    people["Лана"].summary = "Княжна."
     session.commit()
     seen = []
 
@@ -760,10 +760,10 @@ def test_general_check_takes_out_one_chapter_and_never_adds(session, project):
                 ]
             )
 
-    analysis.keep_general(session, Checker(), [people["Люта"], people["Рыхташ"]], "character")
-    assert "[2] Рыхташ\nСтарый мельник, связной князя. Он напоминает ей поесть." in seen[0]
-    assert people["Рыхташ"].summary == "Старый мельник, связной князя."
-    assert people["Люта"].summary == "Княжна."  # the answer grew: it added, so it is ignored
+    analysis.keep_general(session, Checker(), [people["Лана"], people["Ростан"]], "character")
+    assert "[2] Ростан\nСтарый мельник, связной князя. Он напоминает ей поесть." in seen[0]
+    assert people["Ростан"].summary == "Старый мельник, связной князя."
+    assert people["Лана"].summary == "Княжна."  # the answer grew: it added, so it is ignored
 
 
 def test_usage_shows_one_line_per_action_with_rubles_and_balance(
@@ -822,13 +822,13 @@ def test_usage_shows_one_line_per_action_with_rubles_and_balance(
 
 
 def test_two_named_cards_are_never_merged(session, project):
-    """The model may say "Люта" and "Рыхташ" are one: both have proper names, so they stay
+    """The model may say "Лана" and "Ростан" are one: both have proper names, so they stay
     apart; only a card without a proper name joins a named one."""
 
     class SaysNamedAreOne(FakeModel):
         def invoke_json(self, operation, messages, schema):
             if schema is analysis.Groups:
-                # In name order: 1 Дед, 2 Люта, 3 Рыхташ.
+                # In name order: 1 Дед, 2 Лана, 3 Ростан.
                 self.calls.append(operation)
                 return analysis.Groups(groups=[[2, 3]])
             if schema is analysis.Adoptions:
@@ -837,7 +837,7 @@ def test_two_named_cards_are_never_merged(session, project):
             return super().invoke_json(operation, messages, schema)
 
     record = run(session, project, SaysNamedAreOne())
-    assert {"Люта", "Рыхташ"} <= set(cast(session, project))
+    assert {"Лана", "Ростан"} <= set(cast(session, project))
     assert record.report["merged"] == []
 
 
@@ -849,16 +849,16 @@ def test_rebuild_one_card_reads_its_chapters_and_rewrites_it(session, project):
     model = FakeModel()
     run(session, project, model)
     people = cast(session, project)
-    lyuta_facts = len(people["Люта"].facts)
-    rykhtash = people["Рыхташ"]
-    rykhtash.summary = "Старое описание с ошибкой."
+    lana_facts = len(people["Лана"].facts)
+    rostan = people["Ростан"]
+    rostan.summary = "Старое описание с ошибкой."
     session.commit()
 
     class Reader(FakeModel):
         def invoke_json(self, operation, messages, schema):
             if schema is card_rebuild.CardFacts:
                 self.calls.append(operation)
-                assert '"Рыхташ"' in messages[0].content
+                assert '"Ростан"' in messages[0].content
                 if "Мельница" in messages[-1].content:
                     return card_rebuild.CardFacts(
                         facts=[
@@ -877,7 +877,7 @@ def test_rebuild_one_card_reads_its_chapters_and_rewrites_it(session, project):
         project_id=project.id,
         kind="character",
         chapter_ids=[],
-        entity_id=rykhtash.id,
+        entity_id=rostan.id,
         parts=["facts", "summary", "appearance"],
     )
     session.add(record)
@@ -887,24 +887,24 @@ def test_rebuild_one_card_reads_its_chapters_and_rewrites_it(session, project):
     assert record.status == "done" and record.finished_at is not None
     assert reader.calls.count("rebuild_characters") == 2  # both chapters have it
     people = cast(session, project)
-    texts = [f.text for f in people["Рыхташ"].facts if f.text]
+    texts = [f.text for f in people["Ростан"].facts if f.text]
     assert "седая борода" in texts and "хромает" not in texts
     assert "кольчуга" in texts  # "not here" where it was found before keeps the old facts
-    assert people["Рыхташ"].summary.startswith("Связный рассказ")
-    assert people["Рыхташ"].appearance.startswith("Облик")
-    assert len(people["Люта"].facts) == lyuta_facts  # nobody else is touched
+    assert people["Ростан"].summary.startswith("Связный рассказ")
+    assert people["Ростан"].appearance.startswith("Облик")
+    assert len(people["Лана"].facts) == lana_facts  # nobody else is touched
     assert "merge_characters" not in reader.calls
 
 
 def test_rebuild_api_starts_a_card_run(client, session, project, monkeypatch):
     model = FakeModel()
     run(session, project, model)
-    rykhtash = cast(session, project)["Рыхташ"]
+    rostan = cast(session, project)["Ростан"]
     started = []
     monkeypatch.setattr(runner, "start", started.append)
     monkeypatch.setattr(analysis_api, "TextModel", lambda *a: None)
-    data = client.post(f"/api/entities/{rykhtash.id}/rebuild", json={"parts": ["summary"]}).json()
-    assert data["entity_id"] == rykhtash.id and data["entity_name"] == "Рыхташ"
+    data = client.post(f"/api/entities/{rostan.id}/rebuild", json={"parts": ["summary"]}).json()
+    assert data["entity_id"] == rostan.id and data["entity_name"] == "Ростан"
     assert data["parts"] == ["summary"] and len(started) == 1
     stray = session.get(AnalysisRun, data["id"])
     stray.status = "done"  # nothing really ran: other tests must not see it running
@@ -958,18 +958,18 @@ def test_the_looks_step_always_gets_the_age(session, project):
 
 def test_user_can_send_a_card_into_question_and_back_and_runs_keep_it(client, session, project):
     run(session, project, FakeModel())
-    hero = cast(session, project)["Рыхташ"]
+    hero = cast(session, project)["Ростан"]
     assert hero.uncertain is False
 
     sent = client.put(f"/api/entities/{hero.id}/uncertain", json={"uncertain": True})
     assert sent.status_code == 200 and sent.json()["uncertain"] is True
     run(session, project, FakeModel())  # the model still sees a proper name
-    assert cast(session, project)["Рыхташ"].uncertain is True
+    assert cast(session, project)["Ростан"].uncertain is True
 
     back = client.put(f"/api/entities/{hero.id}/uncertain", json={"uncertain": False})
     assert back.json()["uncertain"] is False
     run(session, project, FakeModel())
-    assert cast(session, project)["Рыхташ"].uncertain is False
+    assert cast(session, project)["Ростан"].uncertain is False
     assert client.put("/api/entities/nope/uncertain", json={"uncertain": True}).status_code == 404
 
 
@@ -989,7 +989,7 @@ def test_a_place_with_nothing_about_its_looks_gets_no_card(session, project):
     place("Краина", "profile")
     kept = place("Покой", "profile")
     kept.uncertain_own = False  # the user confirmed it
-    hero = Entity(project_id=project.id, kind="character", name="Люта", aliases=[])
+    hero = Entity(project_id=project.id, kind="character", name="Лана", aliases=[])
     session.add(hero)
     session.commit()
 
@@ -998,5 +998,5 @@ def test_a_place_with_nothing_about_its_looks_gets_no_card(session, project):
     )
     session.commit()
     names = {e.name for e in session.query(Entity).filter_by(project_id=project.id)}
-    assert names == {"Мельница", "Покой", "Люта"}
+    assert names == {"Мельница", "Покой", "Лана"}
     assert {e.name for e in left} == names

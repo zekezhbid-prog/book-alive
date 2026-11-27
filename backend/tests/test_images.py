@@ -38,7 +38,7 @@ def project(session):
         )
     session.add(book)
     session.flush()
-    hero = Entity(project_id=book.id, kind="character", name="Люта", aliases=[])
+    hero = Entity(project_id=book.id, kind="character", name="Лана", aliases=[])
     first, _, third = book.chapters
     hero.facts = [
         EntityFact(chapter_id=first.id, chapter_hash="", category="permanent", text="рыжие волосы"),
@@ -122,10 +122,10 @@ def test_upload_must_be_a_picture(client, project):
 
 def test_card_made_by_hand_is_reused_by_name(client, project):
     created = client.post(
-        f"/api/projects/{project.id}/entities", json={"kind": "character", "name": "Рыхташ"}
+        f"/api/projects/{project.id}/entities", json={"kind": "character", "name": "Ростан"}
     ).json()
     again = client.post(
-        f"/api/projects/{project.id}/entities", json={"kind": "character", "name": "рыхташ"}
+        f"/api/projects/{project.id}/entities", json={"kind": "character", "name": "ростан"}
     ).json()
     assert created["id"] == again["id"]
     assert upload(client, project, created["id"])[0]["is_main"] is True
@@ -434,7 +434,7 @@ def test_the_references_are_looked_at_together(client, project, monkeypatch):
     result = client.post(url, files=files)
     assert result.status_code == 200, result.text
     assert result.json()["placed"] == [{"index": 0, "angle": "face_front"}]
-    assert seen == {"count": 2, "character": "Люта"}
+    assert seen == {"count": 2, "character": "Лана"}
     too_many = [("files", (f"r{n}.png", PNG, "image/png")) for n in range(7)]
     assert client.post(url, files=too_many).status_code == 422
 
@@ -493,8 +493,8 @@ def _exported(client, entity_id):
 
 def test_card_export_holds_texts_facts_and_pictures(client, session, project):
     hero = session.get(Entity, project.hero_id)
-    hero.aliases = ["Лютка"]
-    hero.description = "Мельникова дочь."
+    hero.aliases = ["Ланка"]
+    hero.description = "Дочь кузнеца."
     hero.summary = "Рыжая девушка с мельницы."
     hero.appearance_own = "Рыжая, веснушки."
     session.commit()
@@ -504,9 +504,9 @@ def test_card_export_holds_texts_facts_and_pictures(client, session, project):
     _, archive = _exported(client, project.hero_id)
     card = json.loads(archive.read("card.json"))
     assert card["format"] == "lorebook-card"
-    assert (card["kind"], card["name"], card["aliases"]) == ("character", "Люта", ["Лютка"])
+    assert (card["kind"], card["name"], card["aliases"]) == ("character", "Лана", ["Ланка"])
     assert (card["description"], card["summary"], card["appearance_own"]) == (
-        "Мельникова дочь.",
+        "Дочь кузнеца.",
         "Рыжая девушка с мельницы.",
         "Рыжая, веснушки.",
     )
@@ -522,7 +522,7 @@ def test_card_export_holds_texts_facts_and_pictures(client, session, project):
 
 def test_card_file_makes_a_full_card_in_another_project(client, session, project):
     hero = session.get(Entity, project.hero_id)
-    hero.aliases = ["Лютка"]
+    hero.aliases = ["Ланка"]
     hero.summary = "Рыжая девушка с мельницы."
     hero.appearance_own = "Рыжая, веснушки."
     session.commit()
@@ -536,12 +536,12 @@ def test_card_file_makes_a_full_card_in_another_project(client, session, project
     client.put(f"/api/projects/{sequel.id}/style", json={"style_id": "anime"})
     response = client.post(
         f"/api/projects/{sequel.id}/entities/import",
-        files={"file": ("Люта.zip", data, "application/zip")},
+        files={"file": ("Лана.zip", data, "application/zip")},
         data={"kind": "character"},
     )
     assert response.status_code == 200, response.text
     card = client.get(f"/api/entities/{response.json()['id']}").json()
-    assert (card["name"], card["aliases"]) == ("Люта", ["Лютка"])
+    assert (card["name"], card["aliases"]) == ("Лана", ["Ланка"])
     # Facts belong to the old book's chapters; the description keeps them as text, so a
     # search in the new book (which rewrites the summary) cannot lose them.
     assert card["description"].startswith("Рыжая девушка с мельницы.")
@@ -557,7 +557,7 @@ def test_card_file_makes_a_full_card_in_another_project(client, session, project
 def test_card_file_into_a_namesake_joins_it(client, session, project):
     data, _ = _exported(client, project.hero_id)
     existing = client.post(
-        f"/api/projects/{project.id}/entities", json={"kind": "location", "name": "люта"}
+        f"/api/projects/{project.id}/entities", json={"kind": "location", "name": "лана"}
     ).json()
     response = client.post(
         f"/api/projects/{project.id}/entities/import",
@@ -607,7 +607,7 @@ def test_a_character_prompt_keeps_only_what_is_seen(session, project):
 def test_each_outward_look_is_its_own_set_drawn_from_the_first(
     client, session, project, monkeypatch
 ):
-    # Owner's notes 25.11: Zhurei in a kerchief and with loose hair are two sets; the prompt
+    # Owner's notes 25.11: a heroine in a kerchief and with loose hair are two sets; the prompt
     # of one look sees only its own description, and a new look starts from an approved face.
     looks = [
         {"key": "kerchief", "label": "в платке", "description": "красный платок", "shape": "human"},
@@ -617,7 +617,7 @@ def test_each_outward_look_is_its_own_set_drawn_from_the_first(
             "description": "волосы на плечах",
             "shape": "human",
         },
-        {"key": "seed", "label": "Зернейка", "description": "зёрнышко", "shape": "object"},
+        {"key": "seed", "label": "Зарянка", "description": "зёрнышко", "shape": "object"},
     ]
     saved = client.put(f"/api/entities/{project.hero_id}/variants", json=looks)
     assert [v["key"] for v in saved.json()] == ["kerchief", "loose", "seed"]
@@ -749,7 +749,7 @@ def test_redo_of_an_uploaded_picture_and_its_rules(client, project, monkeypatch)
 
 
 def test_looks_are_searched_with_who_it_is_and_only_once(client, session, project, monkeypatch):
-    # Owner's notes 26.11: the shapes of Zihtinka are told among the facts about who she is,
+    # Owner's notes 26.11: the shapes of a shapeshifter are told among the facts about who she is,
     # and the first drawing must offer the looks itself; it asks the model only once.
     first = project.chapters[0]
     hero = session.get(Entity, project.hero_id)

@@ -51,7 +51,7 @@ class WishNote(BaseModel):
 
 def wish_note(model: TextModel, entity: Entity, wishes: str) -> str:
     """The part of the wishes worth keeping as a note: what the author says about the card
-    ("she is one year old"), not what they ask for ("this is Naydachka", "add her looks").
+    ("she is one year old"), not what they ask for ("this is Anya", "add her looks").
     A broken answer keeps the whole wish: better a long note than a lost one."""
     try:
         answer = model.invoke_json(
@@ -68,7 +68,7 @@ def wish_note(model: TextModel, entity: Entity, wishes: str) -> str:
 
 
 def _stems(name: str) -> list[str]:
-    """The words of a name cut to a stem, so "Рыхташа" and "Рыхташу" match "Рыхташ"."""
+    """The words of a name cut to a stem, so "Тараса" and "Тарасу" match "Тарас"."""
     words = [w for w in re.findall(r"\w+", name.casefold()) if len(w) >= 3]
     return [w[:-2] if len(w) > 5 else w[:-1] if len(w) > 3 else w for w in words]
 

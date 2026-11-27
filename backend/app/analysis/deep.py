@@ -280,7 +280,7 @@ def gather(index: list[list[Mention]]) -> dict[str, Name]:
 
 
 # Endings that only mark a grammatical case (Belarusian and Russian, nouns and adjectives).
-# A light model often writes the name as it stands in the text ("Цмока", "Уцею"); every such
+# A light model often writes the name as it stands in the text ("Тараса", "Андрэю"); every such
 # form would become a card of its own and burden the cast.
 CASE_ENDINGS = (  # noqa: SIM905 - one string reads better than 38 quoted items
     "а я у ю ы і и е э о ой ай ей эй яй ою аю ам ом ем эм ым ім им ах ях оў аў "
@@ -292,7 +292,7 @@ CASE_STEM_MIN = 3
 def _stems(word: str) -> set[str]:
     stems = {word}
     if word.endswith("й") and len(word) - 1 >= CASE_STEM_MIN:
-        stems.add(word[:-1])  # Уцей -> Уцея, Уцею
+        stems.add(word[:-1])  # Андрэй -> Андрэя, Андрэю
     stems.update(
         word[: -len(e)]
         for e in CASE_ENDINGS
@@ -312,7 +312,7 @@ def _same_word(a: list[set[str]], b: list[set[str]]) -> bool:
 def _side_by_side(a: Name, b: Name) -> bool:
     """Both forms in one paragraph while each also has paragraphs of its own: two beings
     acting together. One form's paragraphs inside the other's is one being the model wrote
-    twice ("Рыхташ" and "Рыхташа" in the same paragraphs)."""
+    twice ("Тарас" and "Тараса" in the same paragraphs)."""
     for c in a.places.keys() & b.places.keys():
         x, y = set(a.places[c]), set(b.places[c])
         if x & y and not (x <= y or y <= x):

@@ -8,43 +8,43 @@ from app.models import AnalysisRun, Chapter, ChapterExtraction, Entity, Project,
 from tests.test_analysis import FakeModel
 
 CHAPTER_1 = (
-    "Рыхташ вошёл в мельницу. На нём был чёрный плащ.\n\n"
+    "Ростан вошёл в мельницу. На нём был чёрный плащ.\n\n"
     "У старика была длинная седая борода и шрам через левую бровь."
 )
 CHAPTER_2 = (
     "Дед снял плащ и надел кольчугу.\n\n"
-    "Люта стояла у окна в красном платье. «Надзейка, внучка моя», — соврал дед стражнику."
+    "Лана стояла у окна в красном платье. «Нелечка, внучка моя», — соврал дед стражнику."
 )
 
 MENTIONS = {
     "Мельница": [
-        {"name": "Рыхташ", "paragraphs": [0, 1]},
+        {"name": "Ростан", "paragraphs": [0, 1]},
         {"name": "старик", "named": False, "paragraphs": [1, 7]},  # 7 does not exist
     ],
     "Дорога": [
         {"name": "Дед", "named": False, "paragraphs": [0, 1]},
-        {"name": "Люта", "paragraphs": [1]},
-        {"name": "Надзейка", "paragraphs": [1]},
+        {"name": "Лана", "paragraphs": [1]},
+        {"name": "Нелечка", "paragraphs": [1]},
     ],
 }
 
 CAST = {
     "beings": [
         {
-            "name": "Рыхташ",
+            "name": "Ростан",
             "sources": [
-                {"name": "Рыхташ"},
+                {"name": "Ростан"},
                 {"name": "старик", "chapters": [1]},
                 {"name": "Дед", "chapters": [2]},
             ],
         },
-        {"name": "Люта", "sources": [{"name": "Люта"}]},
+        {"name": "Лана", "sources": [{"name": "Лана"}]},
     ],
-    "false_names": [{"name": "Надзейка", "belongs_to": "Люта", "reason": "ложь деда"}],
+    "false_names": [{"name": "Нелечка", "belongs_to": "Лана", "reason": "ложь деда"}],
 }
 
 CARDS = {
-    "Рыхташ": {
+    "Ростан": {
         "age": "около 70 (оценка)",
         "facts": [
             {
@@ -62,15 +62,15 @@ CARDS = {
             {"category": "permanent", "text": "хромает", "quote": "Он сильно хромал", "chapter": 1},
             {
                 "category": "profile",
-                "text": "дед Люты",
-                "quote": "Надзейка, внучка моя",
+                "text": "дед Ланы",
+                "quote": "Нелечка, внучка моя",
                 "chapter": 2,
                 "doubtful": True,
             },
             {"category": "state", "text": "кольчуга", "quote": "надел кольчугу", "chapter": 1},
         ],
     },
-    "Люта": {
+    "Лана": {
         "age": "",
         "facts": [
             {
@@ -135,7 +135,7 @@ def project(session):
 @pytest.fixture(autouse=True)
 def small_book(monkeypatch):
     monkeypatch.setattr(runner, "RESTART_PAUSE", 0)
-    monkeypatch.setattr(deep, "MAIN_MIN_CHAPTERS", 2)  # Рыхташ (2 chapters) is main here
+    monkeypatch.setattr(deep, "MAIN_MIN_CHAPTERS", 2)  # Ростан (2 chapters) is main here
 
 
 def run_deep(session, project, light, strong):
@@ -161,16 +161,16 @@ def test_cast_merges_names_and_drops_false_ones(session, project):
     record = run_deep(session, project, DeepModel("light"), DeepModel("strong"))
     assert record.status == "done", record.error
     cards = cast(session, project)
-    assert set(cards) == {"Рыхташ", "Люта"}
-    # "старик" and "Дед" are words, not names; "Надзейка" is a lie, not Люта's name.
-    assert cards["Рыхташ"].aliases == []
-    assert cards["Люта"].aliases == []
-    assert not cards["Рыхташ"].uncertain
+    assert set(cards) == {"Ростан", "Лана"}
+    # "старик" and "Дед" are words, not names; "Нелечка" is a lie, not Лана's name.
+    assert cards["Ростан"].aliases == []
+    assert cards["Лана"].aliases == []
+    assert not cards["Ростан"].uncertain
 
 
 def test_card_keeps_only_quoted_sure_facts_of_this_character(session, project):
     run_deep(session, project, DeepModel("light"), DeepModel("strong"))
-    facts = {f.text: f for f in cast(session, project)["Рыхташ"].facts if f.text}
+    facts = {f.text: f for f in cast(session, project)["Ростан"].facts if f.text}
     # Made up quote, doubtful claim, quote from another chapter, and the cloak the check
     # found wrong are all gone.
     assert set(facts) == {"длинная седая борода"}
@@ -179,8 +179,8 @@ def test_card_keeps_only_quoted_sure_facts_of_this_character(session, project):
 
 def test_mentions_cover_both_chapters(session, project):
     run_deep(session, project, DeepModel("light"), DeepModel("strong"))
-    rykhtash = cast(session, project)["Рыхташ"]
-    chapters = {f.chapter_id for f in rykhtash.facts if f.category == analysis.FACT_MENTION}
+    rostan = cast(session, project)["Ростан"]
+    chapters = {f.chapter_id for f in rostan.facts if f.category == analysis.FACT_MENTION}
     assert chapters == {c.id for c in project.chapters}
 
 
@@ -188,8 +188,8 @@ def test_strong_model_only_for_cast_and_main_cards(session, project):
     light, strong = DeepModel("light"), DeepModel("strong")
     run_deep(session, project, light, strong)
     assert strong.calls.count("cast_characters") == 1
-    assert strong.calls.count("card_characters") == 1  # Рыхташ only
-    assert light.calls.count("card_characters") == 1  # Люта
+    assert strong.calls.count("card_characters") == 1  # Ростан only
+    assert light.calls.count("card_characters") == 1  # Лана
     assert light.calls.count("index_characters") == 2
     assert "index_characters" not in strong.calls
 
@@ -200,14 +200,14 @@ def test_no_main_characters_leaves_strong_model_only_the_cast(session, project, 
     record = run_deep(session, project, light, strong)
     assert record.status == "done", record.error
     assert strong.calls == ["cast_characters"]
-    assert light.calls.count("card_characters") == 2  # Рыхташ and Люта
+    assert light.calls.count("card_characters") == 2  # Ростан and Лана
 
 
 def test_ages_of_main_characters_reach_the_others(session, project):
     light = DeepModel("light")
     run_deep(session, project, light, DeepModel("strong"))
-    luta = next(p for p in light.prompts if p.startswith("Character: Люта"))
-    assert "Рыхташ: около 70 (оценка)" in luta
+    lana = next(p for p in light.prompts if p.startswith("Character: Лана"))
+    assert "Ростан: около 70 (оценка)" in lana
 
 
 def test_index_is_kept_and_not_read_again(session, project):
@@ -241,8 +241,8 @@ def test_deep_search_over_chosen_chapters_reads_only_them(session, project):
     runner.execute(session, record, light, DeepModel("strong"))
     assert record.status == "done", record.error
     assert light.calls.count("index_characters") == 1
-    rykhtash = cast(session, project)["Рыхташ"]
-    assert {f.chapter_id for f in rykhtash.facts} == {project.chapters[0].id}
+    rostan = cast(session, project)["Ростан"]
+    assert {f.chapter_id for f in rostan.facts} == {project.chapters[0].id}
 
 
 def test_from_scratch_reads_the_chapters_again(session, project):
@@ -264,51 +264,51 @@ def test_user_card_with_pictures_or_split_stays(session, project):
 def test_namesakes_split_by_chapters():
     names = deep.gather(
         [
-            [deep.Mention(name="Цмок", paragraphs=[0])],
-            [deep.Mention(name="Цмок", paragraphs=[2])],
+            [deep.Mention(name="Цирон", paragraphs=[0])],
+            [deep.Mention(name="Цирон", paragraphs=[2])],
         ]
     )
     plans = deep.plan_cards(
         names,
         deep.Cast(
             beings=[
-                deep.Being(name="Цмок", sources=[deep.Source(name="Цмок", chapters=[1])]),
-                deep.Being(name="Маленький Цмок", sources=[deep.Source(name="Цмок", chapters=[2])]),
+                deep.Being(name="Цирон", sources=[deep.Source(name="Цирон", chapters=[1])]),
+                deep.Being(name="Маленький Цирон", sources=[deep.Source(name="Цирон", chapters=[2])]),
             ]
         ),
     )
     places = {p.name: p.places for p in plans}
-    assert places == {"Цмок": {0: {0}}, "Маленький Цмок": {1: {2}}}
+    assert places == {"Цирон": {0: {0}}, "Маленький Цирон": {1: {2}}}
 
 
 def test_case_forms_of_one_name_are_one_name():
     names = deep.gather(
         [
             [
-                deep.Mention(name="Цмок", paragraphs=[0, 1]),
-                deep.Mention(name="Ўцей", paragraphs=[2]),
+                deep.Mention(name="Цирон", paragraphs=[0, 1]),
+                deep.Mention(name="Ўзей", paragraphs=[2]),
             ],
-            [deep.Mention(name="Цмока", paragraphs=[3]), deep.Mention(name="Уцею", paragraphs=[0])],
+            [deep.Mention(name="Цирона", paragraphs=[3]), deep.Mention(name="Узею", paragraphs=[0])],
             [
-                deep.Mention(name="Цмок", paragraphs=[1]),
-                deep.Mention(name="Уцей", paragraphs=[3]),
-                deep.Mention(name="Ваяводу Зура", paragraphs=[4]),
+                deep.Mention(name="Цирон", paragraphs=[1]),
+                deep.Mention(name="Узей", paragraphs=[3]),
+                deep.Mention(name="Ваяводу Зана", paragraphs=[4]),
                 deep.Mention(name="бацьку", named=False, paragraphs=[5]),
             ],
             [
                 # The model wrote one being twice: one form's paragraphs inside the other's.
-                deep.Mention(name="Цмок", paragraphs=[1, 2, 3]),
-                deep.Mention(name="Цмока", paragraphs=[2]),
-                deep.Mention(name="Уцей", paragraphs=[2]),
-                deep.Mention(name="Ваявода Зур", paragraphs=[1]),
+                deep.Mention(name="Цирон", paragraphs=[1, 2, 3]),
+                deep.Mention(name="Цирона", paragraphs=[2]),
+                deep.Mention(name="Узей", paragraphs=[2]),
+                deep.Mention(name="Ваявода Зан", paragraphs=[1]),
                 deep.Mention(name="бацька", named=False, paragraphs=[0, 2]),
             ],
         ]
     )
     assert {n.name: n.places for n in names.values()} == {
-        "Цмок": {0: [0, 1], 1: [3], 2: [1], 3: [1, 2, 3]},
-        "Уцей": {0: [2], 1: [0], 2: [3], 3: [2]},
-        "Ваявода Зур": {2: [4], 3: [1]},
+        "Цирон": {0: [0, 1], 1: [3], 2: [1], 3: [1, 2, 3]},
+        "Узей": {0: [2], 1: [0], 2: [3], 3: [2]},
+        "Ваявода Зан": {2: [4], 3: [1]},
         "бацька": {2: [5], 3: [0, 2]},
     }
 
@@ -323,23 +323,23 @@ def test_case_folding_keeps_apart_what_may_be_two_beings():
             ],
             # A name and a common word are never folded; short stems are never folded.
             [
-                deep.Mention(name="Грак", paragraphs=[0]),
-                deep.Mention(name="грака", named=False, paragraphs=[1]),
+                deep.Mention(name="Грач", paragraphs=[0]),
+                deep.Mention(name="грача", named=False, paragraphs=[1]),
                 deep.Mention(name="Ян", paragraphs=[2]),
                 deep.Mention(name="Яна", paragraphs=[3]),
             ],
             # A diminutive is another name, not a case: left to the cast.
-            [deep.Mention(name="Уцейка", paragraphs=[0])],
+            [deep.Mention(name="Узейка", paragraphs=[0])],
         ]
     )
     assert {n.name for n in names.values()} == {
         "Аляксандр",
         "Аляксандра",
-        "Грак",
-        "грака",
+        "Грач",
+        "грача",
         "Ян",
         "Яна",
-        "Уцейка",
+        "Узейка",
     }
 
 
@@ -360,7 +360,7 @@ def test_word_given_for_the_whole_book_means_the_being_only_where_it_is_named():
     plans = plans_of(
         [
             [
-                deep.Mention(name="Уцей", paragraphs=[0]),
+                deep.Mention(name="Узей", paragraphs=[0]),
                 deep.Mention(name="стары", named=False, paragraphs=[1]),
             ],
             [deep.Mention(name="стары", named=False, paragraphs=[3])],
@@ -369,15 +369,15 @@ def test_word_given_for_the_whole_book_means_the_being_only_where_it_is_named():
         deep.Cast(
             beings=[
                 deep.Being(
-                    name="Уцей", sources=[deep.Source(name="Уцей"), deep.Source(name="стары")]
+                    name="Узей", sources=[deep.Source(name="Узей"), deep.Source(name="стары")]
                 )
             ]
         ),
     )
-    assert plans["Уцей"].places == {0: {0, 1}}
+    assert plans["Узей"].places == {0: {0, 1}}
     # Nobody was found for "стары" elsewhere: in chapter 3 he is more than a passing word,
     # so a card in question of that chapter only; in chapter 2 he is mentioned once.
-    assert set(plans) == {"Уцей", "стары (гл. 3)"}
+    assert set(plans) == {"Узей", "стары (гл. 3)"}
     assert plans["стары (гл. 3)"].places == {2: {5, 6}}
     assert not plans["стары (гл. 3)"].named
 
@@ -386,24 +386,24 @@ def test_name_given_in_some_chapters_is_no_card_of_its_own_there():
     plans = plans_of(
         [
             [
-                deep.Mention(name="Цмок", paragraphs=[0]),
-                deep.Mention(name="Уладар", paragraphs=[1]),
+                deep.Mention(name="Цирон", paragraphs=[0]),
+                deep.Mention(name="Урман", paragraphs=[1]),
             ],
             [
-                deep.Mention(name="Цмок", paragraphs=[2]),
-                deep.Mention(name="Уладар", paragraphs=[4]),
+                deep.Mention(name="Цирон", paragraphs=[2]),
+                deep.Mention(name="Урман", paragraphs=[4]),
             ],
         ],
         deep.Cast(
             beings=[
                 deep.Being(
-                    name="Цмок",
-                    sources=[deep.Source(name="Цмок"), deep.Source(name="Уладар", chapters=[1, 2])],
+                    name="Цирон",
+                    sources=[deep.Source(name="Цирон"), deep.Source(name="Урман", chapters=[1, 2])],
                 )
             ]
         ),
     )
-    assert set(plans) == {"Цмок"}
+    assert set(plans) == {"Цирон"}
 
 
 def test_crowds_headings_and_lone_words_get_no_card():
@@ -411,7 +411,7 @@ def test_crowds_headings_and_lone_words_get_no_card():
         [
             [
                 deep.Mention(name="людзі", named=False, paragraphs=[0]),
-                deep.Mention(name="ПАСЛАНЦЫ", paragraphs=[0]),
+                deep.Mention(name="ПИЛИГРИМЫ", paragraphs=[0]),
                 deep.Mention(name="маці", named=False, paragraphs=[1]),
                 deep.Mention(name="Аўтар Кнігі", paragraphs=[0]),
             ],
@@ -428,20 +428,20 @@ def test_proper_name_put_among_not_characters_keeps_a_card_in_question():
     plans = plans_of(
         [
             [
-                deep.Mention(name="Жыж", paragraphs=[0, 1]),
+                deep.Mention(name="Жук", paragraphs=[0, 1]),
                 deep.Mention(name="Аўтар Кнігі", paragraphs=[0]),
                 deep.Mention(name="людзі", named=False, paragraphs=[1]),
             ],
         ],
-        deep.Cast(not_characters=["Жыж", "людзі"], titles=["Аўтар Кнігі"]),
+        deep.Cast(not_characters=["Жук", "людзі"], titles=["Аўтар Кнігі"]),
     )
-    assert set(plans) == {"Жыж"}
-    assert plans["Жыж"].doubtful
-    assert plans["Жыж"].named
+    assert set(plans) == {"Жук"}
+    assert plans["Жук"].doubtful
+    assert plans["Жук"].named
 
 
 def test_a_doubtful_card_is_never_a_main_one():
-    plan = deep.Plan("Жыж", [], {c: {0} for c in range(9)}, True, doubtful=True)
+    plan = deep.Plan("Жук", [], {c: {0} for c in range(9)}, True, doubtful=True)
     assert deep.pick_main([plan]) == set()
 
 

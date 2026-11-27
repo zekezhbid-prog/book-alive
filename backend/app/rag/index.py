@@ -172,8 +172,8 @@ MENTION_CANDIDATES = 400
 
 def _name_stems(query: str) -> list[str]:
     """Words written with a capital letter (names, in a search query of key words), cut
-    to a stem that survives case endings: "Журэі" -> "журэ", "Люты" -> "лют". A name of
-    three letters ("Зур") is kept whole; whether it is a name at all, and not "Кто" at the
+    to a stem that survives case endings: "Марыі" -> "мары", "Анны" -> "анн". A name of
+    three letters ("Ян") is kept whole; whether it is a name at all, and not "Кто" at the
     start of a question, `mentions` checks against the book."""
     words = {w for w in re.findall(r"\w+", query) if len(w) >= 3 and w[0].isupper()}
     return sorted({w.casefold()[: len(w) - _cut(w)] for w in words})
@@ -183,7 +183,7 @@ def _cut(word: str) -> int:
     return 0 if len(word) <= 3 else 1 if len(word) <= 5 else 2
 
 
-# Before a name inside a sentence: a word or a comma, then spaces ("ваявода Зур").
+# Before a name inside a sentence: a word or a comma, then spaces ("ваявода Ян").
 INSIDE_SENTENCE = r"[\w,;:]\s+$"
 NAME_SAMPLE = 60
 

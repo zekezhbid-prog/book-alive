@@ -11,9 +11,9 @@ from app.scenes import service
 from tests.test_images import PNG
 
 PARAGRAPHS = [
-    "Рыхташ подошёл к мельнице на рассвете.",
+    "Ростан подошёл к мельнице на рассвете.",
     "Колесо скрипело, вода шумела под мостками.",
-    "Внутри его ждала Люта в красном платке.",
+    "Внутри его ждала Лана в красном платке.",
     "Она молча протянула ему серебряный ключ.",
     "К вечеру они вышли на дорогу к замку.",
 ]
@@ -37,7 +37,7 @@ class FakeModel:
             self.system, self.context = messages[0].content, messages[1].content
             return schema.model_validate(
                 {
-                    "text": "Люта ждёт у жернова. Мука пылит в луче света.",
+                    "text": "Лана ждёт у жернова. Мука пылит в луче света.",
                     "added": ["Мука пылит в луче света.", "Этого нет в тексте."],
                     "why": "Мельница в работе.",
                 }
@@ -66,18 +66,18 @@ def book(session, tmp_path):
     project.chapters += [early, mill]
     session.add(project)
     session.flush()
-    luta = Entity(project_id=project.id, kind="character", name="Люта", aliases=[])
-    rykhtash = Entity(project_id=project.id, kind="character", name="Рыхташ", aliases=["Дед"])
+    lana = Entity(project_id=project.id, kind="character", name="Лана", aliases=[])
+    rostan = Entity(project_id=project.id, kind="character", name="Ростан", aliases=["Дед"])
     place = Entity(project_id=project.id, kind="location", name="Мельница", aliases=[])
-    luta.facts = [
+    lana.facts = [
         EntityFact(chapter_id=early.id, chapter_hash="", category="permanent", text="рыжие волосы"),
         EntityFact(chapter_id=early.id, chapter_hash="", category="state", text="серый плащ"),
         EntityFact(chapter_id=mill.id, chapter_hash="", category="state", text="красный платок"),
     ]
-    rykhtash.facts = [
+    rostan.facts = [
         EntityFact(chapter_id=early.id, chapter_hash="", category="state", text="посох"),
     ]
-    session.add_all([luta, rykhtash, place])
+    session.add_all([lana, rostan, place])
     session.flush()
 
     def picture(entity, **fields):
@@ -94,10 +94,10 @@ def book(session, tmp_path):
         return image
 
     for image in (
-        picture(luta, is_main=True),
-        picture(luta, look_label="в платке", chapter_from_id=mill.id, chapter_to_id=mill.id),
-        picture(luta, look_label="в плаще", chapter_from_id=early.id, chapter_to_id=early.id),
-        picture(rykhtash, is_main=True, style_key="anime"),  # another style: not offered
+        picture(lana, is_main=True),
+        picture(lana, look_label="в платке", chapter_from_id=mill.id, chapter_to_id=mill.id),
+        picture(lana, look_label="в плаще", chapter_from_id=early.id, chapter_to_id=early.id),
+        picture(rostan, is_main=True, style_key="anime"),  # another style: not offered
     ):
         target = settings.files_dir / image.path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -111,13 +111,13 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
     # The model overlaps, leaves a gap and stops early; the result must still cover 0..4.
     model = FakeModel(
         [
-            {"from": 0, "to": 2, "title": "У мельницы", "vivid": False, "characters": ["Рыхташ"]},
+            {"from": 0, "to": 2, "title": "У мельницы", "vivid": False, "characters": ["Ростан"]},
             {
                 "from": 2,
                 "to": 3,
                 "title": "Ключ",
                 "vivid": True,
-                "characters": ["Люта"],
+                "characters": ["Лана"],
                 "location": "Мельница",
             },
         ]
@@ -128,9 +128,9 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
         (3, 4, True),
     ]
     names = lambda scene: {session.get(Entity, i).name for i in scene.entity_ids}
-    # "Люта" is in the first scene by the text itself, though the model did not list her.
-    assert names(scenes[0]) == {"Рыхташ", "Люта", "Мельница"}
-    assert names(scenes[1]) == {"Люта", "Мельница"}
+    # "Лана" is in the first scene by the text itself, though the model did not list her.
+    assert names(scenes[0]) == {"Ростан", "Лана", "Мельница"}
+    assert names(scenes[1]) == {"Лана", "Мельница"}
 
     # Splitting again replaces automatic scenes and keeps the ones marked by hand.
     manual = service.mark_scene(session, book.mill, 3, 3, "")
@@ -146,25 +146,25 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
 
 
 def test_names_in_a_title_line_are_not_the_scene_cast(session, book):
-    # Owner's notes 25.11: Tsmok came into a scene from the book title at the chapter's top.
-    text = "ЛЮТА И МЕЛЬНИЦА\n\nРыхташ шёл по дороге один."
+    # Owner's notes 25.11: a name came into a scene from the book title at the chapter's top.
+    text = "ЛАНА И МЕЛЬНИЦА\n\nРостан шёл по дороге один."
     chapter = Chapter(project_id=book.id, position=2, title="", text=text, content_hash="x")
     session.add(chapter)
     session.commit()
-    model = FakeModel([{"from": 0, "to": 1, "title": "Дорога", "characters": ["Люта", "Рыхташ"]}])
+    model = FakeModel([{"from": 0, "to": 1, "title": "Дорога", "characters": ["Лана", "Ростан"]}])
     [scene] = service.split_chapter(session, model, chapter)
-    assert {session.get(Entity, i).name for i in scene.entity_ids} == {"Рыхташ"}
-    assert service.is_heading("Пасланцы Цмока", "Пасланцы Цмока MAIN", "")
-    assert not service.is_heading("Цмок!", "Пасланцы Цмока MAIN", "")
-    assert not service.is_heading("Адбыўся цуд.", "Пасланцы Цмока MAIN", "")
+    assert {session.get(Entity, i).name for i in scene.entity_ids} == {"Ростан"}
+    assert service.is_heading("Пилигримы Цирона", "Пилигримы Цирона MAIN", "")
+    assert not service.is_heading("Цирон!", "Пилигримы Цирона MAIN", "")
+    assert not service.is_heading("Адбыўся цуд.", "Пилигримы Цирона MAIN", "")
     manual = service.mark_scene(session, chapter, 0, 1, "")
-    assert {session.get(Entity, i).name for i in manual.entity_ids} == {"Рыхташ"}
+    assert {session.get(Entity, i).name for i in manual.entity_ids} == {"Ростан"}
 
 
 def test_a_one_line_lead_in_is_not_a_scene_of_its_own(session, book):
     # Owner's notes 26.11: a tiny prologue came out as two cards about the same miracle.
     text = (
-        "ПАСЛАНЦЫ ЦМОКА\n\nАдбыўся цуд. Ніхто не бачыў.\n\n"
+        "ПИЛИГРИМЫ ЦИРОНА\n\nАдбыўся цуд. Ніхто не бачыў.\n\n"
         "Ноччу на пустым скрыжаванні сярод цёмных сцежак з неба сарвалася зорка і "
         "ўпала на зямлю, і там, дзе была толькі цемра, заззяў цуд."
     )
@@ -213,10 +213,10 @@ def test_enrich_suggests_and_marks_only_what_is_in_the_text(session, book):
 def test_references_follow_the_chapter_and_the_current_style(session, book):
     scene = service.mark_scene(session, book.mill, 2, 3, "Ключ")
     refs = service.references(session, book, scene, book.mill)
-    # Люта: main picture and the look for this chapter. Рыхташ's picture is in another style.
+    # Лана: main picture and the look for this chapter. Ростан's picture is in another style.
     assert [(r.number, r.entity.name, r.role, r.image.look_label) for r in refs] == [
-        (1, "Люта", "main", ""),
-        (2, "Люта", "look", "в платке"),
+        (1, "Лана", "main", ""),
+        (2, "Лана", "look", "в платке"),
     ]
 
 
@@ -225,7 +225,7 @@ def test_video_prompt_gets_the_state_as_of_the_chapter(session, book):
     model = FakeModel()
     prompt, chosen = service.video_prompt(session, model, book, scene, "камера снизу")
     # Every base view and the look for this chapter are offered; the look of the prologue is not.
-    assert "Character: Люта - reference 1 (base), reference 2 (look: в платке)" in model.context
+    assert "Character: Лана - reference 1 (base), reference 2 (look: в платке)" in model.context
     # The model took only the look: it becomes reference 1, in the prompt as well.
     assert prompt == "The figure from reference 1 hands over a key."
     look = session.query(Image).filter_by(project_id=book.id, look_label="в платке").one()
@@ -235,8 +235,8 @@ def test_video_prompt_gets_the_state_as_of_the_chapter(session, book):
     assert [(r.number, r.role, r.image.look_label) for r in refs] == [(1, "look", "в платке")]
     assert "at this point: красный платок" in model.context
     assert "серый плащ" not in model.context  # an earlier chapter, replaced by this one
-    # Рыхташ has no state facts in this chapter: the latest earlier ones are used.
-    assert "Character: Рыхташ - no reference picture" in model.context
+    # Ростан has no state facts in this chapter: the latest earlier ones are used.
+    assert "Character: Ростан - no reference picture" in model.context
     assert "at this point: посох" in model.context
     assert "Author's note: камера снизу" in model.context
     assert "cinematic realism" in model.system
@@ -257,7 +257,7 @@ def test_scene_api_prompt_edit_and_archive(client, session, book):
         f"/api/scenes/{made['id']}/prompt", json={"prompt": " A key changes hands. "}
     ).json()
     assert saved["prompt"] == "A key changes hands."
-    assert saved["text"].startswith("Внутри его ждала Люта")
+    assert saved["text"].startswith("Внутри его ждала Лана")
     assert [r["role"] for r in saved["references"]] == ["main", "look"]
     # The card's every picture can be paged through, not only those sent to the video.
     assert len(saved["participants"][0]["images"]) >= len(saved["references"])
@@ -268,12 +268,12 @@ def test_scene_api_prompt_edit_and_archive(client, session, book):
         assert sorted(bundle.namelist()) == [
             "README.txt",
             "prompt.txt",
-            "ref01_lyuta_main.png",
-            "ref02_lyuta_v_platke.png",
+            "ref01_lana_main.png",
+            "ref02_lana_v_platke.png",
         ]
         assert bundle.read("prompt.txt").decode() == "A key changes hands."
         assert (
-            "ref02_lyuta_v_platke.png: reference 2 - Люта, look (в платке)"
+            "ref02_lana_v_platke.png: reference 2 - Лана, look (в платке)"
             in bundle.read("README.txt").decode()
         )
 
@@ -312,34 +312,34 @@ def test_bad_range_and_missing_model(client, book):
 
 
 def test_slug_transliterates_cyrillic_and_belarusian():
-    assert service.slug("Зіхцінка ў лесе") == "zikhtsinka_u_lese"
+    assert service.slug("Зинка ў лесе") == "zinka_u_lese"
     assert service.slug("!!!") == "x"
 
 
 def test_writer_can_describe_a_card_and_a_scene_in_words(client, book):
-    luta = client.get(f"/api/projects/{book.id}/entities", params={"kind": "character"}).json()
-    luta_id = next(c["id"] for c in luta if c["name"] == "Люта")
-    assert client.get(f"/api/entities/{luta_id}").json()["description"] == ""
+    lana = client.get(f"/api/projects/{book.id}/entities", params={"kind": "character"}).json()
+    lana_id = next(c["id"] for c in lana if c["name"] == "Лана")
+    assert client.get(f"/api/entities/{lana_id}").json()["description"] == ""
     saved = client.put(
-        f"/api/entities/{luta_id}/description", json={"text": "  Рыжая и упрямая.  "}
+        f"/api/entities/{lana_id}/description", json={"text": "  Рыжая и упрямая.  "}
     )
     assert saved.status_code == 200
     assert saved.json()["description"] == "Рыжая и упрямая."
-    assert client.get(f"/api/entities/{luta_id}").json()["description"] == "Рыжая и упрямая."
+    assert client.get(f"/api/entities/{lana_id}").json()["description"] == "Рыжая и упрямая."
     assert client.put("/api/entities/nope/description", json={"text": "x"}).status_code == 404
 
     made = client.post(
         f"/api/chapters/{book.mill.id}/scenes",
         json={"paragraph_from": 0, "paragraph_to": 0, "title": "Ключ"},
     ).json()
-    scene = client.put(f"/api/scenes/{made['id']}/summary", json={"text": " Люта отдаёт ключ. "})
+    scene = client.put(f"/api/scenes/{made['id']}/summary", json={"text": " Лана отдаёт ключ. "})
     assert scene.status_code == 200
-    assert scene.json()["summary"] == "Люта отдаёт ключ."
-    assert client.get(f"/api/scenes/{made['id']}").json()["summary"] == "Люта отдаёт ключ."
+    assert scene.json()["summary"] == "Лана отдаёт ключ."
+    assert client.get(f"/api/scenes/{made['id']}").json()["summary"] == "Лана отдаёт ключ."
 
 
 def test_a_scene_names_the_references_it_still_lacks(client, session, book):
-    # Owner's notes 26.11: Люта's main picture has no view, Рыхташ's is in another style, the
+    # Owner's notes 26.11: Лана's main picture has no view, Ростан's is in another style, the
     # mill has none: each lack is named, so the user can draw it from the scene.
     made = client.post(
         f"/api/chapters/{book.mill.id}/scenes",
@@ -350,13 +350,13 @@ def test_a_scene_names_the_references_it_still_lacks(client, session, book):
     lacks = {(m["name"], m["need"]) for m in made["missing"]}
     if "Мельница" in names:
         assert ("Мельница", "base") in lacks
-    assert {("Люта", "face"), ("Люта", "figure")} <= lacks
-    luta = next(p for p in made["participants"] if p["name"] == "Люта")
-    main = next(i for i in luta["images"] if i["is_main"])
+    assert {("Лана", "face"), ("Лана", "figure")} <= lacks
+    lana = next(p for p in made["participants"] if p["name"] == "Лана")
+    main = next(i for i in lana["images"] if i["is_main"])
     client.patch(f"/api/images/{main['id']}", json={"angle": "face_front"})
     again = client.get(f"/api/scenes/{made['id']}").json()
     lacks = {(m["name"], m["need"]) for m in again["missing"]}
-    assert ("Люта", "face") not in lacks and ("Люта", "figure") in lacks
+    assert ("Лана", "face") not in lacks and ("Лана", "figure") in lacks
 
 
 def test_the_user_picks_the_scene_references_by_hand(client, book):

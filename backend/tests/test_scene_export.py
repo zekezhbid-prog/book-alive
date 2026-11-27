@@ -14,7 +14,7 @@ PLAN = {
     "palette": "cold blue dawn, warm lamp light",
     "music": "low strings",
     "subjects": [
-        {"name": "Люта", "look": "a young woman with red hair in a red headscarf"},
+        {"name": "Лана", "look": "a young woman with red hair in a red headscarf"},
         {"name": "Мельница", "look": "a wooden water mill with a creaking wheel"},
     ],
     "shots": [
@@ -35,10 +35,10 @@ PLAN = {
             "shot_size": "medium",
             "camera": "static",
             "action": "The woman waits inside.",
-            "on_screen": ["Люта"],
+            "on_screen": ["Лана"],
             "references": [2, 1, 99],
-            "lines": [{"text": "Внутри его ждала Люта", "narration": True}],
-            "script": "Люта ждёт.",
+            "lines": [{"text": "Внутри его ждала Лана", "narration": True}],
+            "script": "Лана ждёт.",
         },
         {
             "start": 10,
@@ -46,9 +46,9 @@ PLAN = {
             "shot_size": "close-up",
             "camera": "orbital shot",
             "action": "She holds out a silver key.",
-            "on_screen": ["Люта"],
+            "on_screen": ["Лана"],
             "references": [1],
-            "lines": [{"speaker": "Люта", "text": "Держи, это твой ключ"}],
+            "lines": [{"speaker": "Лана", "text": "Держи, это твой ключ"}],
             "script": "Ключ.",
         },
         {
@@ -57,7 +57,7 @@ PLAN = {
             "shot_size": "wide",
             "camera": "crane shot",
             "action": "They leave the mill.",
-            "on_screen": ["Люта"],
+            "on_screen": ["Лана"],
             "references": [1],
             "script": "Уходят.",
         },
@@ -103,8 +103,8 @@ def test_shots_stay_inside_the_video_and_clips_stay_short():
 
 
 def test_a_line_counts_as_the_books_only_if_it_stands_in_the_text():
-    text = "Внутри его ждала Люта в красном платке."
-    assert export.verified(Line(text="внутри его ждала Люта"), text)
+    text = "Внутри его ждала Лана в красном платке."
+    assert export.verified(Line(text="внутри его ждала Лана"), text)
     assert not export.verified(Line(text="Держи, это твой ключ"), text)
 
 
@@ -146,14 +146,14 @@ def test_export_archive_holds_clips_pictures_plan_and_instructions(client, sessi
         (True, True),
         (False, False),
     ]
-    assert "@Image1 - strict identity reference for Люта" in first
+    assert "@Image1 - strict identity reference for Лана" in first
     assert "a young woman with red hair in a red headscarf" in first
     assert "[0:05-0:10] medium, static." in first
     assert first.rstrip().endswith("4K cinematic.")
     assert "Format: 9:16, 14 seconds" in first
     assert "Effects: falling dust" in first
     assert "1080x1920" in start_here and "Remotion" in start_here
-    assert "Люта: «Держи, это твой ключ»" in script
+    assert "Лана: «Держи, это твой ключ»" in script
 
 
 def test_export_api_asks_for_a_model_and_a_known_format(client, session, book):  # noqa: F811 (fixtures from test_scenes)

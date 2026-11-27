@@ -56,6 +56,12 @@ demo/                a short original story used for demos and end-to-end checks
 
 ## Rules that hold everywhere
 
+- Every change works for any book, never for one book in particular. No name from a real
+  user's book (characters, places, aliases, the title) goes into code, prompts, tests, docs
+  or commit messages; examples use the demo book or generic names. Before every commit run
+  `uv run python scripts/check_book_names.py` from `backend/` (`--refresh` after new books
+  or cards appear in the local database); it must report `found: 0`. False alarms on
+  common words go into `data/book-names-ignore.txt`.
 - Nothing calls an AI model unless the user pressed a button for it (one exception: the
   two-language image prompt translates the edited half after a pause, see decisions.md
   24.11). Import only splits

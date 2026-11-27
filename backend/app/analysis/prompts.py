@@ -452,8 +452,8 @@ speak or act on their own. Named characters matter most: find every one, even on
 only once.
 
 - Write the name in its base form, as a dictionary would list it (nominative, singular), in \
-the language and spelling of the book: "Цмок" for "Цмока", "Цмоку", "Цмокам"; "Уцей" for \
-"Уцея", "Уцею". All forms of one name in the chapter are ONE entry with all their paragraphs.
+the language and spelling of the book: "Тарас" for "Тараса", "Тарасу", "Тарасам"; "Андрэй" for \
+"Андрэя", "Андрэю". All forms of one name in the chapter are ONE entry with all their paragraphs.
 - When the chapter calls a named character also by a common word or a pronoun ("the old \
 man", "he", "the prince"), put those paragraphs under the name; the word gets no entry of \
 its own.
@@ -493,7 +493,7 @@ name and not a kinship.
 "not a proper name") may mean different people in different chapters. Give it to a being \
 as a source ONLY with the chapter numbers where it means that being, never for the whole \
 book. Where it fits nobody, leave it out.
-- A form of a name in another grammatical case ("Uladara", "Uteiku") is a source of that \
+- A form of a name in another grammatical case ("Tarasa", "Andreyu") is a source of that \
 being.
 - The book's title, headings and the author's name go to titles.
 - not_characters is ONLY for crowds and roles of ordinary people ("people", "traders", \
@@ -736,7 +736,7 @@ _OTHER = {
 
 
 def card_label(kind: str) -> str:
-    """What a card is called at the head of a request: "Character: Люта"."""
+    """What a card is called at the head of a request: "Character: Anna"."""
     return {KIND_CHARACTER: "Character", KIND_ITEM: "Object"}.get(kind, "Place")
 
 

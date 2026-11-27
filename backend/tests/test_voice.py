@@ -6,7 +6,7 @@ def test_transcribe_returns_the_words(client, monkeypatch):
 
     def fake(audio, language=None):
         heard.append((audio, language))
-        return "Рыхташ хромает"
+        return "Ростан хромает"
 
     monkeypatch.setattr(voice, "transcribe", fake)
     response = client.post(
@@ -15,7 +15,7 @@ def test_transcribe_returns_the_words(client, monkeypatch):
         data={"language": "ru"},
     )
     assert response.status_code == 200
-    assert response.json() == {"text": "Рыхташ хромает"}
+    assert response.json() == {"text": "Ростан хромает"}
     assert heard == [(b"\x1a\x45\xdf\xa3 audio", "ru")]
 
 

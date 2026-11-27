@@ -37,7 +37,7 @@ def test_existing_conversation_becomes_the_first_chat_thread(client):
                 )
             )
             for n, (role, content) in enumerate(
-                [("user", "Кто такая Люта?"), ("assistant", "Княжна."), ("user", "А Цмок?")]
+                [("user", "Кто такая Лана?"), ("assistant", "Княжна."), ("user", "А Цирон?")]
             ):
                 connection.execute(
                     text(
@@ -53,7 +53,7 @@ def test_existing_conversation_becomes_the_first_chat_thread(client):
         threads = connection.execute(
             text("SELECT id, title FROM chat_threads WHERE project_id = 'mig9'")
         ).all()
-        assert [title for _, title in threads] == ["Кто такая Люта?"]
+        assert [title for _, title in threads] == ["Кто такая Лана?"]
         owners = connection.execute(
             text("SELECT DISTINCT thread_id FROM chat_messages WHERE project_id = 'mig9'")
         ).scalars()

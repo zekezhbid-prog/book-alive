@@ -118,9 +118,9 @@ def _folded(text: str) -> str:
 
 
 def is_heading(paragraph: str, project_title: str, chapter_title: str) -> bool:
-    """A title line inside the chapter text ("ПАСЛАНЦЫ ЦМОКА"): the book's or the chapter's
+    """A title line inside the chapter text ("THE BOOK TITLE"): the book's or the chapter's
     name, or a short line in capitals without a sentence end. Names in it are not the
-    scene's cast (owner's notes 25.11: Tsmok was taken from the book title)."""
+    scene's cast (owner's notes 25.11: a name was taken from the book title)."""
     line = paragraph.strip()
     if not line or "\n" in line or len(line.split()) > 10:
         return False

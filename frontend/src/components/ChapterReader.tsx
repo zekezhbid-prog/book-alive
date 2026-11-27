@@ -201,7 +201,7 @@ function renderInline(text: string, link: Linker): ReactNode[] {
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
- * Finds names without any AI. Slavic names change their endings ("Люта", "Люты", "Люту"),
+ * Finds names without any AI. Slavic names change their endings ("Анна", "Анны", "Анну"),
  * so a final vowel is dropped and up to three letters are allowed after the stem.
  */
 function buildLinker(projectId: string, entities: NamedEntity[]): Linker {
@@ -213,7 +213,7 @@ function buildLinker(projectId: string, entities: NamedEntity[]): Linker {
     }
   }
   if (!targets.size) return (text) => [text]
-  // Longest first, so "Нашчадак Кука" wins over "Кука".
+  // Longest first, so "Старый Тарас" wins over "Тарас".
   const stems = [...targets.keys()].sort((a, b) => b.length - a.length)
   const pattern = new RegExp(
     `(?<![\\p{L}\\p{N}])(${stems.map(escapeRegExp).join('|')})\\p{L}{0,3}(?![\\p{L}\\p{N}])`,
