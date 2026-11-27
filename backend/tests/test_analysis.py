@@ -736,9 +736,7 @@ def test_a_card_without_a_name_joins_the_named_one_it_matches(session, project):
     # The candidates are the named ones sharing its chapters or its company, best first.
     assert listing.startswith("[1] старик (no proper name)") and "A) Лана" in listing
     assert session.get(Entity, old.id) is None
-    lana = next(
-        e for e in analysis._entities(session, project.id, "character") if e.name == "Лана"
-    )
+    lana = next(e for e in analysis._entities(session, project.id, "character") if e.name == "Лана")
     assert "старик" in lana.aliases and named.id
 
 

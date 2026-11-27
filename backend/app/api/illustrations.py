@@ -79,13 +79,14 @@ def _full(session: SessionDep, item: Illustration) -> IllustrationOut:
                 chapter_id=m.get("chapter_id", ""),
                 reference_urls=[_url(i) for i in m.get("reference_ids", [])],
                 image_url=_url(m["image_id"]) if m.get("image_id") else "",
+                # Only the last message can be a plan waiting to be drawn.
                 missing=[
                     Missing(**c) for c in service.missing(project, service.cast_of(session, m))
                 ]
-                if m.get("prompt")
+                if m.get("prompt") and n == len(item.messages) - 1
                 else [],
             )
-            for m in item.messages
+            for n, m in enumerate(item.messages)
         ],
     )
 

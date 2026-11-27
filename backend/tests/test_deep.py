@@ -273,7 +273,9 @@ def test_namesakes_split_by_chapters():
         deep.Cast(
             beings=[
                 deep.Being(name="Цирон", sources=[deep.Source(name="Цирон", chapters=[1])]),
-                deep.Being(name="Маленький Цирон", sources=[deep.Source(name="Цирон", chapters=[2])]),
+                deep.Being(
+                    name="Маленький Цирон", sources=[deep.Source(name="Цирон", chapters=[2])]
+                ),
             ]
         ),
     )
@@ -288,7 +290,10 @@ def test_case_forms_of_one_name_are_one_name():
                 deep.Mention(name="Цирон", paragraphs=[0, 1]),
                 deep.Mention(name="Ўзей", paragraphs=[2]),
             ],
-            [deep.Mention(name="Цирона", paragraphs=[3]), deep.Mention(name="Узею", paragraphs=[0])],
+            [
+                deep.Mention(name="Цирона", paragraphs=[3]),
+                deep.Mention(name="Узею", paragraphs=[0]),
+            ],
             [
                 deep.Mention(name="Цирон", paragraphs=[1]),
                 deep.Mention(name="Узей", paragraphs=[3]),

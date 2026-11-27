@@ -186,7 +186,7 @@ def test_a_one_line_lead_in_is_not_a_scene_of_its_own(session, book):
 def test_short_dialogue_lines_join_one_at_a_time_not_in_a_chain(session, book):
     # Review: a run of short lines must not melt into one scene; each lead-in joins once.
     long = "Ноччу на пустым скрыжаванні з неба сарвалася зорка і ўпала на зямлю ля млына."
-    text = "\n\n".join(["— Хто там?", "— Я.", long, "— Ну?", "— Ды так.", long, "— Бывай."])
+    text = f"— Хто там?\n\n— Я.\n\n{long}\n\n— Ну?\n\n— Ды так.\n\n{long}\n\n— Бывай."
     chapter = Chapter(project_id=book.id, position=2, title="", text=text, content_hash="z")
     session.add(chapter)
     session.commit()
