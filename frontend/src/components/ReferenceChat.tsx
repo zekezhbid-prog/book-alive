@@ -10,6 +10,7 @@ import {
   type RefLineIn,
   type Variant,
 } from '../api'
+import { ask } from '../dialogs'
 import { errorText, useI18n } from '../i18n'
 import { useTwoLang } from '../twoLang'
 import { HelpButton } from './HelpButton'
@@ -62,6 +63,9 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   // The picture just drawn waits for "OK, next" or "Fix": the references it was drawn with.
   const [pending, setPending] = useState<{ image: ImageInfo; references: string[] } | null>(null)
   const [fixing, setFixing] = useState(false)
+  // "Change" on a finished view (owner's notes 27.11, item 22): attached, the model edits
+  // that very picture; detached, it draws the view anew from the card's other references.
+  const [editing, setEditing] = useState<{ image: ImageInfo; attached: boolean } | null>(null)
   // A picture put in with the paperclip, waiting for the user to say which view it is.
   const [upload, setUpload] = useState<{ id: string; file: File } | null>(null)
   // The user's own pictures kept as samples for the next drawing.
@@ -184,7 +188,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   }
 
   /** The text model writes the prompt of the next picture; `words` are the user's own. */
-  const collect = async (words = '') => {
+  const collect = async (words = '', view = upNext) => {
     setError('')
     let lookKey = variant?.key ?? ''
     // The first drawing of a character asks once whether it has several outward looks.
@@ -231,7 +235,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       setPromptReady(true)
       await say([
         ...(words ? [{ role: 'user' as const, text: words }] : []),
-        { role: 'assistant', kind: 'prompt', prompt: written, view: upNext },
+        { role: 'assistant', kind: 'prompt', prompt: written, view },
       ])
     } catch (e) {
       fail(e)
@@ -277,10 +281,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   }
 
   // The picture is liked: the next view is drawn with the prompt as it is.
-  const goOn = async () => {
+  const goOn = async (chosen?: string) => {
     if (!pending) return
     const following = openViews(pending.image.angle)
-    const view = following.includes(nextView) ? nextView : (following[0] ?? '')
+    const view = chosen ?? (following.includes(nextView) ? nextView : (following[0] ?? ''))
     setFixing(false)
     if (!view) {
       setPending(null)
@@ -359,6 +363,55 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     await say([{ role: 'user', text: t('ref.drop') }])
   }
 
+  const startEdit = (image: ImageInfo) => {
+    if (busy) return
+    setFixing(false)
+    setEditing({ image, attached: true })
+  }
+  // The field waits for what to change.
+  const editingId = editing?.image.id
+  useEffect(() => {
+    if (editingId) field.current?.focus()
+  }, [editingId])
+
+  const edit = async (words: string) => {
+    if (!editing) return
+    const { image, attached } = editing
+    setError('')
+    setBusy('image')
+    await say([{ role: 'user', text: words }])
+    try {
+      let made: ImageInfo
+      if (attached) made = await api.redoImage(image.id, { remark: words, size })
+      else {
+        const english = (await api.refineImagePrompt(entityId, image.prompt || (await twoLang.flush()), words)).text
+        const others = doneViews.filter((d) => d.id !== image.id).map((d) => d.id).slice(0, 3)
+        made = await api.redoImage(image.id, { prompt: english, size, reference_ids: others })
+      }
+      onChanged()
+      setEditing({ image: made, attached })
+      await say([{ role: 'assistant', kind: 'image', image_id: made.id, view: made.angle }])
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  const removeView = async (image: ImageInfo) => {
+    if (busy || !(await ask(t('gallery.delete.confirm')))) return
+    setError('')
+    try {
+      await api.deleteImage(image.id)
+      onChanged()
+      setDrawnHere((had) => had.filter((k) => k !== `${image.variant || ''}:${image.angle}`))
+      if (editing?.image.id === image.id) setEditing(null)
+      if (pending?.image.id === image.id) setPending(null)
+      await say([{ role: 'user', text: t('ref.deleted', { view: viewLabel(image.angle) }) }])
+    } catch (e) {
+      fail(e)
+    }
+  }
+
   // The paperclip: the picture is stored as a plain picture of the card, then the user says
   // which view it is (or that it is only a sample).
   const putIn = async (files: FileList | null) => {
@@ -435,6 +488,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     const words = text.trim()
     if (!words || busy) return
     setText('')
+    if (editing) return edit(words)
     if (pending) return fix(words)
     if (promptReady) return refine(words)
     if (!ready) return say([{ role: 'user', text: words }, { role: 'assistant', text: t('ref.done') }])
@@ -450,14 +504,12 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     setRefLook('')
   }
 
-  // "OK, next" may draw another of the open views, leafed with the arrows.
+  // "OK, next" offers the open views; the one picked is drawn.
   const stepChoices = pending ? openViews(pending.image.angle) : []
-  const stepNext = stepChoices.includes(nextView) ? nextView : (stepChoices[0] ?? '')
-  const stepLook = pending && !stepNext && withAngles ? nextLook() : null
-  const leaf = (by: number) => {
-    const at = Math.max(0, stepChoices.indexOf(stepNext))
-    setNextView(stepChoices[(at + by + stepChoices.length) % stepChoices.length])
-  }
+  const stepLook = pending && !stepChoices.length && withAngles ? nextLook() : null
+  // Two or three views to choose the next picture from (owner's notes 27.11, item 29).
+  // Nothing drawn yet: a character starts from the front face, the rest lean on it.
+  const offerViews = first || !bases.length ? [upNext] : [upNext, ...open.filter((v) => v !== upNext)].slice(0, 3)
   // The views a put in picture can take: the open ones, and a place's general picture.
   const uploadViews = withAngles ? open : [...(first ? [''] : []), ...open]
   // The finished views of this look, small, above the dialogue.
@@ -586,31 +638,16 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           {fixing && <p>{t('ref.fix.ask')}</p>}
           {/* Ready answers in the gold of the chat's source numbers (owner's notes 27.11, item 21). */}
           <div className="quick-replies">
-            {stepChoices.length > 1 && (
-              <button
-                className="quick-reply"
-                title={t('generate.step.prev_view')}
-                aria-label={t('generate.step.prev_view')}
-                onClick={() => leaf(-1)}
-              >
-                ‹
-              </button>
-            )}
-            <button className="quick-reply" onClick={goOn}>
-              {stepNext
-                ? t('generate.step.next', { view: viewLabel(stepNext) })
-                : stepLook
-                  ? t('generate.step.next_look', { look: stepLook.label })
-                  : t('generate.step.done')}
-            </button>
-            {stepChoices.length > 1 && (
-              <button
-                className="quick-reply"
-                title={t('generate.step.next_view')}
-                aria-label={t('generate.step.next_view')}
-                onClick={() => leaf(1)}
-              >
-                ›
+            {/* Two or three next views at once (owner's notes 27.11, item 29); a press draws it. */}
+            {stepChoices.length > 0 ? (
+              stepChoices.slice(0, 3).map((view) => (
+                <button key={view} className="quick-reply" onClick={() => goOn(view)}>
+                  {t('generate.step.next', { view: viewLabel(view) })}
+                </button>
+              ))
+            ) : (
+              <button className="quick-reply" onClick={() => goOn()}>
+                {stepLook ? t('generate.step.next_look', { look: stepLook.label }) : t('generate.step.done')}
               </button>
             )}
             <button
@@ -657,7 +694,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     }
     return (
       <>
-        <p>{t('ref.offer', { view: viewLabel(upNext) })}</p>
+        <p>{offerViews.length > 1 ? t('ref.offer.pick') : t('ref.offer', { view: viewLabel(upNext) })}</p>
         {refLooks.length > 0 && (
           <div className="row wrap" title={t('variants.ref.hint')}>
             <span className="small muted">{t('variants.ref')}</span>
@@ -673,9 +710,24 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           </div>
         )}
         <div className="quick-replies">
-          <button className="quick-reply" onClick={() => collect()}>
-            {t('ref.collect')}
-          </button>
+          {offerViews.length > 1 ? (
+            offerViews.map((view) => (
+              <button
+                key={view}
+                className="quick-reply"
+                onClick={() => {
+                  setNextView(view)
+                  collect('', view)
+                }}
+              >
+                {viewLabel(view)}
+              </button>
+            ))
+          ) : (
+            <button className="quick-reply" onClick={() => collect()}>
+              {t('ref.collect')}
+            </button>
+          )}
           {samples.length > 0 && <span className="faint small">{t('ref.samples', { n: samples.length })}</span>}
         </div>
       </>
@@ -716,7 +768,17 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
               <a
                 key={made.id}
                 title={viewLabel(made.angle)}
-                {...zoomLink(doneViews.map((d) => d.url), n)}
+                {...zoomLink(
+                  doneViews.map((d) => d.url),
+                  n,
+                  {
+                    captions: doneViews.map((d) => viewLabel(d.angle)),
+                    actions: [
+                      { label: t('ref.edit'), onClick: (at) => startEdit(doneViews[at]) },
+                      { label: t('app.delete'), onClick: (at) => removeView(doneViews[at]) },
+                    ],
+                  },
+                )}
               >
                 <img src={made.url} alt={viewLabel(made.angle)} loading="lazy" />
               </a>
@@ -741,12 +803,36 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           hidden
           onChange={(e) => putIn(e.target.files)}
         />
+        {editing && (
+          <div className="ref-attach">
+            {editing.attached ? (
+              <>
+                <img src={editing.image.url} alt="" />
+                <span className="grow small">{t('ref.edit.attached', { view: viewLabel(editing.image.angle) })}</span>
+                <button
+                  className="btn ghost small icon"
+                  disabled={off}
+                  title={t('ref.edit.detach')}
+                  aria-label={t('ref.edit.detach')}
+                  onClick={() => setEditing({ ...editing, attached: false })}
+                >
+                  ✕
+                </button>
+              </>
+            ) : (
+              <span className="grow small muted">{t('ref.edit.detached', { view: viewLabel(editing.image.angle) })}</span>
+            )}
+            <button className="quick-reply" disabled={off} onClick={() => setEditing(null)}>
+              {t('ref.edit.stop')}
+            </button>
+          </div>
+        )}
         {/* The same field as in every dialogue (owner's notes 27.11, items 21 and 30). */}
         <Composer
           value={text}
           onChange={setText}
           onSend={send}
-          placeholder={t(pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
+          placeholder={t(editing ? 'ref.placeholder.edit' : pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
           disabled={off || !!upload || !!found}
           sendDisabled={!text.trim()}
           maxLength={1000}

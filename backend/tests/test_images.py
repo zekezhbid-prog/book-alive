@@ -709,6 +709,25 @@ def test_redo_with_an_edited_prompt_draws_anew_from_the_first_references(
     assert client.get(out["url"]).status_code == 200
 
 
+def test_redo_by_prompt_may_take_other_references(client, project, monkeypatch):
+    """Owner's notes 27.11, item 22: a view changed without its own picture attached is drawn
+    from the card's other references; the picture itself and unknown ids are left out."""
+    drawn = []
+    _painter(monkeypatch, drawn)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    face, side = upload(client, project, project.hero_id, count=2)
+    url = f"/api/entities/{project.hero_id}/images/generate"
+    made = client.post(url, json={"prompt": "A woman.", "reference_ids": [face["id"]]}).json()
+
+    redone = client.post(
+        f"/api/images/{made['id']}/redo",
+        json={"prompt": "A tall woman.", "reference_ids": [side["id"], made["id"], "nope"]},
+    )
+    assert redone.status_code == 200, redone.text
+    assert drawn[-1][1] == [side["url"].split("/")[-2] + ".png"]
+    assert redone.json()["reference_ids"] == [side["id"]]
+
+
 def test_redo_with_a_remark_improves_the_picture_itself(client, project, monkeypatch):
     """A remark draws from the picture as it is; the old prompt and references do not count."""
     drawn = []

@@ -588,6 +588,9 @@ class RedoRequest(BaseModel):
     prompt: str = Field(default="", max_length=4000)
     remark: str = Field(default="", max_length=1000)
     size: str = ""
+    # With a prompt only: the references to draw from instead of the first drawing's
+    # (owner's notes 27.11, item 22: a view changed from the card's other pictures).
+    reference_ids: list[str] | None = Field(default=None, max_length=3)
 
     @field_validator("size")
     @classmethod
@@ -625,7 +628,8 @@ def redo_image(image_id: str, body: RedoRequest, session: SessionDep) -> ImageOu
     except ImageModelNotConfigured as exc:
         raise HTTPException(409, str(exc)) from exc
     if prompt:
-        first = [session.get(Image, i) for i in image.reference_ids or []]
+        ids = (image.reference_ids or []) if body.reference_ids is None else body.reference_ids
+        first = [session.get(Image, i) for i in ids if i != image.id]
         kept = [i for i in first if i is not None and i.project_id == project.id]
         references = [settings.files_dir / i.path for i in kept]
         text = prompt

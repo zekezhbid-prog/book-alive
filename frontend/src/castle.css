@@ -593,3 +593,19 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 .quick-reply:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
 .quick-reply:disabled { opacity: 0.45; cursor: default; }
 .quick-reply.dim { color: var(--muted); }
+
+/* 27.11, item 22: an open picture says which view it is and offers its own actions. */
+.lightbox-bar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1;
+  display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100% - 120px); padding: 6px 14px; border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.7); box-shadow: var(--trim);
+}
+.lightbox-caption { color: var(--text); font: 600 14px/1.4 var(--sans); }
+.lightbox-bar .quick-reply { font-size: 14px; }
+/* "Change" on a view: the picture attached above the field, a cross detaches it. */
+.ref-attach {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 6px 10px;
+  border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.35); box-shadow: var(--trim);
+}
+.ref-attach img { width: 44px; height: 44px; object-fit: cover; border-radius: 3px; }

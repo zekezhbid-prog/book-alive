@@ -918,7 +918,7 @@ export const api = {
   ) =>
     request<ImageInfo>('POST', `/entities/${entityId}/images/generate`, body),
   /** A finished picture drawn again: an edited prompt draws it anew, a remark improves it. */
-  redoImage: (imageId: string, body: { prompt?: string; remark?: string; size: ImageSize }) =>
+  redoImage: (imageId: string, body: { prompt?: string; remark?: string; size: ImageSize; reference_ids?: string[] }) =>
     request<ImageInfo>('POST', `/images/${imageId}/redo`, body),
   createEntity: (projectId: string, kind: EntityKind, name: string) =>
     request<{ id: string }>('POST', `/projects/${projectId}/entities`, { kind, name }),
