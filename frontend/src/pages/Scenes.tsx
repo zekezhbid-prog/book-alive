@@ -247,12 +247,14 @@ interface TextsProps {
   writing: boolean
   aiReady: boolean
   onChange: (scene: Scene) => void
+  /** "Add to the description" for an illustrator: the scene's dialogue makes the offer. */
+  onEnrich?: () => void
 }
 
 /** Two folds like a card's sections: the scene as written for the screen, and the book's
  *  own text. "Add more" suggests what fits but the book does not say; it is shown marked
  *  and saved only by "Apply" (owner's notes 25.11). */
-function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
+function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps) {
   const { t } = useI18n()
   const [open, setOpen] = useState({ scene: true, book: false })
   const [enriching, setEnriching] = useState(false)
@@ -263,7 +265,13 @@ function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
         open={open.scene}
         onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
       >
-        {/* An illustrator adds to the description in the scene's dialogue. */}
+        {/* An illustrator adds to the description from here, the offer comes in the scene's
+            dialogue (owner's notes 27.11, items 34, 35, 43). */}
+        {!writing && onEnrich && (
+          <button className="quick-reply" disabled={!aiReady} title={t('scene.enrich.hint')} onClick={onEnrich}>
+            {t('scene.chat.enrich')}
+          </button>
+        )}
         {writing && (
           <button
             className="btn ghost small"
@@ -429,6 +437,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
   const [adding, setAdding] = useState<{ who: Participant; bases: ImageInfo[] } | null>(null)
   const closeAdding = useCallback(() => setAdding(null), [])
   const [exporting, setExporting] = useState(false)
+  const [enrichAsk, setEnrichAsk] = useState(0)
   const closeExport = useCallback(() => setExporting(false), [])
   // The user changed the pictures by hand after the prompt was written: its numbers may be off.
   const [refsChanged, setRefsChanged] = useState(false)
@@ -516,7 +525,13 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
           </Link>
         ))}
       </div>
-      <SceneTexts scene={scene} writing={writing} aiReady={!!aiReady} onChange={onChange} />
+      <SceneTexts
+        scene={scene}
+        writing={writing}
+        aiReady={!!aiReady}
+        onChange={onChange}
+        onEnrich={() => setEnrichAsk((n) => n + 1)}
+      />
 
       {!writing && (
         <>
@@ -581,6 +596,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         scene={scene}
         aiReady={aiReady !== false}
         onChange={onChange}
+        enrichAsk={enrichAsk}
         onAddReference={(entityId) => {
           const who = scene.participants.find((p) => p.id === entityId)
           if (who) void addFor(who)

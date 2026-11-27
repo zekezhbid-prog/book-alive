@@ -210,18 +210,17 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
               hidden={foldedChapters.has(item.chapter_id)}
               onClick={() => navigate(`${base}/scenes/${item.id}`)}
             >
-              <span>
-                {showVivid && item.vivid && (
-                  <span className="vivid" title={t('scenes.vivid')}>
-                    ★{' '}
-                  </span>
-                )}
-                {item.title || t('book.untitled')}
-              </span>
+              <span>{item.title || t('book.untitled')}</span>
               {item.stale && <span className="dot" title={t('scene.stale')} />}
               {item.has_prompt && (
                 <span className="has-prompt" title={t('scenes.has_prompt')}>
                   ✓
+                </span>
+              )}
+              {/* The star on the right, so the titles line up on the left (owner's notes, item 42). */}
+              {showVivid && item.vivid && (
+                <span className="vivid" title={t('scenes.vivid')}>
+                  ★
                 </span>
               )}
             </button>

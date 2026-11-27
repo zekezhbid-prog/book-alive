@@ -5,7 +5,7 @@ import { ask } from '../dialogs'
 import { errorText, useI18n } from '../i18n'
 import { Composer } from './Composer'
 import { zoomLink } from './Lightbox'
-import { CopyIcon, UploadIcon } from './icons'
+import { CopyIcon, RefreshIcon, UploadIcon } from './icons'
 
 type Busy = '' | 'prompt' | 'frame' | 'enrich' | 'apply' | 'upload'
 
@@ -13,8 +13,10 @@ interface Props {
   scene: Scene
   aiReady: boolean
   onChange: (scene: Scene) => void
-  /** "Create a reference: <name>": the card's references window over the scene. */
+  /** A missing picture's name: the card's references window over the scene. */
   onAddReference: (entityId: string) => void
+  /** Goes up by one each time "Add to the description" is pressed by the scene's text. */
+  enrichAsk: number
 }
 
 /**
@@ -24,7 +26,7 @@ interface Props {
  * is drawn here with its aspect ratio and fixed by a remark; "Add to the description" offers
  * a fuller description to apply. The lines are kept with the scene.
  */
-export function SceneDialog({ scene, aiReady, onChange, onAddReference }: Props) {
+export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAsk }: Props) {
   const { t } = useI18n()
   const [text, setText] = useState('')
   const [said, setSaid] = useState('') // the user's words on screen while the model works
@@ -103,6 +105,15 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference }: Props)
       const offer = await api.enrichScene(scene.id, wishes)
       return [{ role: 'assistant', kind: 'enrich', text: offer.text, added: offer.added }]
     })
+  // The link by the scene's text: the offer comes here, with "Apply" / "No need" (item 43).
+  const asked = useRef(enrichAsk)
+  useEffect(() => {
+    if (enrichAsk === asked.current) return
+    asked.current = enrichAsk
+    if (!busy && aiReady) void enrich('')
+    // Only a new press; `enrich` reads the current scene.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrichAsk])
   const apply = (offer: Required<SceneLine>) =>
     step('apply', t('scene.chat.apply'), async () => {
       await api.saveSceneSummary(scene.id, offer.text)
@@ -162,29 +173,39 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference }: Props)
         reply(t('scene.chat.skip'), () => void say(t('scene.chat.skip')), true),
       ]
     }
-    const enrichReply = reply(t('scene.chat.enrich'), () => void enrich(''), true)
-    if (!scene.prompt) return [reply(t('scene.chat.build'), () => void build('')), enrichReply]
-    return [
-      reply(t('scene.chat.frame'), () => void frame()),
-      reply(t('scene.chat.rebuild'), () => void build(''), true),
-      enrichReply,
-    ]
+    // "Add to the description" sits by the scene's text (items 34, 43); "Build again" is the
+    // arrows by the last prompt (item 39).
+    if (!scene.prompt) return [reply(t('scene.chat.build'), () => void build(''))]
+    return [reply(t('scene.chat.frame'), () => void frame())]
   }
 
   const line = (m: Required<SceneLine>, n: number) => (
-    <div key={n} className={`illustration-bubble ${m.role}`}>
+    <div key={n} className={`illustration-bubble ${m.role}${m.kind === 'prompt' ? ' wide' : ''}`}>
       {m.kind === 'enrich' ? (
         <>
           <p className="small muted">{t(m.added.length ? 'scene.chat.enrich.offer' : 'scene.enrich.none')}</p>
           {m.added.length > 0 && <p>{marked(m.text, m.added)}</p>}
         </>
+      ) : m.kind === 'prompt' && n === lastPrompt ? (
+        <div className="row bubble-head">
+          <p className="grow">{m.text}</p>
+          <button
+            className="btn ghost small icon"
+            disabled={off}
+            title={t('scene.chat.rebuild')}
+            aria-label={t('scene.chat.rebuild')}
+            onClick={() => void build('')}
+          >
+            <RefreshIcon />
+          </button>
+        </div>
       ) : (
         m.text && <p>{m.text}</p>
       )}
       {m.kind === 'prompt' && (
         <details open={n === lastPrompt}>
           <summary className="small muted">{t('scene.prompt')}</summary>
-          <p className="small prompt-last">{m.prompt}</p>
+          <p className="prompt-full">{m.prompt}</p>
           {n === lastPrompt && m.prompt === scene.prompt && (
             <button className={`btn ghost small ${copied ? 'on' : ''}`} onClick={copy}>
               <CopyIcon />
@@ -221,18 +242,21 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference }: Props)
           ) : (
             <p className="small faint">{t('scene.chat.no_refs')}</p>
           )}
+          {/* One link per card, just its name: several views are made inside (item 35). */}
           {scene.missing.length > 0 && (
             <div className="quick-replies">
-              {scene.missing.map((m) => (
-                <button
-                  key={`${m.entity_id}-${m.need}`}
-                  className="quick-reply dim"
-                  title={t('scene.missing.hint')}
-                  onClick={() => onAddReference(m.entity_id)}
-                >
-                  {t('scene.chat.create_ref', { name: m.name })} — {t(`scene.missing.${m.need}`)}
-                </button>
-              ))}
+              {scene.missing
+                .filter((m, i) => scene.missing.findIndex((o) => o.entity_id === m.entity_id) === i)
+                .map((m) => (
+                  <button
+                    key={m.entity_id}
+                    className="quick-reply"
+                    title={t('scene.missing.hint')}
+                    onClick={() => onAddReference(m.entity_id)}
+                  >
+                    {m.name}
+                  </button>
+                ))}
             </div>
           )}
         </div>

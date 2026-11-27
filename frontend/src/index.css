@@ -630,6 +630,19 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .live-progress-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: progress-sweep 1.8s ease-in-out infinite; }
 @keyframes progress-flow { from { background-position: 0 0; } to { background-position: -61px 0; } }
 @keyframes progress-sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+/* The proposed scenes of a chapter (owner's notes 27.11, item 33): a bright shining gold title,
+   the summary as before and brighter under the pointer. */
+.btn.proposal-item { justify-content: flex-start; text-align: left; white-space: normal; height: auto; }
+.proposal-title { font-size: 16px; background: linear-gradient(100deg, #d9a429 0%, #fff1b8 22%, #f6c54a 42%, #fffbe6 52%, #e0a52c 72%, #ffe07a 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; filter: drop-shadow(0 0 6px rgba(250, 190, 40, 0.35)); }
+.proposal-summary { color: var(--muted); transition: color 0.15s; }
+.proposal-item:hover .proposal-summary { color: var(--text); }
+.scene-star { color: var(--accent); }
+.nav-list .chapter-link .vivid { flex: none; }
+@media (prefers-reduced-motion: reduce) { .proposal-title { animation: none; } }
+/* No count to show (one model call): a striped segment runs across (owner's notes 27.11, item 32). */
+.live-progress.indeterminate .live-progress-fill { position: absolute; top: 0; bottom: 0; width: 38%; animation: progress-flow 1.4s linear infinite, progress-run 1.8s ease-in-out infinite; }
+@keyframes progress-run { from { left: -38%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .live-progress.indeterminate .live-progress-fill { left: 0; width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .live-progress::after, .live-progress-fill, .live-progress-fill::after { animation: none; } }
 
 /* On a phone improve, export, delete and the cross stand in one row at the top right, the

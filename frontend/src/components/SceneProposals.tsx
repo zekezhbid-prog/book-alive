@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type SceneProposal, type SceneProposals } from '../api'
 import { errorText, useI18n } from '../i18n'
 import { confirmSplit } from '../sceneSplit'
+import { BusyProgress } from './CheckWindow'
 
 interface ListProps {
   chapterId: string
@@ -56,7 +57,7 @@ export function ProposalList({ chapterId, confirm, onPick }: ListProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterId])
 
-  if (busy) return <p className="muted">{t('scenes.split.busy')}</p>
+  if (busy) return <BusyProgress text={t('scenes.split.busy')} />
   return (
     <div className="stack">
       {error && <p className="error small">{error}</p>}
@@ -65,24 +66,17 @@ export function ProposalList({ chapterId, confirm, onPick }: ListProps) {
           {t('scenes.split')}
         </button>
       )}
-      {!data && !error && !declined && <p className="muted">{t('scenes.split.busy')}</p>}
+      {!data && !error && !declined && <BusyProgress text={t('scenes.split.busy')} />}
       {data?.stale && <p className="error small">{t('scenes.proposals.stale')}</p>}
       {data && data.items.length === 0 && <p className="faint">{t('scenes.proposals.none')}</p>}
       {data?.items.map((p) => (
-        <button
-          key={p.number}
-          className="btn ghost"
-          style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', height: 'auto' }}
-          onClick={() => onPick(p, data.stale)}
-        >
+        <button key={p.number} className="btn ghost proposal-item" onClick={() => onPick(p, data.stale)}>
           <span>
-            <b>
-              {p.vivid && '★ '}
-              {p.title}
-            </b>
+            <b className="proposal-title">{p.title}</b>
+            {p.vivid && <span className="scene-star"> ★</span>}
             {p.scene_id && <span className="small faint"> · {t('scenes.proposals.made')}</span>}
             <br />
-            <span className="small muted">{p.summary}</span>
+            <span className="small proposal-summary">{p.summary}</span>
           </span>
         </button>
       ))}

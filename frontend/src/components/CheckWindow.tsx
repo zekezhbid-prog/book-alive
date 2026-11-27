@@ -43,6 +43,18 @@ export function CheckProgress({ text, done, total }: { text: string; done: numbe
   )
 }
 
+/** A step with no count (one model call): the same yellow bar, a segment running across. */
+export function BusyProgress({ text }: { text: string }) {
+  return (
+    <div className="notice stack">
+      <b className="run-progress-text">{text}</b>
+      <div className="live-progress indeterminate" role="progressbar" aria-busy="true">
+        <div className="live-progress-fill" />
+      </div>
+    </div>
+  )
+}
+
 /** Day and time of a kept check, in the language of the interface. */
 export function useWhen() {
   const { lang } = useI18n()
