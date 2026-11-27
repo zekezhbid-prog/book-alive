@@ -1,0 +1,800 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  api,
+  IMAGE_SIZES,
+  isAngle,
+  type EntityKind,
+  type ImageInfo,
+  type ImageSize,
+  type PlaceView,
+  type RefLine,
+  type RefLineIn,
+  type Variant,
+} from '../api'
+import { errorText, useI18n } from '../i18n'
+import { useTwoLang } from '../twoLang'
+import { HelpButton } from './HelpButton'
+import { CheckIcon, CopyIcon, PencilIcon, SparklesIcon, UploadIcon } from './icons'
+import { zoomLink } from './Lightbox'
+import { MicButton } from './MicButton'
+import { latest, orderOf, padTo } from './refViews'
+import { TwoLangPrompt } from './TwoLangPrompt'
+
+interface Props {
+  projectId: string
+  entityId: string
+  kind: EntityKind
+  /** The card's base pictures in the current style. */
+  bases: ImageInfo[]
+  hasStyle: boolean
+  /** A picture was drawn, put in or deleted: the gallery reloads. */
+  onChanged: () => void
+  onClose: () => void
+}
+
+// The first picture of a place or object, when it has none (owner's answers 27.11).
+const FIRST_NOTE: Record<EntityKind, string> = {
+  character: '',
+  location: 'A general view of the whole place, seen from a distance.',
+  item: 'The whole object seen from the front, on a plain background.',
+}
+
+type Busy = '' | 'prompt' | 'image' | 'upload' | 'variants' | 'views'
+
+/**
+ * The card's references as a dialogue, like the "Pictures" section (owner's notes 27.11, item
+ * 19): the window offers the next view, collects the prompt (shown as a step that unfolds,
+ * in English or the interface language), draws on "Draw" and asks "OK, next" or "Fix". Typed
+ * words fix the picture just drawn, or describe the next one. The paperclip puts in the
+ * user's own picture: the window asks which view it is. The lines are kept with the card.
+ */
+export function ReferenceChat({ projectId, entityId, kind, bases: allBases, hasStyle, onChanged, onClose }: Props) {
+  const { t } = useI18n()
+  const withAngles = kind === 'character'
+  const [lines, setLines] = useState<RefLine[] | null>(null)
+  const [text, setText] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState<Busy>('')
+  // The English prompt; the step that shows it can be edited while it waits for "Draw".
+  const [prompt, setPrompt] = useState('')
+  const [promptReady, setPromptReady] = useState(false)
+  // The picture just drawn waits for "OK, next" or "Fix": the references it was drawn with.
+  const [pending, setPending] = useState<{ image: ImageInfo; references: string[] } | null>(null)
+  const [fixing, setFixing] = useState(false)
+  // A picture put in with the paperclip, waiting for the user to say which view it is.
+  const [upload, setUpload] = useState<{ id: string; file: File } | null>(null)
+  // The user's own pictures kept as samples for the next drawing.
+  const [samples, setSamples] = useState<string[]>([])
+  const [nextView, setNextView] = useState('')
+  // Views drawn or put in here, `look:view`: the gallery may not have reloaded them yet.
+  const [drawnHere, setDrawnHere] = useState<string[]>([])
+  // A finished look whose face starts a new look.
+  const [refLook, setRefLook] = useState('')
+  const [size, setSize] = useState<ImageSize>('1:1')
+  const [variants, setVariants] = useState<Variant[]>([])
+  const [variantKey, setVariantKey] = useState('')
+  // Looks the model found, waiting for "Save" or "Cancel".
+  const [found, setFound] = useState<Variant[] | null>(null)
+  const [looksChecked, setLooksChecked] = useState(true)
+  const [placeViews, setPlaceViews] = useState<PlaceView[]>([])
+  const clip = useRef<HTMLInputElement>(null)
+  const field = useRef<HTMLTextAreaElement>(null)
+  const end = useRef<HTMLDivElement>(null)
+  const fail = (e: unknown) => setError(errorText(t, e))
+
+  useEffect(() => {
+    const failed = (e: unknown) => setError(errorText(t, e))
+    api.refChat(entityId).then(setLines, failed)
+    if (!withAngles) {
+      api.views(entityId).then(setPlaceViews, failed)
+      return
+    }
+    api.variants(entityId).then(({ variants: list, checked }) => {
+      setVariants(list)
+      setLooksChecked(checked)
+      setVariantKey((now) => now || list[0]?.key || '')
+    }, failed)
+  }, [entityId, withAngles, t])
+  // Braces matter: new Chrome returns a Promise from scrollIntoView (see Illustrations).
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' })
+  }, [lines, busy, pending, promptReady, upload, found, fixing])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !busy && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, busy])
+
+  const twoLang = useTwoLang(entityId, prompt, setPrompt, true, setError)
+  const variant = variants.find((v) => v.key === variantKey) ?? null
+  const SET_ORDER = orderOf(variant?.shape)
+  const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
+  const has = (view: string, look = variant?.key ?? '') =>
+    Boolean(latest(allBases.filter((b) => (b.variant || '') === look), view)) ||
+    drawnHere.includes(`${look}:${view}`)
+  // The views still without a picture, in their order.
+  const openViews = (except = '') =>
+    (withAngles ? SET_ORDER : placeViews.map((v) => v.key)).filter((v) => v !== except && !has(v))
+  // A place or object starts with its general picture (the free view '').
+  const first = !withAngles && !has('')
+  const open = openViews()
+  const upNext = first ? '' : open.includes(nextView) ? nextView : (open[0] ?? '')
+  // A character with every view of its look drawn has nothing to draw next.
+  const ready = !withAngles || upNext !== ''
+  const viewLabel = (view: string) =>
+    !view
+      ? first
+        ? t(kind === 'item' ? 'ref.view.front' : 'ref.view.general')
+        : t('ref.view.free')
+      : (placeViews.find((v) => v.key === view)?.label ?? (isAngle(view) ? t(`angle.${view}`) : view))
+  // Finished looks of the character whose face can start this one, while it is empty.
+  const refLooks =
+    withAngles && bases.length === 0 && variant?.shape !== 'object'
+      ? variants.filter(
+          (v) =>
+            v.key !== variant?.key &&
+            (v.shape ?? 'human') === (variant?.shape ?? 'human') &&
+            has(orderOf(v.shape)[0], v.key),
+        )
+      : []
+  // Another look of the character that still has empty views.
+  const nextLook = () =>
+    variants.find((v) => v.key !== variant?.key && orderOf(v.shape).some((view) => !has(view, v.key))) ?? null
+
+  const say = async (add: RefLineIn[]) => {
+    try {
+      setLines(await api.addRefChat(entityId, add))
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  const generate = (view: string, english: string, references: string[], lookKey: string) =>
+    api.generateImage(entityId, {
+      angle: view,
+      look_label: '',
+      chapter_from_id: '',
+      chapter_to_id: '',
+      variant: lookKey,
+      prompt: english,
+      size,
+      add_view: true,
+      reference_ids: references,
+    })
+
+  // A picture drawn: it waits for "OK, next" or "Fix", and a place gets its views after its
+  // first picture so that "OK, next" has something to offer.
+  const drawn = async (made: ImageInfo, view: string, references: string[], lookKey: string) => {
+    onChanged()
+    setDrawnHere((had) => [...had, `${lookKey}:${view}`])
+    setPending({ image: made, references })
+    setNextView(openViews(view)[0] ?? '')
+    await say([{ role: 'assistant', kind: 'image', image_id: made.id, view }])
+    if (!withAngles && !placeViews.length) {
+      setBusy('views')
+      try {
+        const saved = await api.saveViews(entityId, await api.findViews(entityId))
+        setPlaceViews(saved)
+        setNextView(saved.find((v) => v.key !== view)?.key ?? '')
+      } catch (e) {
+        fail(e)
+      }
+    }
+  }
+
+  /** The text model writes the prompt of the next picture; `words` are the user's own. */
+  const collect = async (words = '') => {
+    setError('')
+    let lookKey = variant?.key ?? ''
+    // The first drawing of a character asks once whether it has several outward looks.
+    if (withAngles && !looksChecked && !variants.length) {
+      setBusy('variants')
+      try {
+        const list = await api.findVariants(entityId)
+        setLooksChecked(true)
+        if (list.length > 1) {
+          setFound(list)
+          if (words) await say([{ role: 'user', text: words }])
+          return setBusy('')
+        }
+        // One look that is not a person (an animal, a thing) is kept: it has its own views.
+        if (list.length === 1 && list[0].shape !== 'human') {
+          const saved = await api.saveVariants(entityId, list)
+          setVariants(saved)
+          setVariantKey(saved[0]?.key ?? '')
+          lookKey = saved[0]?.key ?? ''
+          onChanged()
+        }
+      } catch (e) {
+        fail(e)
+        return setBusy('')
+      }
+    }
+    setBusy('prompt')
+    try {
+      let written = (
+        await api.imagePrompt(entityId, {
+          angle: '',
+          look_label: '',
+          chapter_from_id: '',
+          chapter_to_id: '',
+          variant: lookKey,
+          // One prompt serves every view; the view is put in front of it when drawn.
+          view_free: true,
+          reference_ids: [],
+          note: withAngles ? '' : words || (first ? FIRST_NOTE[kind] : ''),
+        })
+      ).prompt
+      if (withAngles && words) written = (await api.refineImagePrompt(entityId, written, words)).text
+      setPrompt(written)
+      setPromptReady(true)
+      await say([
+        ...(words ? [{ role: 'user' as const, text: words }] : []),
+        { role: 'assistant', kind: 'prompt', prompt: written, view: upNext },
+      ])
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  // Words said while the prompt waits for "Draw" go into it.
+  const refine = async (words: string) => {
+    setError('')
+    setBusy('prompt')
+    try {
+      const english = (await api.refineImagePrompt(entityId, await twoLang.flush(), words)).text
+      setPrompt(english)
+      await say([
+        { role: 'user', text: words },
+        { role: 'assistant', kind: 'prompt', prompt: english, view: upNext },
+      ])
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  const draw = async () => {
+    setError('')
+    const lookKey = variant?.key ?? ''
+    const view = upNext
+    let references = samples.slice(-3)
+    const from = refLooks.find((v) => v.key === refLook)
+    const fromImage = from && latest(allBases.filter((b) => b.variant === from.key), orderOf(from.shape)[0])
+    if (fromImage) references = [fromImage.id, ...references].slice(0, 3)
+    setBusy('image')
+    try {
+      const made = await generate(view, await twoLang.flush(), references, lookKey)
+      setPromptReady(false)
+      setSamples([])
+      await drawn(made, view, references, lookKey)
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  // The picture is liked: the next view is drawn with the prompt as it is.
+  const goOn = async () => {
+    if (!pending) return
+    const following = openViews(pending.image.angle)
+    const view = following.includes(nextView) ? nextView : (following[0] ?? '')
+    setFixing(false)
+    if (!view) {
+      setPending(null)
+      const after = withAngles ? nextLook() : null
+      if (after) {
+        setPrompt('')
+        setVariantKey(after.key)
+        setRefLook('')
+      }
+      return say([
+        { role: 'user', text: t('generate.step.done') },
+        { role: 'assistant', text: after ? t('ref.look_next', { look: after.label }) : t('ref.done') },
+      ])
+    }
+    await say([{ role: 'user', text: t('generate.step.next', { view: viewLabel(view) }) }])
+    setError('')
+    setBusy('image')
+    const lookKey = pending.image.variant || ''
+    try {
+      const made = await generate(view, await twoLang.flush(), pending.references, lookKey)
+      await drawn(made, view, pending.references, lookKey)
+    } catch (e) {
+      setPending(null)
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  // The user's remark goes into the prompt; the picture is removed and drawn again.
+  const fix = async (remark: string) => {
+    if (!pending) return
+    const { image, references } = pending
+    setError('')
+    setFixing(false)
+    setBusy('prompt')
+    await say([{ role: 'user', text: remark }])
+    let english = await twoLang.flush()
+    try {
+      english = (await api.refineImagePrompt(entityId, english, remark)).text
+      setPrompt(english)
+    } catch (e) {
+      fail(e)
+      return setBusy('')
+    }
+    setBusy('image')
+    try {
+      await api.deleteImage(image.id)
+      onChanged()
+      const made = await generate(image.angle, english, references, image.variant || '')
+      onChanged()
+      setPending({ image: made, references })
+      await say([
+        { role: 'assistant', kind: 'prompt', prompt: english, view: image.angle },
+        { role: 'assistant', kind: 'image', image_id: made.id, view: image.angle },
+      ])
+    } catch (e) {
+      setPending(null)
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  // Not kept: the user's own press removes the picture just drawn.
+  const drop = async () => {
+    if (!pending) return
+    const { image } = pending
+    setPending(null)
+    setFixing(false)
+    setDrawnHere((had) => had.filter((k) => k !== `${image.variant || ''}:${image.angle}`))
+    try {
+      await api.deleteImage(image.id)
+      onChanged()
+    } catch (e) {
+      fail(e)
+    }
+    await say([{ role: 'user', text: t('ref.drop') }])
+  }
+
+  // The paperclip: the picture is stored as a plain picture of the card, then the user says
+  // which view it is (or that it is only a sample).
+  const putIn = async (files: FileList | null) => {
+    const file = [...(files ?? [])].find((f) => f.type.startsWith('image/'))
+    if (clip.current) clip.current.value = ''
+    if (!file) return
+    setError('')
+    setBusy('upload')
+    try {
+      const ratio = size.split(':').map(Number)
+      const ready = await padTo(file, ratio[0] / ratio[1])
+      const [made] = await api.uploadImages(projectId, [ready], entityId)
+      await api.updateImage(made.id, { is_main: false, angle: '', look_label: '' })
+      setUpload({ id: made.id, file: ready })
+      await say([{ role: 'user', kind: 'upload', image_id: made.id }])
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+  // A view: the picture goes into it if it is in the project style, otherwise it is a sample.
+  const placeUpload = async (view: string | null) => {
+    if (!upload) return
+    const { id, file } = upload
+    setUpload(null)
+    const asSample = () => setSamples((had) => [...had, id].slice(-3))
+    if (view === null) {
+      asSample()
+      return say([
+        { role: 'user', text: t('ref.upload.sample') },
+        { role: 'assistant', text: t('ref.upload.sampled') },
+      ])
+    }
+    setBusy('upload')
+    try {
+      const verdict = await api.checkStyle(projectId, file)
+      if (!verdict.matches) {
+        asSample()
+        await say([
+          { role: 'user', text: viewLabel(view) },
+          { role: 'assistant', text: t('ref.upload.style', { reason: verdict.reason }) },
+        ])
+      } else {
+        await api.updateImage(id, { is_main: true, angle: view, variant: variant?.key ?? '' })
+        setDrawnHere((had) => [...had, `${variant?.key ?? ''}:${view}`])
+        onChanged()
+        await say([
+          { role: 'user', text: viewLabel(view) },
+          { role: 'assistant', text: t('ref.upload.placed', { view: viewLabel(view) }) },
+        ])
+      }
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  const keepLooks = async () => {
+    if (!found) return
+    setBusy('variants')
+    try {
+      const saved = await api.saveVariants(entityId, found)
+      setVariants(saved)
+      setVariantKey(saved[0]?.key ?? '')
+      setFound(null)
+      onChanged()
+    } catch (e) {
+      fail(e)
+    }
+    setBusy('')
+  }
+
+  const send = () => {
+    const words = text.trim()
+    if (!words || busy) return
+    setText('')
+    if (pending) return fix(words)
+    if (promptReady) return refine(words)
+    if (!ready) return say([{ role: 'user', text: words }, { role: 'assistant', text: t('ref.done') }])
+    return collect(words)
+  }
+
+  const chooseLook = (key: string) => {
+    if (key === variantKey) return
+    setVariantKey(key)
+    setPrompt('')
+    setPromptReady(false)
+    setNextView('')
+    setRefLook('')
+  }
+
+  // "OK, next" may draw another of the open views, leafed with the arrows.
+  const stepChoices = pending ? openViews(pending.image.angle) : []
+  const stepNext = stepChoices.includes(nextView) ? nextView : (stepChoices[0] ?? '')
+  const stepLook = pending && !stepNext && withAngles ? nextLook() : null
+  const leaf = (by: number) => {
+    const at = Math.max(0, stepChoices.indexOf(stepNext))
+    setNextView(stepChoices[(at + by + stepChoices.length) % stepChoices.length])
+  }
+  // The views a put in picture can take: the open ones, and a place's general picture.
+  const uploadViews = withAngles ? open : [...(first ? [''] : []), ...open]
+  // The finished views of this look, small, above the dialogue.
+  const doneViews = (withAngles ? SET_ORDER : ['', ...placeViews.map((v) => v.key)])
+    .map((view) => latest(bases, view))
+    .filter((made): made is ImageInfo => made !== null)
+  const lastPrompt = lines ? lines.map((m) => m.kind).lastIndexOf('prompt') : -1
+  const off = busy !== ''
+
+  const line = (m: RefLine, n: number): ReactNode => {
+    if (m.kind === 'prompt') {
+      const live = n === lastPrompt && promptReady && !pending
+      return (
+        <details open={live}>
+          <summary className="small muted">
+            {t('ref.prompt')}
+            {m.view ? ` · ${viewLabel(m.view)}` : ''}
+          </summary>
+          {live ? (
+            <div className="stack ref-prompt">
+              <div className="prompt-box">
+                <TwoLangPrompt
+                  english={prompt}
+                  onEnglish={setPrompt}
+                  local={twoLang.local}
+                  onLocal={twoLang.setLocal}
+                  both={twoLang.both}
+                  busy={twoLang.busy}
+                  disabled={off}
+                />
+              </div>
+              <button
+                className="btn ghost small icon"
+                title={t('generate.copy')}
+                aria-label={t('generate.copy')}
+                onClick={() => navigator.clipboard.writeText(prompt)}
+              >
+                <CopyIcon />
+              </button>
+            </div>
+          ) : (
+            <p className="small prompt-last">{m.prompt}</p>
+          )}
+        </details>
+      )
+    }
+    if (m.kind === 'image' || m.kind === 'upload') {
+      if (!m.image_url) return <p className="faint small">{t('ref.image.gone')}</p>
+      const urls = (lines ?? []).map((l) => l.image_url).filter(Boolean)
+      return (
+        <a {...zoomLink(urls, urls.indexOf(m.image_url))}>
+          <img className="illustration-picture" src={m.image_url} alt="" />
+        </a>
+      )
+    }
+    return <p>{m.text}</p>
+  }
+
+  // The window's own turn: what it offers now, with the buttons to answer.
+  const live = (): ReactNode => {
+    if (busy)
+      return (
+        <p className="muted">
+          {t(
+            busy === 'prompt'
+              ? 'generate.prompt.busy'
+              : busy === 'image'
+                ? 'generate.image.busy'
+                : busy === 'upload'
+                  ? 'gallery.uploading'
+                  : busy === 'variants'
+                    ? 'variants.finding'
+                    : 'views.finding',
+          )}
+        </p>
+      )
+    if (found)
+      return (
+        <div className="stack variant-offer">
+          <p>{t('variants.found', { n: found.length })}</p>
+          {found.map((v) => (
+            <div key={v.key} className="row">
+              <span className="grow small">
+                <b>{v.label}</b> · {t(`variants.shape.${v.shape}`)} — {v.description}
+              </span>
+              <button
+                className="btn ghost small icon"
+                title={t('app.delete')}
+                aria-label={t('app.delete')}
+                onClick={() => setFound(found.filter((x) => x.key !== v.key))}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="row wrap">
+            <button className="btn primary small" onClick={keepLooks}>
+              <CheckIcon />
+              {t('generate.face.apply')}
+            </button>
+            <button className="btn ghost small" onClick={() => setFound(null)}>
+              {t('app.cancel')}
+            </button>
+          </div>
+        </div>
+      )
+    if (upload)
+      return (
+        <>
+          <p>{t('ref.upload.ask')}</p>
+          <div className="row wrap">
+            {uploadViews.map((view) => (
+              <button key={view || 'free'} className="chip" onClick={() => placeUpload(view)}>
+                {viewLabel(view)}
+              </button>
+            ))}
+            <button className="chip plain" onClick={() => placeUpload(null)}>
+              {t('ref.upload.sample')}
+            </button>
+          </div>
+        </>
+      )
+    if (pending)
+      return (
+        <>
+          {fixing && <p>{t('ref.fix.ask')}</p>}
+          <div className="row wrap ref-buttons">
+            {stepChoices.length > 1 && (
+              <button
+                className="btn ghost small icon"
+                title={t('generate.step.prev_view')}
+                aria-label={t('generate.step.prev_view')}
+                onClick={() => leaf(-1)}
+              >
+                ‹
+              </button>
+            )}
+            <button className="btn primary small" onClick={goOn}>
+              <CheckIcon />
+              {stepNext
+                ? t('generate.step.next', { view: viewLabel(stepNext) })
+                : stepLook
+                  ? t('generate.step.next_look', { look: stepLook.label })
+                  : t('generate.step.done')}
+            </button>
+            {stepChoices.length > 1 && (
+              <button
+                className="btn ghost small icon"
+                title={t('generate.step.next_view')}
+                aria-label={t('generate.step.next_view')}
+                onClick={() => leaf(1)}
+              >
+                ›
+              </button>
+            )}
+            <button
+              className="btn ghost small"
+              onClick={() => {
+                setFixing(true)
+                field.current?.focus()
+              }}
+            >
+              <PencilIcon />
+              {t('ref.fix')}
+            </button>
+            <button className="btn ghost small" onClick={drop}>
+              {t('ref.drop')}
+            </button>
+          </div>
+        </>
+      )
+    if (promptReady)
+      return (
+        <div className="row wrap ref-buttons">
+          <button className="btn primary small" disabled={!hasStyle || !prompt.trim()} onClick={draw}>
+            <SparklesIcon />
+            {t('ref.draw', { view: viewLabel(upNext) })}
+          </button>
+          <button className="btn ghost small" onClick={() => collect()}>
+            {t('ref.collect.again')}
+          </button>
+          {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
+        </div>
+      )
+    if (!ready) {
+      const after = nextLook()
+      return (
+        <>
+          <p>{t('ref.done')}</p>
+          {after && (
+            <button className="btn ghost small" onClick={() => chooseLook(after.key)}>
+              {t('generate.step.next_look', { look: after.label })}
+            </button>
+          )}
+        </>
+      )
+    }
+    return (
+      <>
+        <p>{t('ref.offer', { view: viewLabel(upNext) })}</p>
+        {refLooks.length > 0 && (
+          <div className="row wrap" title={t('variants.ref.hint')}>
+            <span className="small muted">{t('variants.ref')}</span>
+            {refLooks.map((v) => (
+              <button
+                key={v.key}
+                className={`chip ${refLook === v.key ? 'active' : ''}`}
+                onClick={() => setRefLook(refLook === v.key ? '' : v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="row wrap ref-buttons">
+          <button className="btn primary small" onClick={() => collect()}>
+            <SparklesIcon />
+            {t('ref.collect')}
+          </button>
+          {samples.length > 0 && <span className="faint small">{t('ref.samples', { n: samples.length })}</span>}
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="dialog ref-chat">
+        <div className="row">
+          <h2 className="grow">{t('ref.title')}</h2>
+          <HelpButton
+            title={t('ref.title')}
+            paragraphs={[t('ref.help.flow'), t('ref.help.text'), t('ref.help.clip'), t('generate.help.lang')]}
+          />
+          <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        {withAngles && variants.length > 1 && (
+          <div className="row wrap">
+            {variants.map((v) => (
+              <button
+                key={v.key}
+                className={`chip ${v.key === variantKey ? 'active' : ''}`}
+                disabled={off || !!pending || promptReady}
+                title={v.description}
+                onClick={() => chooseLook(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {doneViews.length > 0 && (
+          <div className="ref-done">
+            {doneViews.map((made, n) => (
+              <a
+                key={made.id}
+                title={viewLabel(made.angle)}
+                {...zoomLink(doneViews.map((d) => d.url), n)}
+              >
+                <img src={made.url} alt={viewLabel(made.angle)} loading="lazy" />
+              </a>
+            ))}
+          </div>
+        )}
+        <div className="stack illustration-log ref-tape">
+          {lines === null && <p className="muted">{t('app.loading')}</p>}
+          {lines?.map((m, n) => (
+            <div key={n} className={`illustration-bubble ${m.role}`}>
+              {line(m, n)}
+            </div>
+          ))}
+          {lines !== null && <div className="illustration-bubble assistant">{live()}</div>}
+          <div ref={end} />
+        </div>
+        {error && <p className="error small">{error}</p>}
+        <div className="row ref-input">
+          <input
+            ref={clip}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            hidden
+            onChange={(e) => putIn(e.target.files)}
+          />
+          <button
+            className="btn ghost small icon"
+            disabled={off || !!pending || !!upload}
+            title={t('ref.clip')}
+            aria-label={t('ref.clip')}
+            onClick={() => clip.current?.click()}
+          >
+            <UploadIcon />
+          </button>
+          <textarea
+            ref={field}
+            className="input grow"
+            rows={2}
+            value={text}
+            maxLength={1000}
+            placeholder={t(pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
+            disabled={off || !!upload || !!found}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                send()
+              }
+            }}
+          />
+          <MicButton
+            disabled={off}
+            onText={(spoken) => setText((now) => (now.trim() ? `${now.trim()} ${spoken}` : spoken))}
+            onError={setError}
+          />
+          <button
+            className="btn primary icon"
+            disabled={off || !text.trim()}
+            title={t('images.send')}
+            aria-label={t('images.send')}
+            onClick={send}
+          >
+            <SparklesIcon />
+          </button>
+        </div>
+        <select
+          className="input small ref-size"
+          value={size}
+          aria-label={t('generate.size')}
+          onChange={(e) => setSize(e.target.value as ImageSize)}
+        >
+          {IMAGE_SIZES.map((option) => (
+            <option key={option} value={option}>
+              {t(`generate.size.${option}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  )
+}

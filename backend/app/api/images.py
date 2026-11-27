@@ -4,7 +4,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePath
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
@@ -785,6 +785,52 @@ def save_views(entity_id: str, body: list[View], session: SessionDep) -> list[Vi
             image.angle = ""
     session.commit()
     return body
+
+
+# ---------- the references window as a dialogue (owner's notes 27.11, item 19) ----------
+
+REF_CHAT_KEPT = 200
+
+
+class RefLine(BaseModel):
+    role: Literal["user", "assistant"]
+    kind: Literal["text", "offer", "prompt", "image", "upload"] = "text"
+    text: str = Field(default="", max_length=4000)
+    prompt: str = Field(default="", max_length=8000)
+    image_id: str = Field(default="", max_length=32)
+    view: str = Field(default="", max_length=64)
+
+
+class RefLineOut(RefLine):
+    # Empty once the picture was deleted: the line stays, the picture is gone.
+    image_url: str = ""
+
+
+def _ref_chat(session: SessionDep, entity: Entity) -> list[RefLineOut]:
+    ids = {m.get("image_id") for m in entity.ref_chat or [] if m.get("image_id")}
+    alive = set(session.scalars(select(Image.id).where(Image.id.in_(ids))).all()) if ids else set()
+    return [
+        RefLineOut(
+            **m, image_url=f"/api/images/{m['image_id']}/file" if m.get("image_id") in alive else ""
+        )
+        for m in entity.ref_chat or []
+    ]
+
+
+@router.get("/entities/{entity_id}/ref-chat")
+def get_ref_chat(entity_id: str, session: SessionDep) -> list[RefLineOut]:
+    return _ref_chat(session, _entity(session, entity_id))
+
+
+@router.post("/entities/{entity_id}/ref-chat")
+def add_ref_chat(entity_id: str, body: list[RefLine], session: SessionDep) -> list[RefLineOut]:
+    """Lines said in the window are appended; only the latest ones are kept."""
+    entity = _entity(session, entity_id)
+    lines = [{**line.model_dump(), "text": line.text.strip()} for line in body]
+    # A JSON list is saved only when a new list is assigned.
+    entity.ref_chat = [*(entity.ref_chat or []), *lines][-REF_CHAT_KEPT:]
+    session.commit()
+    return _ref_chat(session, entity)
 
 
 # ---------- cards made by hand ----------

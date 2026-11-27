@@ -484,6 +484,24 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 .illustration-title:hover { border-color: var(--line-2); }
 .illustration-title:focus { border-color: var(--accent-line); background: rgba(0, 0, 0, 0.25); }
 
+/* 27.11, item 19: the references window is a dialogue. Its height is fixed by the screen:
+   only the lines scroll, the input stays at the bottom and nothing in the window jumps. */
+.dialog.ref-chat {
+  width: min(720px, 100%); height: min(860px, calc(100dvh - 40px));
+  display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+}
+.ref-chat .ref-tape { flex: 1; min-height: 0; max-height: none; }
+.ref-chat .illustration-bubble { max-width: 92%; }
+.ref-chat .illustration-picture { max-height: 46vh; }
+.ref-done { display: flex; gap: 6px; overflow-x: auto; flex-shrink: 0; }
+.ref-done img { display: block; width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line-2); }
+.ref-prompt { gap: 6px; }
+.ref-prompt > .btn { align-self: flex-end; }
+.ref-buttons { gap: 6px; }
+.ref-input { gap: 6px; align-items: flex-end; flex-shrink: 0; }
+.ref-input textarea { resize: none; min-width: 0; }
+.ref-size { align-self: flex-start; width: auto; flex-shrink: 0; }
+
 /* ---------- 27.11: windows fit a phone's width, no sideways scroll ---------- */
 @media (max-width: 640px) {
   .overlay { padding: 10px; }

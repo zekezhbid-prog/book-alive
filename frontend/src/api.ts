@@ -461,6 +461,20 @@ export const IMAGE_SIZES = ['1:1', '2:3', '3:2', '9:16', '16:9'] as const
 export type ImageSize = (typeof IMAGE_SIZES)[number]
 
 /** Empty label and chapters: a main picture in `angle` (empty: the server picks one). */
+/** A line of the references window's dialogue (owner's notes 27.11, item 19). */
+export interface RefLineIn {
+  role: 'user' | 'assistant'
+  kind?: 'text' | 'offer' | 'prompt' | 'image' | 'upload'
+  text?: string
+  prompt?: string
+  image_id?: string
+  view?: string
+}
+export interface RefLine extends Required<RefLineIn> {
+  /** Empty once the picture was deleted. */
+  image_url: string
+}
+
 export interface LookRequest {
   /** `Angle` for a character, a `PlaceView.key` for a place or object. */
   angle: string
@@ -866,6 +880,10 @@ export const api = {
   findVariants: (entityId: string) => request<Variant[]>('POST', `/entities/${entityId}/variants/find`),
   saveVariants: (entityId: string, variants: Variant[]) =>
     request<Variant[]>('PUT', `/entities/${entityId}/variants`, variants),
+  /** The references window is a dialogue: its lines are kept with the card. */
+  refChat: (entityId: string) => request<RefLine[]>('GET', `/entities/${entityId}/ref-chat`),
+  addRefChat: (entityId: string, lines: RefLineIn[]) =>
+    request<RefLine[]>('POST', `/entities/${entityId}/ref-chat`, lines),
   views: (entityId: string) => request<PlaceView[]>('GET', `/entities/${entityId}/views`),
   /** The model's views for a place or object; nothing is saved until `saveViews`. */
   findViews: (entityId: string) => request<PlaceView[]>('POST', `/entities/${entityId}/views/find`),

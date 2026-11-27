@@ -212,6 +212,9 @@ class Entity(Base):
     # from the front...): [{key, label, framing}], `framing` is the English camera line put
     # in front of the prompt; a base picture of a view has it as `Image.angle`.
     views: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    # The references window is a dialogue (owner's notes 27.11, item 19); its lines:
+    # [{role, kind: text | offer | prompt | image | upload, text, prompt, image_id, view}].
+    ref_chat: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # What the author told about the card in "Improve" and the book does not say: true
     # without a quote, heard by every later run. A note the text confirms becomes a fact.
     author_notes: Mapped[list[str]] = mapped_column(JSON, default=list)

@@ -13,7 +13,8 @@ import {
   type SceneBrief,
 } from '../api'
 import CardGrid from '../components/CardGrid'
-import { ImageDialog, RedoPanel } from '../components/Gallery'
+import { RedoPanel } from '../components/Gallery'
+import { ReferenceChat } from '../components/ReferenceChat'
 import SceneExport from '../components/SceneExport'
 import { zoomLink } from '../components/Lightbox'
 import { AutoTextarea } from '../components/AutoTextarea'
@@ -432,7 +433,7 @@ interface ViewProps {
   onDelete: () => void
 }
 
-function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onChange, onDelete }: ViewProps) {
+function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onDelete }: ViewProps) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
   const [prompt, setPrompt] = useState(scene.prompt)
@@ -663,12 +664,11 @@ function SceneView({ onClose, projectId, scene, hasStyle, chapters, writing, onC
         />
       )}
       {adding && adding !== 'frame' && (
-        <ImageDialog
+        <ReferenceChat
           projectId={projectId}
           entityId={adding.who.id}
           bases={adding.bases}
-          withAngles={adding.who.kind === 'character'}
-          chapters={chapters}
+          kind={adding.who.kind}
           hasStyle={hasStyle}
           onChanged={reload}
           onClose={closeAdding}
