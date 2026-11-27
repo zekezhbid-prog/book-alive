@@ -433,14 +433,21 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 @media (min-width: 901px) { .phone-only, .chapter-bar .btn.phone-only { display: none; } }
 @media (max-width: 900px) {
   .desk-only { display: none; }
-  /* Pinned under the top of the screen whatever the scroll; the parchment stays behind it. */
+  /* 27.11, item 16: the open chapter is a still window the size of the screen. The buttons
+     stay on top and only the text below them scrolls, never the window itself. */
+  .workspace.reading-open > .reading > article.chapter {
+    position: fixed; inset: 0; z-index: 15; max-width: none;
+    display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  }
+  .workspace.reading-open > .reading > article.chapter > .chapter-tools { flex-shrink: 0; padding: 0 12px; }
+  .chapter-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 36px; }
   .chapter-bar {
-    position: sticky; top: 0; z-index: 6; gap: 2px;
-    margin: -22px -16px 6px; padding: 6px 10px;
+    gap: 2px; padding: 6px 10px;
     background: var(--tex-parchment) center / 420px;
     border-bottom: 1px solid var(--line);
     box-shadow: 0 6px 14px rgba(70, 40, 10, 0.25);
   }
+  .workspace.reading-open > .reading > article.chapter > .chapter-bar { padding: 6px 10px; }
   .chapter-bar .btn.icon { min-width: 44px; }
   /* The reading view is a page of its own: the list or the chapter, never both. */
   .workspace.reading-open > .project-nav { display: none; }
@@ -462,6 +469,20 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 .redo-prompt.quiet:focus { color: var(--text); border-color: var(--accent-line); }
 .remark-field > span { color: var(--accent); font-weight: 700; }
 .remark-field textarea { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line), 0 0 14px rgba(220, 184, 102, 0.12); }
+
+/* 27.11, item 18: a finger moving over an open picture no longer scrolls the page under it
+   (on a phone that resized the screen and the window below jumped); pinching still zooms. */
+.lightbox { touch-action: pinch-zoom; overscroll-behavior: contain; }
+
+/* 27.11, item 15: a picture card's name is a heading that can be typed over. */
+.illustration-head { gap: 4px; }
+.illustration-title {
+  min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text); font: 700 18px/1.3 var(--book); outline: none;
+  text-overflow: ellipsis;
+}
+.illustration-title:hover { border-color: var(--line-2); }
+.illustration-title:focus { border-color: var(--accent-line); background: rgba(0, 0, 0, 0.25); }
 
 /* ---------- 27.11: windows fit a phone's width, no sideways scroll ---------- */
 @media (max-width: 640px) {

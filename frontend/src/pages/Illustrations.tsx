@@ -15,7 +15,7 @@ import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { MicButton } from '../components/MicButton'
 import { zoomLink } from '../components/Lightbox'
-import { BoldPlusIcon, ImageIcon, SparklesIcon, TrashIcon } from '../components/icons'
+import { BoldPlusIcon, BookIcon, ImageIcon, SparklesIcon, TrashIcon } from '../components/icons'
 import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
@@ -175,6 +175,18 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
     }
     setBusy('')
   }
+  // The name being typed; null while it is not being changed.
+  const [name, setName] = useState<string | null>(null)
+  const rename = async () => {
+    if (name === null || !item) return
+    if (name.trim() === item.title) return setName(null)
+    try {
+      setItem(await api.renameIllustration(id, name))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setName(null)
+  }
   const remove = async () => {
     if (!(await ask(t('images.delete.confirm')))) return
     try {
@@ -192,8 +204,35 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
 
   return (
     <section className="stack illustration-chat">
-      <div className="row">
-        <h3 className="grow">{item?.title || t('images.untitled')}</h3>
+      {/* The name can be changed; "Pick from the book" is an icon beside the bin (owner's notes 27.11, item 15). */}
+      <div className="row illustration-head">
+        <input
+          className="illustration-title grow"
+          value={name ?? item?.title ?? ''}
+          maxLength={300}
+          placeholder={t('images.untitled')}
+          title={t('images.rename')}
+          aria-label={t('images.rename')}
+          disabled={!item}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={rename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Escape') {
+              setName(null)
+              e.currentTarget.blur()
+            }
+          }}
+        />
+        <button
+          className="btn ghost small icon"
+          disabled={busy !== ''}
+          title={t('images.pick')}
+          aria-label={t('images.pick')}
+          onClick={() => setPicking(true)}
+        >
+          <BookIcon />
+        </button>
         <button className="btn ghost small icon gold" title={t('app.delete')} aria-label={t('app.delete')} onClick={remove}>
           <TrashIcon />
         </button>
@@ -266,11 +305,6 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
         <div ref={end} />
       </div>
       {error && <p className="error small">{error}</p>}
-      <div className="row">
-        <button className="btn ghost small" disabled={busy !== ''} onClick={() => setPicking(true)}>
-          📖 {t('images.pick')}
-        </button>
-      </div>
       {picking && (
         <BookPicker
           project={project}

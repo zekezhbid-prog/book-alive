@@ -31,6 +31,11 @@ export function showPictures(urls: string[], index = 0) {
 export function zoomLink(urls: string[], index: number) {
   return {
     href: urls[index],
+    // The link takes no focus on a press: a focused link half out of view is scrolled into
+    // it, and the window under the picture jumped (owner's notes 27.11, item 18).
+    onMouseDown: (e: MouseEvent) => {
+      if (e.button === 0) e.preventDefault()
+    },
     onClick: (e: MouseEvent) => {
       if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
       e.preventDefault()

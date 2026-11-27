@@ -64,6 +64,8 @@ def test_a_picture_is_planned_in_a_dialogue_and_drawn_from_card_references(
     done = client.post(f"{url}/draw").json()
     assert drawn == [(planned["prompt"], 1)]
     assert done["messages"][-1]["image_url"] == done["cover"] != ""
+    # Named after the request the picture was drawn from (owner's notes 27.11, item 15).
+    assert done["title"] == "Лана у мельницы, встреча"
     listed = client.get(f"/api/projects/{project.id}/illustrations").json()
     assert [i["id"] for i in listed] == [made["id"]]
     assert client.delete(url).status_code == 204
@@ -156,3 +158,45 @@ def test_a_card_without_a_reference_is_named_before_drawing(client, project, mon
     assert plan["reference_urls"] == [face["url"]] and plan["missing"] == []
     assert plan["prompt"] == drawn[0][0]
     assert client.get(url).json()["messages"][-2]["prompt"] == drawn[0][0]  # saved
+
+
+def test_a_card_is_named_after_its_last_picture_until_the_user_renames_it(
+    client, project, monkeypatch
+):
+    # Owner's notes 27.11 (15): the name comes from the request a picture was drawn from, not
+    # the first words of the dialogue; a name the user wrote stays.
+    plan = {"chapter": "", "cast": [], "say": "Рисую.", "prompt": "A mill at dawn."}
+
+    class Plans(Planner):
+        def invoke_json(self, operation, messages, schema):
+            return schema.model_validate(plan)
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.illustrations.TextModel", Plans)
+    monkeypatch.setattr("app.api.illustrations.ImageModel", Painter)
+    monkeypatch.setattr(illustrations, "search", lambda *a, **k: [])
+    monkeypatch.setattr(illustrations, "index_project", lambda *a: 0)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    url = f"/api/illustrations/{client.post(f'/api/projects/{project.id}/illustrations').json()['id']}"
+
+    client.post(f"{url}/ask", json={"text": "мельница"})
+    assert client.post(f"{url}/draw").json()["title"] == "мельница"
+    client.post(f"{url}/ask", json={"text": "  теперь   ночью "})
+    second = client.post(f"{url}/draw").json()
+    assert second["title"] == "теперь ночью"
+    assert second["cover"] == second["messages"][-1]["image_url"]  # the last picture
+
+    assert (
+        client.patch(url, json={"title": "  Ночная мельница "}).json()["title"] == "Ночная мельница"
+    )
+    client.post(f"{url}/ask", json={"text": "днём"})
+    assert client.post(f"{url}/draw").json()["title"] == "Ночная мельница"
+    # An emptied name goes back to the automatic one.
+    assert client.patch(url, json={"title": " "}).json()["title"] == "днём"
+    assert client.patch(url, json={"title": "x" * 301}).status_code == 422

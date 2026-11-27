@@ -849,6 +849,9 @@ export const api = {
     request<Illustration>('POST', `/projects/${projectId}/illustrations`),
   illustration: (id: string) => request<Illustration>('GET', `/illustrations/${id}`),
   deleteIllustration: (id: string) => request<void>('DELETE', `/illustrations/${id}`),
+  /** An empty title gives the automatic one (from the request of the last picture) back. */
+  renameIllustration: (id: string, title: string) =>
+    request<Illustration>('PATCH', `/illustrations/${id}`, { title }),
   /** The user's words: the model answers with a question or a plan; nothing is drawn yet. */
   askIllustration: (id: string, text: string) =>
     request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),

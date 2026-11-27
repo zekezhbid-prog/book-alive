@@ -51,10 +51,14 @@ export default function ChapterReader({
   }, [project.id, names, found])
 
   const article = useRef<HTMLElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   // Set by the arrows below: the bar was pinned (the text scrolled past the chapter's top).
   const pinned = (useLocation().state as { pinned?: boolean } | null)?.pinned === true
   useEffect(() => {
     if (target.current) return target.current.scrollIntoView({ block: 'center' })
+    // A phone scrolls the text inside the chapter: a new chapter starts at its top.
+    if (scroller.current) scroller.current.scrollTop = 0
+    if (article.current && getComputedStyle(article.current).position === 'fixed') return
     // Leafed on from the pinned bar (owner's notes 27.11): while the next chapter loaded the
     // page was short and the scroll fell back to the top; the new text starts under the bar.
     if (pinned || (article.current?.getBoundingClientRect().top ?? 0) < 0)
@@ -133,8 +137,9 @@ export default function ChapterReader({
         <span className="spacer desk-only" />
         {/* Leaf through the book from the chapter itself (owner's notes 26.11 and 27.11). */}
         {leaf('chapter.first', first, <ChevronIcon dir="left" double />)}
-        {leaf('chapter.prev', previous, <ChevronIcon dir="left" />, <span className="desk-only">{t('chapter.prev')}</span>)}
-        {leaf('chapter.next', next, <ChevronIcon dir="right" />, <span className="desk-only">{t('chapter.next')}</span>)}
+        {/* Arrows only, the name is the tooltip (owner's notes 27.11, item 16). */}
+        {leaf('chapter.prev', previous, <ChevronIcon dir="left" />)}
+        {leaf('chapter.next', next, <ChevronIcon dir="right" />)}
         {leaf('chapter.last', last, <ChevronIcon dir="right" double />)}
         <button
           className={`btn ghost small icon ${chapter.private ? 'on' : ''}`}
@@ -162,17 +167,20 @@ export default function ChapterReader({
         <span className="spacer" />
         {splitButton}
       </div>
-      <h2 className="chapter-title">{chapter.title || t('book.untitled')}</h2>
-      {paragraphs.map((paragraph, index) => (
-        <p
-          key={index}
-          data-index={index}
-          ref={index === highlighted ? target : undefined}
-          className={index === highlighted ? 'highlighted' : ''}
-        >
-          {renderInline(paragraph, linker)}
-        </p>
-      ))}
+      {/* On a phone the chapter fills the screen and only this part scrolls (owner's notes 27.11, item 16). */}
+      <div className="chapter-scroll" ref={scroller}>
+        <h2 className="chapter-title">{chapter.title || t('book.untitled')}</h2>
+        {paragraphs.map((paragraph, index) => (
+          <p
+            key={index}
+            data-index={index}
+            ref={index === highlighted ? target : undefined}
+            className={index === highlighted ? 'highlighted' : ''}
+          >
+            {renderInline(paragraph, linker)}
+          </p>
+        ))}
+      </div>
       {picked && (
         // onMouseDown: a click would clear the selection before it is read.
         <button className="btn primary floating" onMouseDown={(e) => e.preventDefault()} onClick={markScene}>

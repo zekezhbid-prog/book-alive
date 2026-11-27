@@ -98,9 +98,21 @@ def _item(session: SessionDep, illustration_id: str) -> tuple[Illustration, Proj
     return item, session.get(Project, item.project_id)
 
 
+def _request_title(messages: list[dict]) -> str:
+    """The user's words that led to the last picture, or to the coming one while nothing is
+    drawn after the previous picture (owner's notes 27.11, item 15)."""
+    drawn = [n for n, m in enumerate(messages) if m.get("image_id")]
+    end = drawn[-1] if drawn else len(messages)
+    start = next((n + 1 for n in reversed(drawn) if n < end), 0)
+    words = [m.get("text", "") for m in messages[start:end] if m["role"] == "user"]
+    return " ".join(", ".join(w for w in words if w.strip()).split())[:80]
+
+
 def _say(session: SessionDep, item: Illustration, message: dict) -> None:
     # A JSON list is saved only when a new list is assigned.
     item.messages = [*item.messages, message]
+    if not item.title_edited:
+        item.title = _request_title(item.messages)
     session.commit()
 
 
@@ -156,6 +168,23 @@ def get_illustration(illustration_id: str, session: SessionDep) -> IllustrationO
     return _full(session, _item(session, illustration_id)[0])
 
 
+class RenameRequest(BaseModel):
+    title: str = Field(max_length=300)
+
+
+@router.patch("/illustrations/{illustration_id}")
+def rename_illustration(
+    illustration_id: str, body: RenameRequest, session: SessionDep
+) -> IllustrationOut:
+    """The user's own name for the card; an empty one gives the automatic name back."""
+    item, _ = _item(session, illustration_id)
+    title = " ".join(body.title.split())
+    item.title_edited = bool(title)
+    item.title = title or _request_title(item.messages)
+    session.commit()
+    return _full(session, item)
+
+
 @router.delete("/illustrations/{illustration_id}", status_code=204)
 def delete_illustration(illustration_id: str, session: SessionDep) -> None:
     item, _ = _item(session, illustration_id)
@@ -167,8 +196,6 @@ def delete_illustration(illustration_id: str, session: SessionDep) -> None:
 def ask(illustration_id: str, body: AskRequest, session: SessionDep) -> IllustrationOut:
     """The user's words; the model answers with a question or a plan of the picture."""
     item, project = _item(session, illustration_id)
-    if not item.title:
-        item.title = " ".join(body.text.split())[:80]
     _say(session, item, {"role": "user", "text": body.text.strip()})
     try:
         model = TextModel(session, project.id, "prompts")

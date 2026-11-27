@@ -477,6 +477,8 @@ class Illustration(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(300), default="")
+    # The user wrote the name: it is no longer taken from the requests (owner's notes 27.11).
+    title_edited: Mapped[bool] = mapped_column(default=False)
     # [{role: user | assistant, text, image_id?, reference_ids?, chapter_id?, prompt?}]
     messages: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
