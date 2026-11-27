@@ -1,15 +1,16 @@
 from pathlib import PurePath
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.images import EXTENSIONS, MAX_IMAGE_BYTES, ImageOut, _sniff, _store
 from app.api.images import _out as image_out
 from app.config import settings
 from app.db import SessionDep
-from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
+from app.images.generate import SIZES, ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel, estimate_tokens
 from app.models import Chapter, Entity, Image, Project, Scene, SceneSplit
@@ -72,6 +73,29 @@ class SceneOut(SceneBrief):
     frames: list[ImageOut]
     # Pictures the scene would want and its cards do not have yet.
     missing: list[Missing] = Field(default_factory=list)
+    # The dialogue that leads to the video prompt (owner's notes 27.11).
+    chat: list["SceneLineOut"] = Field(default_factory=list)
+
+
+class SceneLine(BaseModel):
+    role: Literal["user", "assistant"]
+    # text | prompt (a version of the video prompt) | frame (a first frame drawn) |
+    # enrich (a fuller description offered, `added` marks what is new)
+    kind: Literal["text", "prompt", "frame", "enrich"] = "text"
+    text: str = Field(default="", max_length=6000)
+    prompt: str = Field(default="", max_length=8000)
+    image_id: str = Field(default="", max_length=32)
+    added: list[str] = Field(default_factory=list, max_length=40)
+
+
+class SceneLineOut(SceneLine):
+    # Empty once the picture was deleted: the line stays, the picture is gone.
+    image_url: str = ""
+
+
+SceneOut.model_rebuild()
+
+SCENE_CHAT_KEPT = 200
 
 
 class ReferencesRequest(BaseModel):
@@ -128,6 +152,15 @@ class SummaryPatch(BaseModel):
 class FrameRequest(BaseModel):
     # The user's edit of the frame prompt; empty draws from the video prompt as it is.
     prompt: str = Field(default="", max_length=6000)
+    # A key of SIZES, chosen in the dialogue's field; empty means square.
+    size: str = ""
+
+    @field_validator("size")
+    @classmethod
+    def known_size(cls, value: str) -> str:
+        if value and value not in SIZES:
+            raise ValueError("unknown size")
+        return value
 
 
 def _scene(session: SessionDep, scene_id: str) -> tuple[Scene, Chapter | None, Project]:
@@ -208,7 +241,19 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
         ],
         frames=[image_out(frame, project) for frame in frames],
         missing=[Missing(**m) for m in service.missing_references(session, project, scene)],
+        chat=_chat(session, scene),
     )
+
+
+def _chat(session: SessionDep, scene: Scene) -> list[SceneLineOut]:
+    ids = {m.get("image_id") for m in scene.chat or [] if m.get("image_id")}
+    alive = set(session.scalars(select(Image.id).where(Image.id.in_(ids))).all()) if ids else set()
+    return [
+        SceneLineOut(
+            **m, image_url=f"/api/images/{m['image_id']}/file" if m.get("image_id") in alive else ""
+        )
+        for m in scene.chat or []
+    ]
 
 
 @router.get("/projects/{project_id}/scenes")
@@ -363,9 +408,22 @@ def refine(scene_id: str, body: RefineRequest, session: SessionDep) -> SceneOut:
         raise HTTPException(409, "no_prompt_yet")
     model = _text_model(session, project.id, "prompts")
     try:
-        scene.prompt = service.refine_prompt(model, scene.prompt, body.change)
+        scene.prompt, scene.reference_ids = service.refine_prompt(
+            session, model, project, scene, body.change
+        )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    session.commit()
+    return _full(session, scene, chapter, project)
+
+
+@router.post("/scenes/{scene_id}/chat")
+def add_chat(scene_id: str, body: list[SceneLine], session: SessionDep) -> SceneOut:
+    """Lines said in the scene's dialogue are appended; only the latest ones are kept."""
+    scene, chapter, project = _scene(session, scene_id)
+    lines = [{**line.model_dump(), "text": line.text.strip()} for line in body]
+    # A JSON list is saved only when a new list is assigned.
+    scene.chat = [*(scene.chat or []), *lines][-SCENE_CHAT_KEPT:]
     session.commit()
     return _full(session, scene, chapter, project)
 
@@ -433,7 +491,8 @@ def generate_frame(
         raise HTTPException(409, str(exc)) from exc
     refs = service.references(session, project, scene, chapter) if chapter else []
     try:
-        result = model.generate(prompt, [settings.files_dir / r.image.path for r in refs])
+        size = body.size if body else ""
+        result = model.generate(prompt, [settings.files_dir / r.image.path for r in refs], size)
     except ImageGenerationFailed as exc:
         raise HTTPException(502, f"provider_error: {exc}") from exc
     mime = result.mime if result.mime in EXTENSIONS else "image/png"

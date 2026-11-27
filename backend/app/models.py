@@ -426,6 +426,8 @@ class Scene(Base):
     prompt: Mapped[str] = mapped_column(Text, default="")
     # The pictures the model chose for that prompt, in order; empty until it is built.
     reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # The scene's dialogue that leads to the video prompt (owner's notes 27.11): its lines.
+    chat: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 

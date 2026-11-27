@@ -592,6 +592,21 @@ export interface Scene extends SceneBrief {
   frames: ImageInfo[]
   /** Pictures the scene would want and its cards do not have yet (no model, fixed rules). */
   missing: { entity_id: string; name: string; kind: EntityKind; need: 'face' | 'figure' | 'base' }[]
+  /** The dialogue that leads to the video prompt. */
+  chat: Required<SceneLine>[]
+}
+
+/** A line of the scene's dialogue: words, a version of the video prompt, a first frame, or
+ * a fuller description offered (`added` marks what is new). */
+export interface SceneLine {
+  role: 'user' | 'assistant'
+  kind: 'text' | 'prompt' | 'frame' | 'enrich'
+  text?: string
+  prompt?: string
+  image_id?: string
+  added?: string[]
+  /** Set by the server; empty once the picture was deleted. */
+  image_url?: string
 }
 
 /** `code` is the machine-readable part of the server's error, e.g. `reader_mode_readonly`. */
@@ -974,8 +989,10 @@ export const api = {
   /** The user's own choice of the pictures that go with the scene; empty: back to the rules. */
   chooseSceneReferences: (id: string, imageIds: string[]) =>
     request<Scene>('PUT', `/scenes/${id}/references`, { image_ids: imageIds }),
-  generateSceneFrame: (id: string, prompt: string) =>
-    request<Scene>('POST', `/scenes/${id}/frame`, { prompt }),
+  generateSceneFrame: (id: string, prompt: string, size: ImageSize = '1:1') =>
+    request<Scene>('POST', `/scenes/${id}/frame`, { prompt, size }),
+  /** Lines said in the scene's dialogue, appended to it. */
+  addSceneChat: (id: string, lines: SceneLine[]) => request<Scene>('POST', `/scenes/${id}/chat`, lines),
   uploadSceneFrame: (id: string, file: File) => {
     const form = new FormData()
     form.set('file', file)

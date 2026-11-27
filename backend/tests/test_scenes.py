@@ -256,6 +256,52 @@ def test_video_prompt_gets_the_state_as_of_the_chapter(session, book):
     assert "cinematic realism" in model.system
 
 
+def test_a_change_in_the_dialogue_may_take_a_picture_in_or_leave_one_out(session, book):
+    # Owner's notes 27.11, scene dialogue: "we need ..." / "no reference for ..." in words.
+    scene = service.mark_scene(session, book.mill, 0, 3, "Ключ")
+    model = FakeModel()
+    scene.prompt, scene.reference_ids = service.video_prompt(session, model, book, scene, "")
+    look = session.query(Image).filter_by(project_id=book.id, look_label="в платке").one()
+    assert (scene.prompt, scene.reference_ids) == (
+        "The figure from reference 1 hands over a key.",
+        [look.id],
+    )
+    # The model sees the pool's numbers: the look is 2 there, the base view 1.
+    model.video = {"references": [1], "prompt": "The figure from reference 1 smiles."}
+    prompt, chosen = service.refine_prompt(session, model, book, scene, "возьми общий вид Ланы")
+    assert "Pictures the prompt uses now: 2" in model.context
+    assert "Prompt:\nThe figure from reference 2 hands over a key." in model.context
+    assert "Change wanted:\nвозьми общий вид Ланы" in model.context
+    base = next(r for r in service.candidates(session, book, scene, book.mill) if r.number == 1)
+    assert (prompt, chosen) == ("The figure from reference 1 smiles.", [base.image.id])
+    assert "drop one" in model.system
+
+
+def test_the_scene_dialogue_keeps_its_lines(client, session, book):
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 2, "paragraph_to": 3, "title": "Ключ"},
+    ).json()
+    picture = session.query(Image).filter_by(project_id=book.id).first()
+    lines = [
+        {"role": "user", "text": "  Собрать промпт  "},
+        {"role": "assistant", "kind": "prompt", "prompt": "A key."},
+        {"role": "assistant", "kind": "frame", "image_id": picture.id},
+        {"role": "assistant", "kind": "frame", "image_id": "gone"},
+        {"role": "assistant", "kind": "enrich", "text": "Полнее.", "added": ["Полнее."]},
+    ]
+    scene = client.post(f"/api/scenes/{made['id']}/chat", json=lines).json()
+    assert [(m["kind"], m["text"]) for m in scene["chat"]][:2] == [
+        ("text", "Собрать промпт"),
+        ("prompt", ""),
+    ]
+    assert scene["chat"][2]["image_url"] == f"/api/images/{picture.id}/file"
+    assert scene["chat"][3]["image_url"] == ""  # the picture was deleted: the line stays
+    assert client.get(f"/api/scenes/{made['id']}").json()["chat"][4]["added"] == ["Полнее."]
+    bad = client.post(f"/api/scenes/{made['id']}/frame", json={"size": "7:5"})
+    assert bad.status_code == 422
+
+
 def test_scene_api_prompt_edit_and_archive(client, session, book):
     made = client.post(
         f"/api/chapters/{book.mill.id}/scenes",

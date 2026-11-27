@@ -84,12 +84,21 @@ size and one movement.
 Reply with one JSON object and nothing else:
 {{"references": [1, 3], "prompt": ""}}"""
 
-REFINE_SYSTEM = """Below is a prompt for an AI video generator and a change the author \
-wants. Rewrite the prompt with that change and keep everything else as it is, including \
-the references, the shots, the spoken lines (in the language of the book) and the style at \
-the end. English apart from the spoken lines, under 250 words, no line breaks.
+REFINE_SYSTEM = """Below are a scene of a book, who is in it with the reference pictures \
+that may go with the video, a prompt for an AI video generator written for it, and a change \
+the author wants. Rewrite the prompt with that change and keep everything else as it is, \
+including the shots, the spoken lines (in the language of the book) and the style at the end.
 
-Reply with the prompt only."""
+- The prompt calls people and places "the figure from reference N"; N are the numbers of \
+the list below. Keep the pictures the prompt uses unless the change says otherwise.
+- The author may ask to add a picture ("take the full-length view of ...", "we need the \
+mill") or to drop one ("no reference for ..."): change the list and the prompt to match. \
+Without a picture, describe that person or place by how they look.
+- At most 4 pictures in all. English apart from the spoken lines, under 250 words, no line \
+breaks.
+
+Reply with one JSON object and nothing else:
+{"references": [1, 3], "prompt": ""}"""
 
 
 class SceneDraft(BaseModel):
@@ -495,6 +504,19 @@ def scene_context(
 _REFERENCE = re.compile(r"\b(references?\s+)(\d+)\b", re.IGNORECASE)
 
 
+def _renumbered(prompt: str, numbers: list[int], pool: list[Reference]) -> tuple[str, list[str]]:
+    """The prompt with the pool's numbers turned into 1, 2... in the order the pictures go
+    into the archive, and their ids. A picture the prompt names counts as chosen even if the
+    list forgot it."""
+    named = {int(m.group(2)) for m in _REFERENCE.finditer(prompt)}
+    chosen = [r for r in pool if r.number in {*numbers, *named}]
+    new_number = {r.number: n for n, r in enumerate(chosen, 1)}
+    prompt = _REFERENCE.sub(
+        lambda m: m.group(1) + str(new_number.get(int(m.group(2)), m.group(2))), prompt
+    )
+    return prompt, [r.image.id for r in chosen]
+
+
 def video_prompt(
     session: Session, model: TextModel, project: Project, scene: Scene, note: str
 ) -> tuple[str, list[str]]:
@@ -507,22 +529,39 @@ def video_prompt(
     answer = model.invoke_json(
         "video_prompt", [SystemMessage(system), HumanMessage(context)], VideoAnswer
     )
-    prompt = answer.prompt.strip()
-    # A picture the prompt names counts as chosen even if the list forgot it.
-    named = {int(m.group(2)) for m in _REFERENCE.finditer(prompt)}
-    chosen = [r for r in pool if r.number in {*answer.references, *named}]
-    new_number = {r.number: n for n, r in enumerate(chosen, 1)}
+    return _renumbered(answer.prompt.strip(), answer.references, pool)
+
+
+def refine_prompt(
+    session: Session, model: TextModel, project: Project, scene: Scene, change: str
+) -> tuple[str, list[str]]:
+    """The author's change to the video prompt, said in the scene's dialogue: it may also
+    take a reference picture in or leave one out (owner's notes 27.11, scene dialogue)."""
+    chapter = session.get(Chapter, scene.chapter_id)
+    pool = candidates(session, project, scene, chapter)
+    by_id = {r.image.id: r for r in pool}
+    # The prompt counts its pictures from 1 in the scene's order; the model sees the pool's.
+    current = [by_id[i] for i in scene.reference_ids if i in by_id]
+    to_pool = {n: r.number for n, r in enumerate(current, 1)}
     prompt = _REFERENCE.sub(
-        lambda m: m.group(1) + str(new_number.get(int(m.group(2)), m.group(2))), prompt
+        lambda m: m.group(1) + str(to_pool.get(int(m.group(2)), m.group(2))), scene.prompt
     )
-    return prompt, [r.image.id for r in chosen]
-
-
-def refine_prompt(model: TextModel, prompt: str, change: str) -> str:
-    request = f"Prompt:\n{prompt}\n\nChange wanted:\n{change}"
-    return model.invoke(
-        "refine_prompt", [SystemMessage(REFINE_SYSTEM), HumanMessage(request)]
-    ).strip()
+    used = ", ".join(str(r.number) for r in current) or "none"
+    request = "\n".join(
+        [
+            scene_context(session, project, scene, chapter, "", pool),
+            "",
+            f"Pictures the prompt uses now: {used}",
+            "",
+            f"Prompt:\n{prompt}",
+            "",
+            f"Change wanted:\n{change}",
+        ]
+    )
+    answer = model.invoke_json(
+        "refine_prompt", [SystemMessage(REFINE_SYSTEM), HumanMessage(request)], VideoAnswer
+    )
+    return _renumbered(answer.prompt.strip(), answer.references, pool)
 
 
 ENRICH_SYSTEM = """You help an author turn a scene of their book into a film scene. Below \

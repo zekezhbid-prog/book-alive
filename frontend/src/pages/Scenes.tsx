@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   api,
@@ -14,9 +14,10 @@ import {
   type SceneProposal,
 } from '../api'
 import CardGrid from '../components/CardGrid'
-import { RedoPanel } from '../components/Gallery'
 import { ReferenceChat } from '../components/ReferenceChat'
 import SceneExport from '../components/SceneExport'
+import { SceneDialog } from '../components/SceneDialog'
+import { marked } from '../marked'
 import { zoomLink } from '../components/Lightbox'
 import { AutoTextarea } from '../components/AutoTextarea'
 import { MicButton } from '../components/MicButton'
@@ -30,7 +31,6 @@ import { ProposalList } from '../components/SceneProposals'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import {
   CheckIcon,
-  CopyIcon,
   TrashIcon,
   GoldPlusSymbol,
   GoldSparklesSymbol,
@@ -39,7 +39,6 @@ import {
   SparklesIcon,
   UploadIcon,
 } from '../components/icons'
-import { HelpButton } from '../components/HelpButton'
 import FoldHead from '../components/FoldHead'
 
 type Participant = Scene['participants'][number]
@@ -243,24 +242,6 @@ function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
   )
 }
 
-/** The text with the fragments the model added lit, in the order they stand. */
-function marked(text: string, added: string[]): ReactNode[] {
-  const parts: ReactNode[] = []
-  let rest = text
-  for (;;) {
-    const hits = added
-      .map((fragment) => ({ fragment, at: rest.indexOf(fragment) }))
-      .filter((hit) => hit.fragment && hit.at >= 0)
-      .sort((a, b) => a.at - b.at)
-    if (!hits.length) break
-    const { fragment, at } = hits[0]
-    parts.push(rest.slice(0, at), <mark key={parts.length}>{fragment}</mark>)
-    rest = rest.slice(at + fragment.length)
-  }
-  parts.push(rest)
-  return parts
-}
-
 interface TextsProps {
   scene: Scene
   writing: boolean
@@ -282,15 +263,18 @@ function SceneTexts({ scene, writing, aiReady, onChange }: TextsProps) {
         open={open.scene}
         onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
       >
-        <button
-          className="btn ghost small"
-          disabled={!aiReady}
-          title={t('scene.enrich.hint')}
-          onClick={() => setEnriching(true)}
-        >
-          <SparklesIcon />
-          {t('scene.enrich')}
-        </button>
+        {/* An illustrator adds to the description in the scene's dialogue. */}
+        {writing && (
+          <button
+            className="btn ghost small"
+            disabled={!aiReady}
+            title={t('scene.enrich.hint')}
+            onClick={() => setEnriching(true)}
+          >
+            <SparklesIcon />
+            {t('scene.enrich')}
+          </button>
+        )}
       </FoldHead>
       {enriching && (
         <EnrichDialog
@@ -440,17 +424,9 @@ interface ViewProps {
 function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onDelete }: ViewProps) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
-  const [prompt, setPrompt] = useState(scene.prompt)
-  const [note, setNote] = useState('')
-  const [change, setChange] = useState('')
-  const [busy, setBusy] = useState<'' | 'prompt' | 'refine'>('')
-  const [promptOpen, setPromptOpen] = useState(Boolean(scene.prompt))
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
-  // The picture window over the scene: for a card in it, or for the first frame.
-  const [adding, setAdding] = useState<{ who: Participant; bases: ImageInfo[] } | 'frame' | null>(
-    null,
-  )
+  // The picture window over the scene, for a card in it.
+  const [adding, setAdding] = useState<{ who: Participant; bases: ImageInfo[] } | null>(null)
   const closeAdding = useCallback(() => setAdding(null), [])
   const [exporting, setExporting] = useState(false)
   const closeExport = useCallback(() => setExporting(false), [])
@@ -467,46 +443,12 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
   // A card's new picture changes the scene's references, so the scene is fetched again.
   const reload = () => api.scene(scene.id).then(onChange, (e) => setError(errorText(t, e)))
 
-  const run = async (step: 'prompt' | 'refine', call: () => Promise<Scene>) => {
-    setBusy(step)
-    setError('')
-    try {
-      const next = await call()
-      setPrompt(next.prompt)
-      onChange(next)
-      if (step === 'refine') setChange('')
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-  // The copy and the archive must carry what is on screen, so an edit is saved first.
-  const saveEdit = async () => {
-    if (prompt.trim() === scene.prompt) return scene
-    const saved = await api.saveScenePrompt(scene.id, prompt)
-    onChange(saved)
-    return saved
-  }
-  const copy = async () => {
-    const saved = await saveEdit()
-    await navigator.clipboard.writeText(saved.prompt)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  const download = async () => {
-    await saveEdit()
+  const download = () => {
     location.href = api.sceneArchiveUrl(scene.id)
   }
   // Not every picture the scene wants is there: the user is asked before going on with what
   // there is (owner's notes 26.11).
   const enoughRefs = async () => !scene.missing.length || (await ask(t('scene.missing.confirm')))
-  const build = async () => {
-    if (await enoughRefs()) {
-      setRefsChanged(false)
-      setPromptOpen(true)
-      run('prompt', () => api.buildScenePrompt(scene.id, note))
-    }
-  }
   const openExport = async () => {
     if (await enoughRefs()) setExporting(true)
   }
@@ -580,39 +522,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         <>
       <h4>{t('scene.references')}</h4>
       {!hasStyle && <p className="faint small">{t('scene.references.no_style')}</p>}
-      {/* What the scene still lacks: a click opens the card's picture window (owner's notes 26.11). */}
-      {hasStyle && scene.missing.length > 0 && (
-        <div className="row wrap missing-refs">
-          <span className="small muted">{t('scene.missing.title')}</span>
-          {scene.missing.map((m) => {
-            const who = scene.participants.find((p) => p.id === m.entity_id)
-            return (
-              <button
-                key={`${m.entity_id}-${m.need}`}
-                className="chip plain missing-ref"
-                title={t('scene.missing.hint')}
-                disabled={!who}
-                onClick={() => who && addFor(who)}
-              >
-                <PlusIcon />
-                {m.name} — {t(`scene.missing.${m.need}`)}
-              </button>
-            )
-          })}
-        </div>
-      )}
       <div className="refs">
-        {/* The first frame comes first: it is what the video starts from. */}
-        <RefSlot
-          title={<b>{t('scene.first_frame')}</b>}
-          pictures={scene.frames.map((frame, i) => ({
-            url: frame.url,
-            note: i === 0 ? t('scene.frame.latest') : '',
-          }))}
-          empty={t('scene.frame.none')}
-          addTitle={t('scene.frame.add')}
-          onAdd={() => setAdding('frame')}
-        />
         {/* Everyone in the scene gets a frame with all of the card's pictures, those that go
             to the video first and numbered, or an empty one. */}
         {scene.participants.map((who) => (
@@ -651,23 +561,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         ))}
       </div>
       {refsChanged && <p className="muted small">{t('scene.refs.changed')}</p>}
-      {adding === 'frame' && (
-        <FrameDialog
-          scene={scene}
-          hasStyle={hasStyle}
-          onChanged={onChange}
-          onClose={closeAdding}
-          onBuild={async () => {
-            if (!(await enoughRefs())) return null
-            const next = await api.buildScenePrompt(scene.id, '')
-            setPrompt(next.prompt)
-            onChange(next)
-            return next
-          }}
-          onToggle={toggleRef}
-        />
-      )}
-      {adding && adding !== 'frame' && (
+      {adding && (
         <ReferenceChat
           projectId={projectId}
           entityId={adding.who.id}
@@ -680,77 +574,19 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         />
       )}
 
-      {/* The prompt folds away; building it opens the fold. The busy line sits in the
-          heading, so nothing below moves while it is written (owner's notes 26.11). */}
-      <FoldHead
-        title={t('scene.prompt')}
-        open={promptOpen || busy !== ''}
-        onToggle={() => setPromptOpen((now) => !now)}
-        note={busy === 'prompt' ? <span className="muted small">{t('scene.build.busy')}</span> : undefined}
-      >
-        <button
-          className="btn ghost small icon gold"
-          disabled={busy !== '' || aiReady === false}
-          title={busy === 'prompt' ? t('scene.build.busy') : scene.prompt ? t('scene.rebuild') : t('scene.build')}
-          aria-label={scene.prompt ? t('scene.rebuild') : t('scene.build')}
-          onClick={build}
-        >
-          <SparklesIcon />
-        </button>
-        {scene.prompt && (
-          <button
-            className={`btn ghost small icon ${copied ? 'on' : ''}`}
-            title={copied ? t('scene.copied') : t('scene.copy')}
-            aria-label={t('scene.copy')}
-            onClick={copy}
-          >
-            <CopyIcon />
-          </button>
-        )}
-      </FoldHead>
-      {(promptOpen || busy !== '') && !scene.prompt && (
-        <AutoTextarea
-          className="input"
-          value={note}
-          maxLength={2000}
-          placeholder={t('scene.note.placeholder')}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      )}
-      {(promptOpen || busy !== '') && scene.prompt && (
-        <>
-          <textarea
-            className="input prompt"
-            rows={7}
-            value={prompt}
-            maxLength={6000}
-            onChange={(e) => setPrompt(e.target.value)}
-            onBlur={() => saveEdit().catch((e) => setError(errorText(t, e)))}
-          />
-          <div className="row">
-            <input
-              className="input grow"
-              value={change}
-              maxLength={2000}
-              placeholder={t('scene.refine.placeholder')}
-              onChange={(e) => setChange(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === 'Enter' &&
-                change.trim() &&
-                run('refine', () => api.refineScenePrompt(scene.id, change))
-              }
-            />
-            <button
-              className="btn"
-              disabled={busy !== '' || !change.trim()}
-              onClick={() => run('refine', () => api.refineScenePrompt(scene.id, change))}
-            >
-              {busy === 'refine' ? t('scene.refine.busy') : t('scene.refine')}
-            </button>
-          </div>
-        </>
-      )}
-      {!scene.prompt && <AiNotice ready={aiReady} />}
+      {/* The video prompt, the first frame and a fuller description in one dialogue
+          (owner's notes 27.11). */}
+      <h4>{t('scene.prompt')}</h4>
+      <SceneDialog
+        scene={scene}
+        aiReady={aiReady !== false}
+        onChange={onChange}
+        onAddReference={(entityId) => {
+          const who = scene.participants.find((p) => p.id === entityId)
+          if (who) void addFor(who)
+        }}
+      />
+      {aiReady === false && <AiNotice ready={aiReady} />}
       {/* The archive is what the work here is for: one large button at the end. */}
       <div className="row scene-export-row">
         <button
@@ -847,229 +683,3 @@ function RefSlot({ title, pictures, empty, addTitle, onAdd, onToggle }: SlotProp
   )
 }
 
-interface FrameProps {
-  scene: Scene
-  hasStyle: boolean
-  onChanged: (scene: Scene) => void
-  onClose: () => void
-  /** Writes the video prompt, asking first when pictures are missing; null when not written. */
-  onBuild: () => Promise<Scene | null>
-  /** Takes a picture into the scene's references or leaves it out. */
-  onToggle: (imageId: string) => void
-}
-
-/**
- * The first frame's window, laid out like the card's picture window (owner's notes 26.11):
- * the prompt is ready (the video prompt turned into a still, editable here), the scene's
- * references are already in, and one press draws it. A finished frame opens with its prompt
- * and remarks: a changed prompt draws it anew, a remark improves the frame itself. The
- * user's own picture can be put in too. The newest frame goes into the archive.
- */
-function FrameDialog({ scene, hasStyle, onChanged, onClose, onBuild, onToggle }: FrameProps) {
-  const { t } = useI18n()
-  const [prompt, setPrompt] = useState(scene.frame_prompt)
-  // The frame in view; '' is a new one.
-  const [pickedId, setPickedId] = useState(scene.frames[0]?.id ?? '')
-  const picked = scene.frames.find((f) => f.id === pickedId) ?? null
-  const [busy, setBusy] = useState<'' | 'image' | 'upload' | 'prompt' | 'delete'>('')
-  const [error, setError] = useState('')
-  const picker = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const run = async (step: 'image' | 'upload', call: () => Promise<Scene>) => {
-    setBusy(step)
-    setError('')
-    try {
-      const next = await call()
-      setPickedId(next.frames[0]?.id ?? '')
-      onChanged(next)
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-  const upload = (file: File | undefined) => {
-    if (picker.current) picker.current.value = ''
-    if (file) run('upload', () => api.uploadSceneFrame(scene.id, file))
-  }
-  // No video prompt yet: it is written here, and the frame prompt comes from it.
-  const build = async () => {
-    setBusy('prompt')
-    setError('')
-    try {
-      const next = await onBuild()
-      if (next) setPrompt(next.frame_prompt)
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-  const reload = () => api.scene(scene.id).then(onChanged, (e) => setError(errorText(t, e)))
-  const removeFrame = async (frame: ImageInfo) => {
-    if (!(await ask(t('gallery.delete.confirm')))) return
-    setBusy('delete')
-    setError('')
-    try {
-      await api.deleteImage(frame.id)
-      setPickedId('')
-      await reload()
-    } catch (e) {
-      setError(errorText(t, e))
-    }
-    setBusy('')
-  }
-
-  return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog generator image-dialog">
-        <div className="row">
-          <h2>{t('scene.frame.title')}</h2>
-          <span className="spacer" />
-          {/* Every explanation of the window lives behind its "?" (owner's notes 27.11). */}
-          <HelpButton
-            title={t('scene.frame.title')}
-            paragraphs={[t('scene.frame.hint'), t('scene.frame.short'), t('generate.help.done')]}
-          />
-          <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
-            ✕
-          </button>
-        </div>
-        <div className="dialog-body">
-          <div className="stack">
-            <div className="picture-slot">
-              {picked ? (
-                <div className="stack slot-picture">
-                  <a {...zoomLink(scene.frames.map((f) => f.url), Math.max(0, scene.frames.indexOf(picked)))}>
-                    <img src={picked.url} alt="" />
-                  </a>
-                </div>
-              ) : (
-                <span className="stack slot-hint">
-                  <span className="faint small">
-                    {busy === 'image' ? t('generate.image.busy') : t('generate.slot')}
-                  </span>
-                </span>
-              )}
-            </div>
-            {/* The new frame first, then every frame made so far, newest first. */}
-            <div className="look-strip base-strip">
-              <div className="look-new-wrap">
-                <button
-                  className={`look-tile look-new ${!picked ? 'shown' : ''}`}
-                  disabled={busy !== ''}
-                  title={t('scene.frame.new')}
-                  onClick={() => setPickedId('')}
-                >
-                  <span className="look-new-icon" aria-hidden>
-                    <PlusIcon />
-                  </span>
-                  <span className="small">{t('scene.frame.new')}</span>
-                </button>
-              </div>
-              {scene.frames.map((frame) => (
-                <div key={frame.id} className="look-tile-wrap">
-                  <button
-                    className={`look-tile ${picked?.id === frame.id ? 'shown' : ''}`}
-                    disabled={busy !== ''}
-                    title={t('generate.slot.show')}
-                    onClick={() => setPickedId(frame.id)}
-                  >
-                    <img src={frame.url} alt="" loading="lazy" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          {picked ? (
-            <RedoPanel
-              key={picked.id}
-              image={picked}
-              hasStyle={hasStyle}
-              disabled={busy !== ''}
-              onDone={() => reload()}
-              onDelete={() => removeFrame(picked)}
-            />
-          ) : (
-            <div className="stack">
-              {/* The scene's references go with the frame; one can be left out here, more are
-                  taken in under the scene. */}
-              <div className="stack field">
-                <span className="small muted">{t('scene.references')}</span>
-                {scene.references.length ? (
-                  <div className="used-refs">
-                    {scene.references.map((ref) => (
-                      <span key={ref.image_id} className="used-ref" title={ref.entity_name}>
-                        <a {...zoomLink(scene.references.map((r) => r.url), ref.number - 1)}>
-                          <img src={ref.url} alt="" loading="lazy" />
-                        </a>
-                        <button
-                          className="btn ghost small icon"
-                          disabled={busy !== ''}
-                          title={t('scene.ref.drop')}
-                          aria-label={t('scene.ref.drop')}
-                          onClick={() => onToggle(ref.image_id)}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="faint small">{t('scene.frame.no_refs')}</span>
-                )}
-              </div>
-              <label className="stack field">
-                <span className="small muted">{t('generate.prompt.label')}</span>
-                {scene.prompt ? (
-                  <AutoTextarea
-                    className="input prompt"
-                    value={prompt}
-                    maxLength={6000}
-                    onChange={(e) => setPrompt(e.target.value)}
-                  />
-                ) : (
-                  <span className="row wrap">
-                    <span className="muted small grow">{t('scene.frame.needs_prompt')}</span>
-                    <button className="btn small" disabled={busy !== ''} onClick={build}>
-                      <SparklesIcon />
-                      {busy === 'prompt' ? t('scene.build.busy') : t('scene.build')}
-                    </button>
-                  </span>
-                )}
-              </label>
-              <div className="row wrap">
-                <button
-                  className="btn primary generate-big"
-                  disabled={busy !== '' || !hasStyle || !scene.prompt || !prompt.trim()}
-                  title={scene.prompt ? '' : t('scene.frame.needs_prompt')}
-                  onClick={() => run('image', () => api.generateSceneFrame(scene.id, prompt))}
-                >
-                  <SparklesIcon />
-                  {busy === 'image' ? t('generate.image.busy') : t('generate.image')}
-                </button>
-                <input
-                  ref={picker}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  hidden
-                  onChange={(e) => upload(e.target.files?.[0])}
-                />
-                <button className="btn small" disabled={busy !== ''} onClick={() => picker.current?.click()}>
-                  <UploadIcon />
-                  {busy === 'upload' ? t('gallery.uploading') : t('scene.frame.upload')}
-                </button>
-              </div>
-              {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
-            </div>
-          )}
-        </div>
-        {error && <p className="error">{error}</p>}
-      </div>
-    </div>
-  )
-}
