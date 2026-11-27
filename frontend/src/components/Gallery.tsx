@@ -14,6 +14,8 @@ interface Props {
   entityId?: string
   /** Main pictures of a character are marked with a view (face, full length). */
   kind?: EntityKind
+  /** The card's name, for the references window header. */
+  name?: string
   /** Not used since the references window became a dialogue; kept for the callers. */
   chapters?: ChapterBrief[]
   /** Whether a project style is chosen: pictures cannot be generated without one. */
@@ -23,7 +25,7 @@ interface Props {
 }
 
 /** Reference pictures: uploaded by the user or generated here, labelled with their style. */
-export default function Gallery({ projectId, entityId, kind, hasStyle, onChanged }: Props) {
+export default function Gallery({ projectId, entityId, kind, name, hasStyle, onChanged }: Props) {
   const { t } = useI18n()
   const [images, setImages] = useState<ImageInfo[] | null>(null)
   const [error, setError] = useState('')
@@ -96,6 +98,7 @@ export default function Gallery({ projectId, entityId, kind, hasStyle, onChanged
             projectId={projectId}
             entityId={entityId}
             kind={kind ?? 'location'}
+            name={name}
             bases={(images ?? []).filter((i) => i.is_main && i.current_style)}
             hasStyle={hasStyle}
             onChanged={changed}

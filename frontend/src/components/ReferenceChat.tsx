@@ -24,6 +24,8 @@ interface Props {
   projectId: string
   entityId: string
   kind: EntityKind
+  /** The card's name, shown in the header. */
+  name?: string
   /** The card's base pictures in the current style. */
   bases: ImageInfo[]
   hasStyle: boolean
@@ -48,7 +50,7 @@ type Busy = '' | 'prompt' | 'image' | 'upload' | 'variants' | 'views'
  * words fix the picture just drawn, or describe the next one. The paperclip puts in the
  * user's own picture: the window asks which view it is. The lines are kept with the card.
  */
-export function ReferenceChat({ projectId, entityId, kind, bases: allBases, hasStyle, onChanged, onClose }: Props) {
+export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases, hasStyle, onChanged, onClose }: Props) {
   const { t } = useI18n()
   const withAngles = kind === 'character'
   const [lines, setLines] = useState<RefLine[] | null>(null)
@@ -686,7 +688,7 @@ export function ReferenceChat({ projectId, entityId, kind, bases: allBases, hasS
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="dialog ref-chat">
         <div className="row">
-          <h2 className="grow">{t('ref.title')}</h2>
+          <h2 className="grow">{name ? t('ref.title.of', { name }) : t('ref.title')}</h2>
           <HelpButton
             title={t('ref.title')}
             paragraphs={[t('ref.help.flow'), t('ref.help.text'), t('ref.help.clip'), t('generate.help.lang')]}

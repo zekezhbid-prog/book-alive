@@ -4,7 +4,7 @@ import { api, sectionOf, type Chapter, type EntityKind, type Project } from '../
 import { useI18n, type MessageKey } from '../i18n'
 import { markMatches } from '../markMatches'
 import { chooseSplit } from '../sceneSplit'
-import { ChevronIcon, CloseIcon, LockIcon } from './icons'
+import { ChevronIcon, ClapperIcon, CloseIcon, LockIcon } from './icons'
 
 export interface NamedEntity {
   id: string
@@ -55,10 +55,19 @@ export default function ChapterReader({
   // Set by the arrows below: the bar was pinned (the text scrolled past the chapter's top).
   const pinned = (useLocation().state as { pinned?: boolean } | null)?.pinned === true
   useEffect(() => {
+    const still = !!article.current && getComputedStyle(article.current).position === 'fixed'
+    // On a phone only the text moves: scrollIntoView would also shift the page under the
+    // still window (owner's notes 27.11, item 24).
+    if (target.current && still && scroller.current) {
+      const box = scroller.current
+      const top = target.current.getBoundingClientRect().top - box.getBoundingClientRect().top
+      box.scrollTop += top - box.clientHeight / 2 + target.current.offsetHeight / 2
+      return
+    }
     if (target.current) return target.current.scrollIntoView({ block: 'center' })
     // A phone scrolls the text inside the chapter: a new chapter starts at its top.
     if (scroller.current) scroller.current.scrollTop = 0
-    if (article.current && getComputedStyle(article.current).position === 'fixed') return
+    if (still) return
     // Leafed on from the pinned bar (owner's notes 27.11): while the next chapter loaded the
     // page was short and the scroll fell back to the top; the new text starts under the bar.
     if (pinned || (article.current?.getBoundingClientRect().top ?? 0) < 0)
@@ -119,22 +128,28 @@ export default function ChapterReader({
       {label}
     </button>
   )
+  // An icon, the name is the tooltip (owner's notes 27.11, item 24).
+  const splitLabel = splitting ? t('scenes.split.busy') : t('scenes.split')
   const splitButton = (
     <button
-      className="btn small"
+      className="btn ghost small icon"
+      title={splitLabel}
+      aria-label={splitLabel}
       disabled={splitting || !paragraphs.length || chapter.private}
       onClick={splitIntoScenes}
     >
-      {splitting ? t('scenes.split.busy') : t('scenes.split')}
+      <ClapperIcon />
     </button>
   )
+  // The state is the tooltip, no text by the lock (owner's notes 27.11, item 24).
+  const privateLabel = chapter.private ? t('chapter.private.on') : t('chapter.private.off')
 
   return (
     <article className="chapter" ref={article} onMouseUp={readSelection}>
       {/* On a phone this row stays pinned at the top while the text scrolls (owner's notes 27.11). */}
       <div className="chapter-tools chapter-bar">
-        <span className="faint small desk-only">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
-        <span className="spacer desk-only" />
+        <span className="faint small" style={{ whiteSpace: 'nowrap' }}>{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
+        <span className="spacer" />
         {/* Leaf through the book from the chapter itself (owner's notes 26.11 and 27.11). */}
         {leaf('chapter.first', first, <ChevronIcon dir="left" double />)}
         {/* Arrows only, the name is the tooltip (owner's notes 27.11, item 16). */}
@@ -144,15 +159,13 @@ export default function ChapterReader({
         <button
           className={`btn ghost small icon ${chapter.private ? 'on' : ''}`}
           onClick={togglePrivate}
-          title={t('chapter.private.hint')}
-          aria-label={chapter.private ? t('chapter.private.on') : t('chapter.private.off')}
+          title={`${privateLabel}. ${t('chapter.private.hint')}`}
+          aria-label={privateLabel}
           aria-pressed={chapter.private}
         >
           <LockIcon open={!chapter.private} />
-          <span className="desk-only">{chapter.private ? t('chapter.private.on') : t('chapter.private.off')}</span>
         </button>
-        <span className="desk-only">{splitButton}</span>
-        <span className="spacer phone-only" />
+        {splitButton}
         <button
           className="btn ghost small icon phone-only"
           title={t('chapter.close')}
@@ -161,11 +174,6 @@ export default function ChapterReader({
         >
           <CloseIcon />
         </button>
-      </div>
-      <div className="chapter-tools phone-only">
-        <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
-        <span className="spacer" />
-        {splitButton}
       </div>
       {/* On a phone the chapter fills the screen and only this part scrolls (owner's notes 27.11, item 16). */}
       <div className="chapter-scroll" ref={scroller}>

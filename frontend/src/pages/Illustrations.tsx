@@ -11,7 +11,6 @@ import {
   type PictureIdea,
   type Project,
 } from '../api'
-import PageClose from '../components/PageClose'
 import ProjectHeader from '../components/ProjectHeader'
 import { MicButton } from '../components/MicButton'
 import { zoomLink } from '../components/Lightbox'
@@ -60,12 +59,12 @@ export default function Illustrations() {
             <h1>{t('images.title')}</h1>
             <p className="muted">{t('images.hint')}</p>
           </div>
-          <button className="btn primary" onClick={add}>
+          {/* A "+" without words; the section has no close button, it closes by going to
+              another one (owner's notes 27.11, items 26 and 27). */}
+          <button className="btn primary icon" title={t('images.add')} aria-label={t('images.add')} onClick={add}>
             <BoldPlusIcon />
-            {t('images.add')}
           </button>
           <HelpButton title={t('images.title')} paragraphs={[t('images.help')]} />
-          <PageClose fallback={`/projects/${projectId}`} />
         </div>
         {error && <p className="error">{error}</p>}
         {!project.style_id && <p className="faint small">{t('generate.no_style')}</p>}

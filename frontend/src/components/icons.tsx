@@ -341,6 +341,17 @@ export function FilmIcon() {
   )
 }
 
+/** A clapperboard: split a chapter into scenes (owner's notes 27.11, item 24). */
+export function ClapperIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+      <path d="m4 11-.6-3.4a1 1 0 0 1 .8-1.2l13.8-2.4a1 1 0 0 1 1.2.8L19.6 7 4 11" />
+      <path d="m8.5 6.3 2.4 3.4M13.4 5.4l2.4 3.4" />
+    </svg>
+  )
+}
+
 export function PaletteIcon() {
   return (
     <svg {...stroke}>

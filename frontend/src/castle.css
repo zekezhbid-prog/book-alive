@@ -436,10 +436,13 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   /* 27.11, item 16: the open chapter is a still window the size of the screen. The buttons
      stay on top and only the text below them scrolls, never the window itself. */
   .workspace.reading-open > .reading > article.chapter {
-    position: fixed; inset: 0; z-index: 15; max-width: none;
+    position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh; z-index: 15; max-width: none;
     display: flex; flex-direction: column; padding: 0; overflow: hidden;
   }
   .workspace.reading-open > .reading > article.chapter > .chapter-tools { flex-shrink: 0; padding: 0 12px; }
+  /* Item 24: the page under the still window never scrolls, so a phone's toolbar does not
+     slide away and drag the window down with it. */
+  html:has(.workspace.reading-open), body:has(.workspace.reading-open) { overflow: hidden; overscroll-behavior: none; }
   .chapter-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 36px; }
   .chapter-bar {
     gap: 2px; padding: 6px 10px;
@@ -473,6 +476,15 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 /* 27.11, item 18: a finger moving over an open picture no longer scrolls the page under it
    (on a phone that resized the screen and the window below jumped); pinching still zooms. */
 .lightbox { touch-action: pinch-zoom; overscroll-behavior: contain; }
+
+/* 27.11, item 26: an open picture card lies on the same framed slab as a character's card,
+   so its cross plainly closes this window. */
+.illustration-chat {
+  padding: 18px 22px 24px;
+  background: var(--corners), var(--surface-stone); border: 1px solid #050505; border-radius: var(--radius);
+  box-shadow: var(--trim), var(--bevel), var(--shade-in), var(--drop);
+}
+@media (max-width: 900px) { .illustration-chat { padding: 14px 12px 18px; } }
 
 /* 27.11, item 15: a picture card's name is a heading that can be typed over. */
 .illustration-head { gap: 4px; }

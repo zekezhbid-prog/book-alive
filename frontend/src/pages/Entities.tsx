@@ -344,6 +344,7 @@ export default function Entities({ kind }: { kind: EntityKind }) {
                     projectId={projectId}
                     entityId={entity.id}
                     kind={entity.kind}
+                    name={entity.name}
                     chapters={project.chapters}
                     hasStyle={Boolean(project.style_id)}
                     onChanged={loadList}

@@ -669,6 +669,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
           entityId={adding.who.id}
           bases={adding.bases}
           kind={adding.who.kind}
+          name={adding.who.name}
           hasStyle={hasStyle}
           onChanged={reload}
           onClose={closeAdding}
