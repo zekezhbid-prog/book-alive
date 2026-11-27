@@ -448,3 +448,12 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   .workspace.reading-closed > .reading:not(:has(> .error)) { display: none; }
   .workspace.reading-closed .nav-list { max-height: none; }
 }
+
+/* ---------- 27.11: windows fit a phone's width, no sideways scroll ---------- */
+@media (max-width: 640px) {
+  .overlay { padding: 10px; }
+  .dialog { padding: 20px 16px; }
+  /* `1fr` alone lets the widest row (prompt tools, buttons) stretch the column past the window. */
+  .dialog-body { grid-template-columns: minmax(0, 1fr); }
+  .dialog-body > * { min-width: 0; }
+}

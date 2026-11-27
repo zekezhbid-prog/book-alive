@@ -26,7 +26,7 @@ import {
   GoldPlusSymbol,
   GoldSparklesSymbol,
   PencilIcon,
-  SparklesIcon,
+  RefreshIcon,
   TrashIcon,
   CheckIcon,
   QuestionIcon,
@@ -451,7 +451,7 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onEr
             disabled={!onRebuild}
             onClick={onRebuild}
           >
-            <SparklesIcon />
+            <RefreshIcon />
           </button>
           <a
             className="btn ghost icon"

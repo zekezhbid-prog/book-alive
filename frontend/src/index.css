@@ -632,12 +632,12 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 @keyframes progress-sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
 @media (prefers-reduced-motion: reduce) { .live-progress::after, .live-progress-fill, .live-progress-fill::after { animation: none; } }
 
-/* On a phone the name takes its own line; merge, rebuild and delete go under it. */
+/* On a phone improve, export, delete and the cross stand in one row at the top right, the
+   name takes its own line under them (owner's notes 27.11). */
 @media (max-width: 640px) {
   .card-head { flex-wrap: wrap; }
-  .card-head > * { order: 2; }
-  .card-head .entity-name { order: 0; flex: 1 1 calc(100% - 80px); min-width: 0; }
-  .card-head .card-close { order: 1; }
+  .card-head .entity-name { order: 1; flex: 1 1 100%; min-width: 0; }
+  .card-head .entity-name + * { margin-left: auto; }
 }
 /* The image window: the right column reaches down so "Generate" sits level with the last
    row of slots. */
