@@ -14,6 +14,7 @@ import ProjectHeader from '../components/ProjectHeader'
 import { MicButton } from '../components/MicButton'
 import { zoomLink } from '../components/Lightbox'
 import { BoldPlusIcon, ImageIcon, SparklesIcon, TrashIcon } from '../components/icons'
+import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
 
@@ -61,6 +62,7 @@ export default function Illustrations() {
             <BoldPlusIcon />
             {t('images.add')}
           </button>
+          <HelpButton title={t('images.title')} paragraphs={[t('images.help')]} />
           <PageClose fallback={`/projects/${projectId}`} />
         </div>
         {error && <p className="error">{error}</p>}

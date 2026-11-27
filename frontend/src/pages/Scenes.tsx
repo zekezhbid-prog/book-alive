@@ -36,6 +36,7 @@ import {
   SparklesIcon,
   UploadIcon,
 } from '../components/icons'
+import { HelpButton } from '../components/HelpButton'
 import FoldHead from '../components/FoldHead'
 
 type Participant = Scene['participants'][number]
@@ -927,6 +928,11 @@ function FrameDialog({ scene, hasStyle, onChanged, onClose, onBuild, onToggle }:
         <div className="row">
           <h2>{t('scene.frame.title')}</h2>
           <span className="spacer" />
+          {/* Every explanation of the window lives behind its "?" (owner's notes 27.11). */}
+          <HelpButton
+            title={t('scene.frame.title')}
+            paragraphs={[t('scene.frame.hint'), t('scene.frame.short'), t('generate.help.done')]}
+          />
           <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
             ✕
           </button>
@@ -945,7 +951,6 @@ function FrameDialog({ scene, hasStyle, onChanged, onClose, onBuild, onToggle }:
                   <span className="faint small">
                     {busy === 'image' ? t('generate.image.busy') : t('generate.slot')}
                   </span>
-                  {busy !== 'image' && <span className="muted small">{t('scene.frame.hint')}</span>}
                 </span>
               )}
             </div>
@@ -989,7 +994,6 @@ function FrameDialog({ scene, hasStyle, onChanged, onClose, onBuild, onToggle }:
             />
           ) : (
             <div className="stack">
-              <p className="muted small">{t('scene.frame.short')}</p>
               {/* The scene's references go with the frame; one can be left out here, more are
                   taken in under the scene. */}
               <div className="stack field">

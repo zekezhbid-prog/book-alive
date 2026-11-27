@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useI18n } from '../i18n'
 
 interface Props {
@@ -12,37 +13,39 @@ interface Props {
   placeholder?: string
 }
 
-/** The two halves one under the other, English first. */
+/**
+ * One prompt field with a switch above it: English (what the image model gets) or the
+ * interface language. Both halves stay in memory and follow each other as before; only one
+ * is shown (owner's notes 27.11).
+ */
 export function TwoLangPrompt({ english, onEnglish, local, onLocal, both, busy, disabled, placeholder }: Props) {
   const { t } = useI18n()
+  const [half, setHalf] = useState<'english' | 'local'>('local')
+  const showLocal = both && half === 'local'
   return (
     <div className="two-lang">
-      <label className="two-lang-half">
-        {both && <span className="faint small">English</span>}
-        <textarea
-          className="input prompt"
-          value={english}
-          maxLength={4000}
-          disabled={disabled}
-          placeholder={placeholder}
-          onChange={(e) => onEnglish(e.target.value)}
-        />
-      </label>
       {both && (
-        <label className="two-lang-half">
-          <span className="faint small">
-            {t('generate.prompt.local')}
-            {busy && ` · ${t('generate.prompt.translating')}`}
-          </span>
-          <textarea
-            className="input prompt"
-            value={local}
-            maxLength={4000}
-            disabled={disabled}
-            onChange={(e) => onLocal(e.target.value)}
-          />
-        </label>
+        <div className="row two-lang-switch">
+          <div className="segmented small" role="group" aria-label={t('generate.prompt.lang')}>
+            <button className={showLocal ? '' : 'active'} aria-pressed={!showLocal} onClick={() => setHalf('english')}>
+              English
+            </button>
+            <button className={showLocal ? 'active' : ''} aria-pressed={showLocal} onClick={() => setHalf('local')}>
+              {t('generate.prompt.lang.local')}
+            </button>
+          </div>
+          {busy && <span className="faint small">{t('generate.prompt.translating')}</span>}
+        </div>
       )}
+      <textarea
+        className="input prompt"
+        value={showLocal ? local : english}
+        maxLength={4000}
+        disabled={disabled}
+        placeholder={placeholder}
+        aria-label={showLocal ? t('generate.prompt.lang.local') : 'English'}
+        onChange={(e) => (showLocal ? onLocal(e.target.value) : onEnglish(e.target.value))}
+      />
     </div>
   )
 }

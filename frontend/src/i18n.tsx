@@ -769,7 +769,27 @@ const ru = {
   'generate.views': 'Ракурсы',
   'generate.prompt.auto': 'Авто',
   'generate.prompt.manual': 'Вручную',
-  'generate.prompt.auto.hint': 'Авто: промпт соберётся сам из карточки, когда нажмёте «Сгенерировать». Снимите галочку, чтобы собрать и поправить его самому.',
+  'generate.prompt.auto.hint':
+    'Промпт. «Собрать промпт» — модель напишет его по карточке, его можно поправить до рисования. Галочка «Авто»: если поле пустое, «Сгенерировать» сначала соберёт промпт в поле, потом нарисует по нему. Без галочки напишите промпт сами или соберите его кнопкой.',
+  'generate.prompt.placeholder.auto': 'Пусто — промпт соберётся сам при «Сгенерировать». Или напишите свой.',
+  'generate.prompt.lang': 'Язык промпта',
+  'generate.prompt.lang.local': 'Русский',
+  'generate.help.lang':
+    'Над полем промпта переключатель языка: English — то, что получит модель картинок, «Русский» — перевод для чтения. Правьте любой: второй подстроится сам через пару секунд после того, как перестанете печатать.',
+  'generate.help.done':
+    'Готовая картинка открывается нажатием на неё. Её промпт показан приглушённо: его можно поправить, тогда картинка нарисуется заново с теми же референсами. Чаще удобнее «Замечание»: что поправить — и эта картинка будет улучшена. У картинки, загруженной файлом, промпта нет, только замечание.',
+  'gallery.help.paste':
+    'Свой референс: «Добавить референс» → файл или вставка из буфера; можно и просто Ctrl+V в окне.',
+  'help.open': 'Подсказка',
+  'generate.step.help.title': 'Что дальше',
+  'generate.step.help.refs':
+    'Следующий ракурс рисуется по тому же промпту. Референсами пойдут эта картинка и другие уже готовые ракурсы этого образа, а также ваши загруженные референсы, если были, — чтобы лицо и одежда совпадали.',
+  'generate.step.help.next':
+    '«ОК, дальше» — картинка остаётся, сразу рисуется следующий ракурс. Стрелками ‹ › можно выбрать, какой ракурс рисовать следующим. Когда ракурсов не осталось, кнопка называется «ОК, готово» или ведёт к следующему образу.',
+  'generate.step.help.redraw':
+    '«Перерисовать» — откроется поле: что поправить. Эта картинка удалится, а новая нарисуется по промпту с вашим замечанием и с теми же референсами.',
+  'generate.step.help.prompt': 'Промпт под картинкой можно поправить: правка пойдёт и в перерисовку, и в следующие ракурсы.',
+  'generate.step.help.cancel': '«Отмена» — картинка удаляется, рисование набора останавливается.',
   'generate.prompt.last': 'Показать промпт',
   'generate.views.hint': 'Ракурсы рисуются по одному: после каждого выберите «ОК, дальше» (ракурс можно перелистнуть) или «Перерисовать».',
   'generate.slot.show': 'Показать крупно',
@@ -838,12 +858,14 @@ const ru = {
   'scene.enrich.wishes': 'Что добавить? Можно оставить пустым — модель дополнит сама.',
   'tabs.images': 'Изображения',
   'images.title': 'Изображения',
-  'images.hint': 'Иллюстрации к книге. Добавьте карточку и скажите, что нарисовать: модель найдёт место в книге, возьмёт картинки персонажей и мест как референсы и нарисует.',
+  'images.hint': 'Нажмите «Добавить» и опишите, что нарисовать.',
+  'images.help':
+    'Иллюстрации к книге. Добавьте карточку и скажите текстом или голосом, что нарисовать: модель найдёт это место в книге, возьмёт готовые референсы персонажей, мест и предметов и нарисует. «Выбрать из книги» — глава, а в ней моменты, которые стоит нарисовать: нажатие ставит описание момента в поле запроса. Готовую картинку можно поправить следующим сообщением: что изменить.',
   'images.add': 'Добавить',
   'images.empty': 'Пока ни одной картинки: нажмите «Добавить».',
   'images.untitled': 'Новая картинка',
   'images.delete.confirm': 'Удалить эту карточку с диалогом? Нарисованные картинки останутся в проекте.',
-  'images.start': 'Опишите текстом или голосом, что нарисовать. Например: «Журей встречает Зихтинку на скрещении дорог».',
+  'images.start': 'Опишите текстом или голосом, что нарисовать.',
   'images.cast': 'В кадре',
   'images.thinking': 'Ищу это место в книге…',
   'images.drawing': 'Рисую…',
@@ -1782,7 +1804,26 @@ const en: Record<keyof typeof ru, string> = {
   'generate.views': 'Views',
   'generate.prompt.auto': 'Auto',
   'generate.prompt.manual': 'By hand',
-  'generate.prompt.auto.hint': 'Auto: the prompt is written from the card when you press “Generate”. Untick to write and edit it yourself.',
+  'generate.prompt.auto.hint':
+    'The prompt. “Collect prompt” has the model write it from the card; edit it before drawing if you like. “Auto”: with the field empty, “Generate” first writes the prompt into it, then draws from it. Without “Auto”, write the prompt yourself or collect it with the button.',
+  'generate.prompt.placeholder.auto': 'Empty: the prompt is written when you press “Generate”. Or write your own.',
+  'generate.prompt.lang': 'Prompt language',
+  'generate.prompt.lang.local': 'Interface language',
+  'generate.help.lang':
+    'Above the prompt field is a language switch: English is what the image model gets, the other is a translation to read. Edit either one: the other follows a couple of seconds after you stop typing.',
+  'generate.help.done':
+    'A finished picture opens with a click on it. Its prompt is shown faded: edit it and the picture is drawn anew from the same references. A remark is usually handier: say what to fix and this picture is improved. A picture put in from a file has no prompt, only the remark.',
+  'gallery.help.paste': 'Your own reference: “Add reference” → a file or a paste from the clipboard; plain Ctrl+V in the window works too.',
+  'help.open': 'Help',
+  'generate.step.help.title': 'What happens next',
+  'generate.step.help.refs':
+    'The next view is drawn from the same prompt. Its references are this picture and the other finished views of this look, plus your own references if you added any, so the face and clothes match.',
+  'generate.step.help.next':
+    '“OK, next” keeps the picture and draws the next view at once. The ‹ › arrows choose which view comes next. When no view is left, the button reads “OK, done” or moves on to the next look.',
+  'generate.step.help.redraw':
+    '“Redraw” opens a field: what to fix. This picture is deleted and a new one is drawn from the prompt with your remark and the same references.',
+  'generate.step.help.prompt': 'The prompt under the picture can be edited: the edit goes into the redraw and into the next views.',
+  'generate.step.help.cancel': '“Cancel” deletes the picture and stops drawing the set.',
   'generate.prompt.last': 'Show the prompt',
   'generate.views.hint': 'Views are drawn one at a time: after each one choose “OK, next” (the view can be changed with the arrows) or “Redraw”.',
   'generate.slot.show': 'Show large',
@@ -1852,12 +1893,14 @@ const en: Record<keyof typeof ru, string> = {
   'scene.enrich.wishes': 'What to add? May stay empty: the model adds on its own.',
   'tabs.images': 'Pictures',
   'images.title': 'Pictures',
-  'images.hint': 'Illustrations of the book. Add a card and say what to draw: the model finds the place in the book, takes the pictures of the characters and places as references and draws it.',
+  'images.hint': 'Press “Add” and say what to draw.',
+  'images.help':
+    'Illustrations of the book. Add a card and say in words or by voice what to draw: the model finds the place in the book, takes the finished references of the characters, places and objects and draws it. “Pick from the book” offers a chapter, then moments of it worth a picture: a press puts the moment into the request box. To fix a finished picture, say in the next message what to change.',
   'images.add': 'Add',
   'images.empty': 'No pictures yet: press “Add”.',
   'images.untitled': 'New picture',
   'images.delete.confirm': 'Delete this card with its dialogue? The pictures drawn stay in the project.',
-  'images.start': 'Say in words or by voice what to draw. For example: “Zhurei meets Zikhtinka at the crossroads”.',
+  'images.start': 'Say in words or by voice what to draw.',
   'images.cast': 'In the picture',
   'images.thinking': 'Looking for this place in the book…',
   'images.drawing': 'Drawing…',

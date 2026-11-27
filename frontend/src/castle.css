@@ -449,6 +449,20 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   .workspace.reading-closed .nav-list { max-height: none; }
 }
 
+/* ---------- 27.11: help behind "?", one prompt field, the remark first ---------- */
+.help-overlay { z-index: 70; }
+.help-dialog { width: min(520px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.help-body p { margin: 0; line-height: 1.55; color: var(--text); }
+.two-lang-switch { gap: 10px; }
+.two-lang-switch .segmented button { padding: 4px 12px; font-size: 13px; }
+.two-lang > textarea { flex: 1; min-height: 0; resize: none; }
+.prompt-box { height: 200px; }
+/* A finished picture's prompt: editable, but it does not ask to be typed in. */
+.redo-prompt.quiet { color: var(--muted); background: transparent; border-color: rgba(120, 96, 58, 0.25); box-shadow: none; }
+.redo-prompt.quiet:focus { color: var(--text); border-color: var(--accent-line); }
+.remark-field > span { color: var(--accent); font-weight: 700; }
+.remark-field textarea { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line), 0 0 14px rgba(220, 184, 102, 0.12); }
+
 /* ---------- 27.11: windows fit a phone's width, no sideways scroll ---------- */
 @media (max-width: 640px) {
   .overlay { padding: 10px; }

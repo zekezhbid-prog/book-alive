@@ -18,6 +18,7 @@ import { MicButton } from './MicButton'
 import { zoomLink } from './Lightbox'
 import { AutoTextarea } from './AutoTextarea'
 import { TwoLangPrompt } from './TwoLangPrompt'
+import { HelpButton } from './HelpButton'
 import { useTwoLang } from '../twoLang'
 
 interface Props {
@@ -381,6 +382,8 @@ export function ImageDialog({
   const [look, setLook] = useState('')
   // A place or object: the user's wish for the next picture ("a view from above").
   const [note, setNote] = useState('')
+  // The wish the prompt in the field was written with.
+  const collectedNote = useRef('')
   const [chapter, setChapter] = useState('')
   const [prompt, setPrompt] = useState('')
   // Square unless the user picks another shape (owner's notes 26.11).
@@ -449,7 +452,7 @@ export function ImageDialog({
   const openViews = (except = '') =>
     (withAngles ? SET_ORDER : placeViews.map((v) => v.key)).filter((v) => v !== except && !has(v))
   // The prompt in English and in the interface language, wherever it can be edited.
-  const twoLang = useTwoLang(entityId, prompt, setPrompt, !autoPrompt || !!faceCheck, setError)
+  const twoLang = useTwoLang(entityId, prompt, setPrompt, true, setError)
 
   const isMain = mode === 'base'
   // A filled base slot or tile in view: only looked at or deleted, never drawn over.
@@ -500,6 +503,7 @@ export function ImageDialog({
         note: withAngles ? '' : note.trim(),
       })
       setPrompt(written.prompt)
+      collectedNote.current = withAngles ? '' : note.trim()
       return written
     } catch (e) {
       setError(errorText(t, e))
@@ -665,10 +669,14 @@ export function ImageDialog({
     const from = refLooks.find((v) => v.key === refLook)
     const fromImage = from && latest(allBases.filter((b) => b.variant === from.key), orderOf(from.shape)[0])
     if (fromImage) reference_ids = [fromImage.id, ...reference_ids].slice(0, 3)
-    // Automatic prompt: written quietly right before drawing, nothing to check in between.
-    // By hand: the English half takes in the last edit of the translation first.
-    let text = autoPrompt ? prompt : await twoLang.flush()
-    if (autoPrompt) {
+    // The English half takes in the last edit of the translation first. An empty field under
+    // "Auto" is filled by the model right before drawing, and the user sees what it wrote.
+    let text = await twoLang.flush()
+    // A place's wish for the next picture changed since the prompt was written: the prompt
+    // must take it in, so "Auto" writes it again.
+    const newWish = !withAngles && note.trim() !== collectedNote.current
+    if (!text.trim() || (autoPrompt && newWish)) {
+      if (!autoPrompt) return setBusy('')
       setBusy('prompt')
       const written = await collect(reference_ids, lookNow?.key ?? '')
       if (!written) return setBusy('')
@@ -696,6 +704,7 @@ export function ImageDialog({
       setRemark('')
       const after = asSet ? nextLook() : null
       if (after) {
+        setPrompt('')
         setVariantKey(after.key)
         setRefLook('')
         setCurrent(null)
@@ -939,10 +948,18 @@ export function ImageDialog({
     setNextView(stepChoices[(at + by + stepChoices.length) % stepChoices.length])
   }
 
-  // The full explanation of the form: in the empty picture, or on hover over "Generate".
-  const longHint = asSet
-    ? `${t('generate.hint.base_set')} ${t('generate.views.hint')}`
-    : t(withAngles ? 'generate.hint.main' : 'generate.hint.place')
+  // Every explanation of the window lives behind its "?" (owner's notes 27.11).
+  const help = [
+    asSet
+      ? `${t('generate.hint.base_set')} ${t('generate.views.hint')}`
+      : t(withAngles ? 'generate.hint.main' : 'generate.hint.place'),
+    `${t('gallery.samples')}: ${t(asSet ? 'gallery.samples.hint.set' : 'gallery.samples.hint')}`,
+    t('gallery.help.paste'),
+    t('generate.prompt.auto.hint'),
+    t('generate.help.lang'),
+    asSet ? t('variants.ref.hint') : '',
+    t('generate.help.done'),
+  ]
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -950,6 +967,7 @@ export function ImageDialog({
         <div className="row">
           <h2>{t('gallery.settings')}</h2>
           <span className="spacer" />
+          <HelpButton title={t('gallery.settings')} paragraphs={help} />
           <button className="btn ghost small icon" title={t('app.close')} aria-label={t('app.close')} onClick={onClose}>
             ✕
           </button>
@@ -970,7 +988,6 @@ export function ImageDialog({
             ) : (
               <span className="stack slot-hint">
                 <span className="faint small">{busy === 'image' ? t('generate.image.busy') : t('generate.slot')}</span>
-                {busy !== 'image' && <span className="muted small">{longHint}</span>}
               </span>
             )}
           </div>
@@ -985,6 +1002,8 @@ export function ImageDialog({
                     disabled={busy !== '' || !!pending}
                     title={v.description}
                     onClick={() => {
+                      // Each look has its own prompt: the field of the last one is not reused.
+                      if (v.key !== variantKey) setPrompt('')
                       setVariantKey(v.key)
                       setCurrent(null)
                       setInspected(null)
@@ -1167,13 +1186,6 @@ export function ImageDialog({
               ))}
             </div>
           )}
-          {/* What the picture in view was drawn from; a picture put in has no prompt. */}
-          {!peek && !viewing && (shown?.prompt || pickedLook?.prompt) && (
-            <details key={(shown ?? pickedLook)!.id} className="shown-prompt">
-              <summary className="muted small">{t('gallery.prompt.show')}</summary>
-              <p className="small prompt-last">{(shown ?? pickedLook)!.prompt}</p>
-            </details>
-          )}
           </div>
           {viewing ? (
             <RedoPanel
@@ -1190,10 +1202,8 @@ export function ImageDialog({
             />
           ) : (
           <div className="stack">
-            {/* Pictures in context moved to the "Pictures" section (owner's notes 25.11). The
-                long explanation sits in the empty picture or on the "Generate" button; here only
-                a line or two (owner's notes 26.11). */}
-            <p className="muted small">{t(asSet ? 'generate.short.set' : 'generate.short.place')}</p>
+            {/* Pictures in context moved to the "Pictures" section (owner's notes 25.11). How
+                the window works is told behind the "?" (owner's notes 27.11). */}
             {/* The user's own samples. For a set: the AI puts the fitting ones into slots and
                 draws the rest from them; once a view is there, the set is drawn from it. */}
               {samplesAllowed && (
@@ -1232,14 +1242,12 @@ export function ImageDialog({
                           <CopyIcon />
                           {t('gallery.paste')}
                         </button>
-                        <span className="faint small">{t('gallery.paste.ctrlv')}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 {samples.length > 0 && (
                   <>
-                    <p className="faint small">{t(asSet ? 'gallery.samples.hint.set' : 'gallery.samples.hint')}</p>
                     <div className="sample-strip">
                       {samples.map((sample) => (
                         <div key={sample.url} className={`sample ${peek === sample.url ? 'shown' : ''} ${sample.odd ? 'odd' : ''}`}>
@@ -1269,9 +1277,9 @@ export function ImageDialog({
             <div className="stack field">
               <div className="row">
                 <span className="small muted">{t('generate.prompt.label')}</span>
-                {/* Auto: pressing "Generate" writes the prompt and draws at once. Unticked: the
-                    prompt is written first and shown for editing, drawing is the next press. */}
-                <label className="small auto-prompt" title={t('generate.prompt.auto.hint')}>
+                {/* Auto: "Generate" with an empty field writes the prompt into it, then draws.
+                    Unticked: the user writes it or presses "Collect" first (owner's notes 27.11). */}
+                <label className="small auto-prompt">
                   <input
                     type="checkbox"
                     checked={autoPrompt}
@@ -1281,13 +1289,8 @@ export function ImageDialog({
                   {t('generate.prompt.auto')}
                 </label>
                 <span className="spacer" />
-                {/* Hidden, not removed, under "Auto": the row keeps its height. */}
-                <button
-                  className="btn ghost small"
-                  disabled={busy !== '' || !ready || autoPrompt}
-                  style={{ visibility: autoPrompt ? 'hidden' : 'visible' }}
-                  onClick={writePrompt}
-                >
+                {/* Always at hand: the prompt can be seen before anything is drawn. */}
+                <button className="btn ghost small" disabled={busy !== '' || !ready} onClick={writePrompt}>
                   <SparklesIcon />
                   {busy === 'prompt' ? t('generate.prompt.busy') : t('generate.prompt')}
                 </button>
@@ -1301,29 +1304,18 @@ export function ImageDialog({
                   <CopyIcon />
                 </button>
               </div>
-              {/* One box of fixed height either way: ticking "Auto" moves nothing in the form. */}
-              <div className={`prompt-box ${twoLang.both ? 'both' : ''}`}>
-                {autoPrompt ? (
-                  <div className="stack prompt-auto">
-                    <p className="faint small">{t('generate.prompt.auto.note')}</p>
-                    {prompt && (
-                      <details>
-                        <summary className="muted small">{t('generate.prompt.last')}</summary>
-                        <p className="small prompt-last">{prompt}</p>
-                      </details>
-                    )}
-                  </div>
-                ) : (
-                  <TwoLangPrompt
-                    english={prompt}
-                    onEnglish={setPrompt}
-                    local={twoLang.local}
-                    onLocal={twoLang.setLocal}
-                    both={twoLang.both}
-                    busy={twoLang.busy}
-                    placeholder={t('generate.prompt.placeholder')}
-                  />
-                )}
+              {/* One field, always open; ticking "Auto" moves nothing in the form. */}
+              <div className="prompt-box">
+                <TwoLangPrompt
+                  english={prompt}
+                  onEnglish={setPrompt}
+                  local={twoLang.local}
+                  onLocal={twoLang.setLocal}
+                  both={twoLang.both}
+                  busy={twoLang.busy}
+                  disabled={busy !== ''}
+                  placeholder={t(autoPrompt ? 'generate.prompt.placeholder.auto' : 'generate.prompt.placeholder')}
+                />
               </div>
             </div>
             {/* A place or object: the wish for the next picture, under the prompt as for
@@ -1359,7 +1351,6 @@ export function ImageDialog({
           <button
             className="btn primary generate-big"
             disabled={busy !== '' || !hasStyle || (!autoPrompt && !prompt.trim()) || !ready}
-            title={longHint}
             onClick={draw}
           >
             <SparklesIcon />
@@ -1397,6 +1388,16 @@ export function ImageDialog({
                   view: faceCheck.angle ? viewLabel(faceCheck.angle) : t('generate.step.free'),
                 })}
               </h3>
+              <HelpButton
+                title={t('generate.step.help.title')}
+                paragraphs={[
+                  t('generate.step.help.refs'),
+                  t('generate.step.help.next'),
+                  t('generate.step.help.redraw'),
+                  t('generate.step.help.prompt'),
+                  t('generate.step.help.cancel'),
+                ]}
+              />
               <button
                 className="btn ghost small icon"
                 title={t('app.cancel')}
@@ -1543,7 +1544,6 @@ export function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoP
 
   return (
     <div className="stack picture-info">
-      <p className="muted small">{t(image.prompt ? 'generate.short.done' : 'generate.short.upload')}</p>
       <div className="stack field">
         <span className="small muted">{t('generate.references.used')}</span>
         {urls.length ? (
@@ -1559,20 +1559,10 @@ export function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoP
           <p className="faint small">{t('generate.references.none')}</p>
         )}
       </div>
-      <label className="stack field">
-        <span className="small muted">{t('generate.prompt.label')}</span>
-        <textarea
-          className="input small redo-prompt"
-          value={prompt}
-          maxLength={4000}
-          disabled={busy || remarked}
-          title={remarked ? t('generate.remark.placeholder') : undefined}
-          placeholder={t('generate.redo.prompt.placeholder')}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-      </label>
-      <div className="stack field">
-        <span className="small muted">{t('generate.remark')}</span>
+      {/* The remark is what the user is meant to write; the prompt stays editable but faded,
+          and a picture put in from a file has none (owner's notes 27.11). */}
+      <div className="stack field remark-field">
+        <span className="small">{t('generate.remark')}</span>
         <div className="row">
           <AutoTextarea
             className="input small grow"
@@ -1590,6 +1580,20 @@ export function RedoPanel({ image, hasStyle, disabled, onDone, onDelete }: RedoP
           />
         </div>
       </div>
+      {image.prompt && (
+      <label className="stack field">
+        <span className="small muted">{t('generate.prompt.label')}</span>
+        <textarea
+          className="input small redo-prompt quiet"
+          value={prompt}
+          maxLength={4000}
+          disabled={busy || remarked}
+          title={remarked ? t('generate.remark.placeholder') : undefined}
+          placeholder={t('generate.redo.prompt.placeholder')}
+          onChange={(e) => setPrompt(e.target.value)}
+        />
+      </label>
+      )}
       <select
         className="input small"
         value={size}
