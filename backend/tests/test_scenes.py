@@ -6,7 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_engine
-from app.models import Chapter, Entity, EntityFact, Image, Project, Scene, new_id, text_hash
+from app.models import (
+    Chapter,
+    Entity,
+    EntityFact,
+    Image,
+    Project,
+    Scene,
+    SceneSplit,
+    new_id,
+    text_hash,
+)
 from app.scenes import service
 from tests.test_images import PNG
 
@@ -50,6 +60,12 @@ class FakeModel:
     def invoke(self, operation, messages):
         self.system, self.context = messages[0].content, messages[1].content
         return " A woman hands over a silver key. "
+
+
+def split(session, model, chapter):
+    """Every proposal of a new split picked: the cards the old one-step split made."""
+    proposals = service.propose_scenes(session, model, chapter).proposals
+    return [service.scene_from_proposal(session, chapter, p) for p in proposals]
 
 
 @pytest.fixture
@@ -122,7 +138,7 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
             },
         ]
     )
-    scenes = service.split_chapter(session, model, book.mill)
+    scenes = split(session, model, book.mill)
     assert [(s.paragraph_from, s.paragraph_to, s.vivid) for s in scenes] == [
         (0, 2, False),
         (3, 4, True),
@@ -132,17 +148,15 @@ def test_model_boundaries_are_forced_to_tile_the_chapter(session, book):
     assert names(scenes[0]) == {"Ростан", "Лана", "Мельница"}
     assert names(scenes[1]) == {"Лана", "Мельница"}
 
-    # Splitting again replaces automatic scenes and keeps the ones marked by hand.
+    # A new split only proposes: the cards made before and the ones marked by hand stay.
     manual = service.mark_scene(session, book.mill, 3, 3, "")
     assert manual.title == "Она молча протянула ему серебряный ключ."
-    service.split_chapter(
+    service.propose_scenes(
         session, FakeModel([{"from": 0, "to": 4, "title": "Вся глава"}]), book.mill
     )
     kept = session.query(Scene).filter_by(chapter_id=book.mill.id).all()
-    assert sorted((s.origin, s.title) for s in kept) == [
-        ("auto", "Вся глава"),
-        ("manual", "Она молча протянула ему серебряный ключ."),
-    ]
+    assert len(kept) == 3
+    assert session.get(SceneSplit, book.mill.id).proposals[0]["title"] == "Вся глава"
 
 
 def test_names_in_a_title_line_are_not_the_scene_cast(session, book):
@@ -152,7 +166,7 @@ def test_names_in_a_title_line_are_not_the_scene_cast(session, book):
     session.add(chapter)
     session.commit()
     model = FakeModel([{"from": 0, "to": 1, "title": "Дорога", "characters": ["Лана", "Ростан"]}])
-    [scene] = service.split_chapter(session, model, chapter)
+    [scene] = split(session, model, chapter)
     assert {session.get(Entity, i).name for i in scene.entity_ids} == {"Ростан"}
     assert service.is_heading("Пилигримы Цирона", "Пилигримы Цирона MAIN", "")
     assert not service.is_heading("Цирон!", "Пилигримы Цирона MAIN", "")
@@ -177,7 +191,7 @@ def test_a_one_line_lead_in_is_not_a_scene_of_its_own(session, book):
             {"from": 2, "to": 2, "title": "Зорка на скрыжаванні", "summary": "Зорка падае."},
         ]
     )
-    [scene] = service.split_chapter(session, model, chapter)
+    [scene] = split(session, model, chapter)
     assert (scene.paragraph_from, scene.paragraph_to) == (0, 2)
     assert scene.title == "Зорка на скрыжаванні"
     assert "Do not make a scene of a passage that only announces" in service.SPLIT_SYSTEM
@@ -191,7 +205,7 @@ def test_short_dialogue_lines_join_one_at_a_time_not_in_a_chain(session, book):
     session.add(chapter)
     session.commit()
     model = FakeModel([{"from": i, "to": i, "title": f"S{i}"} for i in range(7)])
-    scenes = service.split_chapter(session, model, chapter)
+    scenes = split(session, model, chapter)
     assert [(s.paragraph_from, s.paragraph_to) for s in scenes] == [(0, 1), (2, 2), (3, 4), (5, 6)]
 
 
@@ -378,27 +392,48 @@ def test_the_user_picks_the_scene_references_by_hand(client, book):
     assert [r["image_id"] for r in back["references"]] == [main, look]
 
 
-def test_a_split_chapter_shows_its_scenes_and_splits_again_only_when_asked(
-    client, book, monkeypatch
+def test_a_chapter_is_split_once_and_a_card_is_made_from_the_scene_picked(
+    client, session, book, monkeypatch
 ):
-    # Owner's notes 27.11 (14): a second press made the scenes again; now the chapter's
-    # scenes are shown, and a new split needs `again` (the user confirmed it).
-    model = FakeModel([{"from": 0, "to": 4, "title": "Мельница"}])
-    monkeypatch.setattr("app.api.scenes._text_model", lambda *a: model)
+    # Owner's notes 27.11 (14, 25): the split is kept and shown again without the model; a
+    # card is made only for the proposal the user picks; a new split needs `again`.
+    model = FakeModel(
+        [{"from": 0, "to": 1, "title": "Мельница"}, {"from": 2, "to": 4, "title": "Ключ"}]
+    )
+    calls = []
+    monkeypatch.setattr("app.api.scenes._text_model", lambda *a: calls.append(1) or model)
     url = f"/api/chapters/{book.mill.id}/scenes"
-    estimate = client.get(f"{url}/estimate").json()
-    assert (estimate["existing"], estimate["first_scene_id"]) == (0, "")
+    assert client.get(f"{url}/proposals").json() == {
+        "chapter_id": book.mill.id,
+        "exists": False,
+        "stale": False,
+        "items": [],
+    }
+    assert client.get(f"{url}/estimate").json()["existing"] == 0
 
     made = client.post(f"{url}/split").json()
-    estimate = client.get(f"{url}/estimate").json()
-    assert (estimate["existing"], estimate["first_scene_id"]) == (len(made), made[0]["id"])
+    assert made["exists"] and not made["stale"]
+    assert [(p["title"], p["scene_id"]) for p in made["items"]] == [("Мельница", ""), ("Ключ", "")]
+    assert client.get(f"/api/projects/{book.id}/scenes").json() == []  # no card yet
+    assert client.get(f"{url}/estimate").json()["existing"] == 2
 
-    again = client.post(f"{url}/split")
-    assert again.status_code == 409 and again.json()["detail"] == "scenes_already_split"
-    listed = client.get(f"/api/projects/{book.id}/scenes").json()
-    assert [s["id"] for s in listed] == [s["id"] for s in made]  # nothing made twice
+    card = client.post(f"{url}/proposals/1").json()
+    assert (card["title"], card["paragraph_from"], card["paragraph_to"]) == ("Ключ", 2, 4)
+    assert client.post(f"{url}/proposals/1").json()["id"] == card["id"]  # not made twice
+    assert client.post(f"{url}/proposals/5").status_code == 404
 
-    remade = client.post(f"{url}/split", params={"again": True})
-    assert remade.status_code == 200
+    shown = client.post(f"{url}/split").json()
+    assert len(calls) == 1  # the kept split, no second call
+    assert [p["scene_id"] for p in shown["items"]] == ["", card["id"]]
+
+    model.scenes = [{"from": 0, "to": 4, "title": "Вся глава"}]
+    remade = client.post(f"{url}/split", params={"again": True}).json()
+    assert len(calls) == 2 and [p["title"] for p in remade["items"]] == ["Вся глава"]
     listed = client.get(f"/api/projects/{book.id}/scenes").json()
-    assert [s["id"] for s in listed] == [s["id"] for s in remade.json()]
+    assert [s["id"] for s in listed] == [card["id"]]  # the card made before stays
+
+    # The text changed since: the kept split is stale and no card is made from it.
+    session.get(Chapter, book.mill.id).content_hash = "changed"
+    session.commit()
+    assert client.get(f"{url}/proposals").json()["stale"]
+    assert client.post(f"{url}/proposals/0").json()["detail"] == "proposals_stale"

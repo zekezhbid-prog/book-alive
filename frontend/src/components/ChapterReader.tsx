@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, sectionOf, type Chapter, type EntityKind, type Project } from '../api'
 import { useI18n, type MessageKey } from '../i18n'
 import { markMatches } from '../markMatches'
-import { chooseSplit } from '../sceneSplit'
+import SceneProposalsDialog from './SceneProposals'
 import { ChevronIcon, ClapperIcon, CloseIcon, LockIcon } from './icons'
 
 export interface NamedEntity {
@@ -76,20 +76,6 @@ export default function ChapterReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlighted, chapter.id])
 
-  const splitIntoScenes = async () => {
-    try {
-      const choice = await chooseSplit(t, chapter.id)
-      if (!choice) return
-      if ('show' in choice) return navigate(`/projects/${project.id}/scenes/${choice.show}`)
-      setSplitting(true)
-      const scenes = await api.splitScenes(chapter.id, choice.again)
-      navigate(`/projects/${project.id}/scenes/${scenes[0]?.id ?? ''}`)
-    } catch (e) {
-      onError(e)
-    } finally {
-      setSplitting(false)
-    }
-  }
   const readSelection = () => {
     const selection = window.getSelection()
     const paragraphOf = (node: Node | null) =>
@@ -129,14 +115,14 @@ export default function ChapterReader({
     </button>
   )
   // An icon, the name is the tooltip (owner's notes 27.11, item 24).
-  const splitLabel = splitting ? t('scenes.split.busy') : t('scenes.split')
+  const splitLabel = t('scenes.split')
   const splitButton = (
     <button
       className="btn ghost small icon"
       title={splitLabel}
       aria-label={splitLabel}
-      disabled={splitting || !paragraphs.length || chapter.private}
-      onClick={splitIntoScenes}
+      disabled={!paragraphs.length || chapter.private}
+      onClick={() => setSplitting(true)}
     >
       <ClapperIcon />
     </button>
@@ -194,6 +180,14 @@ export default function ChapterReader({
         <button className="btn primary floating" onMouseDown={(e) => e.preventDefault()} onClick={markScene}>
           {t('scenes.mark', { from: picked[0] + 1, to: picked[1] + 1 })}
         </button>
+      )}
+      {splitting && (
+        <SceneProposalsDialog
+          chapterId={chapter.id}
+          title={chapter.title}
+          onClose={() => setSplitting(false)}
+          onPicked={(sceneId) => navigate(`/projects/${project.id}/scenes/${sceneId}`)}
+        />
       )}
     </article>
   )

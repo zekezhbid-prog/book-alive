@@ -95,9 +95,25 @@ export interface ReviewChecks {
   checks: ReviewCheck[]
 }
 
-export interface PictureIdea {
+/** A scene the model proposed for a chapter; a card is made only when the user picks it. */
+export interface SceneProposal {
+  number: number
+  paragraph_from: number
+  paragraph_to: number
   title: string
-  description: string
+  summary: string
+  vivid: boolean
+  /** The card made from it before, or empty. */
+  scene_id: string
+}
+
+export interface SceneProposals {
+  chapter_id: string
+  /** False until the chapter is split once. */
+  exists: boolean
+  /** The chapter text changed since the split: split again before making a card. */
+  stale: boolean
+  items: SceneProposal[]
 }
 
 export interface ChapterBrief {
@@ -872,8 +888,6 @@ export const api = {
   drawIllustration: (id: string, size: ImageSize | '' = '') =>
     request<Illustration>('POST', `/illustrations/${id}/draw`, { size }),
   /** "Pick from the book": moments of a chapter worth a picture (3 to 20). */
-  pictureIdeas: (projectId: string, chapterId: string) =>
-    request<PictureIdea[]>('POST', `/projects/${projectId}/chapters/${chapterId}/picture-ideas`),
   /** `checked`: the looks were searched for once, the first drawing does not search again. */
   variants: (entityId: string) =>
     request<{ variants: Variant[]; checked: boolean }>('GET', `/entities/${entityId}/variants`),
@@ -934,13 +948,18 @@ export const api = {
   scene: (id: string) => request<Scene>('GET', `/scenes/${id}`),
   deleteScene: (id: string) => request<void>('DELETE', `/scenes/${id}`),
   splitEstimate: (chapterId: string) =>
-    request<{ input_tokens: number; output_tokens: number; existing: number; first_scene_id: string }>(
+    request<{ input_tokens: number; output_tokens: number; existing: number }>(
       'GET',
       `/chapters/${chapterId}/scenes/estimate`,
     ),
-  /** `again`: the chapter is split anew though it has scenes (the user confirmed it). */
+  sceneProposals: (chapterId: string) =>
+    request<SceneProposals>('GET', `/chapters/${chapterId}/scenes/proposals`),
+  /** A kept split comes back as it is; `again` asks the model anew (the user confirmed it). */
   splitScenes: (chapterId: string, again = false) =>
-    request<SceneBrief[]>('POST', `/chapters/${chapterId}/scenes/split${again ? '?again=true' : ''}`),
+    request<SceneProposals>('POST', `/chapters/${chapterId}/scenes/split${again ? '?again=true' : ''}`),
+  /** One proposed scene becomes a card (or the card made from it before). */
+  pickProposal: (chapterId: string, number: number) =>
+    request<SceneBrief>('POST', `/chapters/${chapterId}/scenes/proposals/${number}`),
   markScene: (chapterId: string, from: number, to: number) =>
     request<SceneBrief>('POST', `/chapters/${chapterId}/scenes`, {
       paragraph_from: from,

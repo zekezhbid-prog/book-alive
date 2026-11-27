@@ -429,6 +429,25 @@ class Scene(Base):
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 
+class SceneSplit(Base):
+    """The scenes the model proposed for a chapter, kept so neither "Split into scenes" nor
+    "Pick from the book" asks the model twice (owner's notes 27.11, items 14 and 25). A
+    proposal becomes a card only when the user picks it."""
+
+    __tablename__ = "scene_splits"
+
+    # Not a foreign key, like EntityFact: a chapter rolled back from a version keeps its id.
+    chapter_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # Paragraph numbers refer to the chapter text with this hash.
+    chapter_hash: Mapped[str] = mapped_column(String(64))
+    # [{"from", "to", "title", "summary", "vivid", "entity_ids"}], in the chapter's order
+    proposals: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
 class BetaReview(Base):
     """A beta reader's response to one chapter: a living review, not a list of mistakes.
     Kept with the chapter so the author can come back to it; the chapter's hash tells

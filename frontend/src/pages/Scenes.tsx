@@ -11,6 +11,7 @@ import {
   type Project,
   type Scene,
   type SceneBrief,
+  type SceneProposal,
 } from '../api'
 import CardGrid from '../components/CardGrid'
 import { RedoPanel } from '../components/Gallery'
@@ -25,7 +26,7 @@ import DescriptionEditor from '../components/DescriptionEditor'
 import { errorText, useI18n } from '../i18n'
 import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
-import { chooseSplit } from '../sceneSplit'
+import { ProposalList } from '../components/SceneProposals'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
 import {
   CheckIcon,
@@ -188,34 +189,30 @@ interface SplitProps {
   onDone: (firstSceneId: string | undefined) => void
 }
 
-/** Pick a chapter, see the price, then the AI splits it into scenes (as in the reader). */
+/** Pick a chapter, then one of its proposed scenes becomes a card (as in the reader). The
+ * chapter is split once, with the price asked first; later it shows the kept split. */
 function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
   const { t } = useI18n()
   const aiReady = useTextModelReady()
   const [chapterId, setChapterId] = useState(() => lastChapter(projectId, chapters))
-  const [busy, setBusy] = useState(false)
+  const [opened, setOpened] = useState(false)
   const [error, setError] = useState('')
-  const start = async () => {
+  const pick = async (p: SceneProposal) => {
     setError('')
+    if (p.scene_id) return onDone(p.scene_id)
     try {
-      const choice = await chooseSplit(t, chapterId)
-      if (!choice) return
-      if ('show' in choice) return onDone(choice.show)
-      setBusy(true)
-      const scenes = await api.splitScenes(chapterId, choice.again)
-      onDone(scenes[0]?.id)
+      onDone((await api.pickProposal(chapterId, p.number)).id)
     } catch (e) {
       setError(errorText(t, e))
-      setBusy(false)
     }
   }
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="dialog stack">
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="dialog stack scroll">
         <h2>{t('tiles.scene.split')}</h2>
         <label className="field">
           {t('tiles.scene.split.chapter')}
-          <select className="input" value={chapterId} disabled={busy} onChange={(e) => setChapterId(e.target.value)}>
+          <select className="input" value={chapterId} onChange={(e) => setChapterId(e.target.value)}>
             {chapters.map((chapter, index) => (
               <option key={chapter.id} value={chapter.id}>
                 {chapter.title || `${index + 1}. ${t('book.untitled')}`}
@@ -225,15 +222,22 @@ function SplitDialog({ projectId, chapters, onClose, onDone }: SplitProps) {
         </label>
         <AiNotice ready={aiReady} />
         {error && <p className="error">{error}</p>}
-        <div className="row">
-          <span className="spacer" />
-          <button className="btn" disabled={busy} onClick={onClose}>
-            {t('app.cancel')}
-          </button>
-          <button className="btn primary" disabled={busy || !chapterId} onClick={start}>
-            {busy ? t('scenes.split.busy') : t('scenes.split')}
-          </button>
-        </div>
+        {opened && chapterId ? (
+          <>
+            <p className="small faint">{t('scenes.proposals.hint')}</p>
+            <ProposalList chapterId={chapterId} confirm onPick={pick} />
+          </>
+        ) : (
+          <div className="row">
+            <span className="spacer" />
+            <button className="btn" onClick={onClose}>
+              {t('app.cancel')}
+            </button>
+            <button className="btn primary" disabled={!chapterId} onClick={() => setOpened(true)}>
+              {t('scenes.split')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

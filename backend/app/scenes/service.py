@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analysis.entities import norm
@@ -25,6 +25,8 @@ from app.models import (
     Image,
     Project,
     Scene,
+    SceneSplit,
+    now,
 )
 
 SPLIT_SYSTEM = """You divide one chapter of a book into scenes for a screen adaptation. \
@@ -176,9 +178,9 @@ def entities_in(session: Session, project_id: str, text: str, named: list[str]) 
     return found
 
 
-def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[Scene]:
-    """Ask the model for scene boundaries. Replaces the chapter's earlier automatic
-    scenes; scenes the user marked by hand stay."""
+def propose_scenes(session: Session, model: TextModel, chapter: Chapter) -> SceneSplit:
+    """Ask the model for scene boundaries and keep them as the chapter's proposals. No card
+    is made or removed here: the user picks a proposal (owner's notes 27.11, item 25)."""
     paragraphs = paragraphs_of(chapter)
     book = _project_title(session, chapter)
     numbered = "\n\n".join(
@@ -190,7 +192,6 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
         "split_scenes", [SystemMessage(SPLIT_SYSTEM), HumanMessage(numbered)], SceneDrafts
     )
     drafts = sorted(answer.scenes, key=lambda d: d.start)
-    session.execute(delete(Scene).where(Scene.chapter_id == chapter.id, Scene.origin == "auto"))
     # The model's numbers are a suggestion; the result must tile the chapter exactly.
     spans: list[tuple[int, int, SceneDraft]] = []
     cursor = 0
@@ -202,7 +203,7 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
         spans.append((cursor, end, draft))
         cursor = end + 1
     spans = _join_lead_ins(spans, paragraphs, book, chapter.title)
-    scenes: list[Scene] = []
+    proposals = []
     for start, end, draft in spans:
         text = _story_text(paragraphs[start : end + 1], book, chapter.title)
         # A name the model took from a title line is not someone in the scene either.
@@ -211,23 +212,55 @@ def split_chapter(session: Session, model: TextModel, chapter: Chapter) -> list[
             for n in [*draft.characters, draft.location]
             if not (_mentions(headings, n) and not _mentions(text, n))
         ]
-        scenes.append(
-            Scene(
-                project_id=chapter.project_id,
-                chapter_id=chapter.id,
-                chapter_hash=chapter.content_hash,
-                paragraph_from=start,
-                paragraph_to=end,
-                title=draft.title.strip()[:300],
-                summary=draft.summary.strip(),
-                vivid=draft.vivid,
-                origin="auto",
-                entity_ids=entities_in(session, chapter.project_id, text, named),
-            )
+        proposals.append(
+            {
+                "from": start,
+                "to": end,
+                "title": draft.title.strip()[:300],
+                "summary": draft.summary.strip(),
+                "vivid": draft.vivid,
+                "entity_ids": entities_in(session, chapter.project_id, text, named),
+            }
         )
-    session.add_all(scenes)
+    split = session.get(SceneSplit, chapter.id) or SceneSplit(
+        chapter_id=chapter.id, project_id=chapter.project_id
+    )
+    split.chapter_hash = chapter.content_hash
+    split.proposals = proposals
+    split.created_at = now()
+    session.add(split)
     session.commit()
-    return scenes
+    return split
+
+
+def scene_from_proposal(session: Session, chapter: Chapter, proposal: dict) -> Scene:
+    """The card of a proposal the user picked; picked twice, it is the same card."""
+    same = session.scalars(
+        select(Scene).where(
+            Scene.chapter_id == chapter.id,
+            Scene.chapter_hash == chapter.content_hash,
+            Scene.paragraph_from == proposal["from"],
+            Scene.paragraph_to == proposal["to"],
+            Scene.origin == "auto",
+        )
+    ).first()
+    if same is not None:
+        return same
+    scene = Scene(
+        project_id=chapter.project_id,
+        chapter_id=chapter.id,
+        chapter_hash=chapter.content_hash,
+        paragraph_from=proposal["from"],
+        paragraph_to=proposal["to"],
+        title=proposal["title"],
+        summary=proposal["summary"],
+        vivid=proposal["vivid"],
+        origin="auto",
+        entity_ids=list(proposal["entity_ids"]),
+    )
+    session.add(scene)
+    session.commit()
+    return scene
 
 
 # A stretch with less story than this is a line or two of lead-in, not a scene to film.

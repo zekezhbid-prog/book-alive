@@ -9,11 +9,11 @@ import {
   type Illustration,
   type IllustrationBrief,
   type ImageSize,
-  type PictureIdea,
   type Project,
 } from '../api'
 import ProjectHeader from '../components/ProjectHeader'
 import { Composer } from '../components/Composer'
+import { ProposalList } from '../components/SceneProposals'
 import { zoomLink } from '../components/Lightbox'
 import { BoldPlusIcon, BookIcon, ImageIcon, TrashIcon } from '../components/icons'
 import { HelpButton } from '../components/HelpButton'
@@ -332,50 +332,26 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   )
 }
 
-// Ideas of a chapter, kept while the page is open: the model is asked once per text.
-const ideasCache = new Map<string, PictureIdea[]>()
-
 interface PickerProps {
   project: Project
   onPick: (words: string) => void
   onClose: () => void
 }
 
-/** "Pick from the book": a chapter, then moments of it worth a picture; a press puts the
- * moment's description into the request box (owner's notes 26.11). */
+/** "Pick from the book": a chapter, then its scenes; a press puts the scene's description
+ * into the request box (owner's notes 26.11). The scenes are the chapter's one kept split,
+ * the same list "Split into scenes" shows (owner's notes 27.11, item 25). */
 function BookPicker({ project, onPick, onClose }: PickerProps) {
   const { t } = useI18n()
   const chapters = project.chapters.filter((c) => !c.private).sort((a, b) => a.position - b.position)
   const [chapter, setChapter] = useState<ChapterBrief | null>(null)
-  const [ideas, setIdeas] = useState<PictureIdea[] | null>(null)
-  const [error, setError] = useState('')
-  const shown = useRef('') // the chapter on screen: a late answer for another one is kept, not shown
-
-  const open = async (c: ChapterBrief) => {
-    const key = `${c.id}:${c.content_hash}`
-    shown.current = key
-    setChapter(c)
-    setError('')
-    setIdeas(ideasCache.get(key) ?? null)
-    if (ideasCache.has(key)) return
-    try {
-      const found = await api.pictureIdeas(project.id, c.id)
-      ideasCache.set(key, found)
-      if (shown.current === key) setIdeas(found)
-    } catch (e) {
-      if (shown.current === key) setError(errorText(t, e))
-    }
-  }
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog stack scroll">
         <div className="row">
           {chapter && (
-            <button className="btn ghost small icon" title={t('images.pick.back')} aria-label={t('images.pick.back')} onClick={() => {
-                shown.current = ''
-                setChapter(null)
-              }}>
+            <button className="btn ghost small icon" title={t('images.pick.back')} aria-label={t('images.pick.back')} onClick={() => setChapter(null)}>
               ‹
             </button>
           )}
@@ -388,32 +364,14 @@ function BookPicker({ project, onPick, onClose }: PickerProps) {
           <div className="stack">
             {chapters.length === 0 && <p className="faint">{t('images.pick.no_chapters')}</p>}
             {chapters.map((c) => (
-              <button key={c.id} className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => open(c)}>
+              <button key={c.id} className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => setChapter(c)}>
                 {c.title || t('book.untitled')}
               </button>
             ))}
           </div>
         )}
-        {chapter && error && <p className="error small">{error}</p>}
-        {chapter && !error && !ideas && <p className="muted">{t('images.pick.thinking')}</p>}
-        {chapter && ideas?.length === 0 && <p className="faint">{t('images.pick.none')}</p>}
-        {chapter && ideas && ideas.length > 0 && (
-          <div className="stack">
-            {ideas.map((idea, n) => (
-              <button
-                key={n}
-                className="btn ghost"
-                style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', height: 'auto' }}
-                onClick={() => onPick(idea.description)}
-              >
-                <span>
-                  <b>{idea.title}</b>
-                  <br />
-                  <span className="small muted">{idea.description}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+        {chapter && (
+          <ProposalList chapterId={chapter.id} confirm={false} onPick={(p) => onPick(p.summary || p.title)} />
         )}
       </div>
     </div>

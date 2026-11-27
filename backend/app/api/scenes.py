@@ -12,7 +12,7 @@ from app.db import SessionDep
 from app.images.generate import ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel, estimate_tokens
-from app.models import Chapter, Entity, Image, Project, Scene
+from app.models import Chapter, Entity, Image, Project, Scene, SceneSplit
 from app.scenes import export, service
 
 router = APIRouter(prefix="/api", tags=["scenes"])
@@ -87,8 +87,26 @@ class MarkRequest(BaseModel):
 class SplitEstimate(BaseModel):
     input_tokens: int
     output_tokens: int
-    existing: int  # automatic scenes that a new split will replace
-    first_scene_id: str = ""  # the first of them, to show instead of splitting again
+    existing: int  # scenes already proposed for the chapter: shown instead of a new split
+
+
+class ProposalOut(BaseModel):
+    number: int
+    paragraph_from: int
+    paragraph_to: int
+    title: str
+    summary: str
+    vivid: bool
+    scene_id: str = ""  # the card made from it, if the user picked it already
+
+
+class ProposalsOut(BaseModel):
+    chapter_id: str
+    # False until the chapter is split once.
+    exists: bool
+    # The chapter text changed since: the paragraph numbers no longer fit, split again.
+    stale: bool
+    items: list[ProposalOut]
 
 
 class PromptRequest(BaseModel):
@@ -220,46 +238,84 @@ def split_estimate(chapter_id: str, session: SessionDep) -> SplitEstimate:
         overhead = TextModel(session, chapter.project_id, "prompts").request_overhead
     except ModelNotConfigured:
         pass
-    existing = _auto_scenes(session, chapter)
+    split = session.get(SceneSplit, chapter.id)
     tokens = estimate_tokens(chapter.text)
     return SplitEstimate(
         input_tokens=tokens + estimate_tokens(service.SPLIT_SYSTEM) + overhead,
         output_tokens=max(300, tokens // 8),
-        existing=len(existing),
-        first_scene_id=existing[0].id if existing else "",
+        existing=len(split.proposals) if split else 0,
     )
 
 
-def _auto_scenes(session: SessionDep, chapter: Chapter) -> list[Scene]:
-    return list(
-        session.scalars(
-            select(Scene)
-            .where(Scene.chapter_id == chapter.id, Scene.origin == "auto")
-            .order_by(Scene.paragraph_from)
-        ).all()
-    )
+def _proposals(session: SessionDep, chapter: Chapter) -> ProposalsOut:
+    split = session.get(SceneSplit, chapter.id)
+    if split is None:
+        return ProposalsOut(chapter_id=chapter.id, exists=False, stale=False, items=[])
+    stale = split.chapter_hash != chapter.content_hash
+    cards = {
+        (s.paragraph_from, s.paragraph_to): s.id
+        for s in session.scalars(
+            select(Scene).where(
+                Scene.chapter_id == chapter.id,
+                Scene.chapter_hash == split.chapter_hash,
+                Scene.origin == "auto",
+            )
+        )
+    }
+    items = [
+        ProposalOut(
+            number=n,
+            paragraph_from=p["from"],
+            paragraph_to=p["to"],
+            title=p["title"],
+            summary=p["summary"],
+            vivid=p["vivid"],
+            scene_id="" if stale else cards.get((p["from"], p["to"]), ""),
+        )
+        for n, p in enumerate(split.proposals)
+    ]
+    return ProposalsOut(chapter_id=chapter.id, exists=True, stale=stale, items=items)
+
+
+@router.get("/chapters/{chapter_id}/scenes/proposals")
+def proposals(chapter_id: str, session: SessionDep) -> ProposalsOut:
+    return _proposals(session, _chapter(session, chapter_id))
 
 
 @router.post("/chapters/{chapter_id}/scenes/split")
-def split(chapter_id: str, session: SessionDep, again: bool = False) -> list[SceneBrief]:
-    """A chapter already split is not split again unless the user confirmed it (`again`):
-    a second press used to make its scenes anew (owner's notes 27.11)."""
+def split(chapter_id: str, session: SessionDep, again: bool = False) -> ProposalsOut:
+    """The scenes of a chapter are proposed once and kept: a later press shows them, and the
+    model is asked again only when the user confirmed it (`again`; owner's notes 27.11,
+    items 14 and 25). Cards already made from earlier proposals stay."""
     chapter = _chapter(session, chapter_id)
     if not chapter.text.strip():
         raise HTTPException(422, "empty_chapter")
     if chapter.private:
         raise HTTPException(403, "chapter_private")
-    if not again and _auto_scenes(session, chapter):
-        raise HTTPException(409, "scenes_already_split")
+    if not again and session.get(SceneSplit, chapter.id) is not None:
+        return _proposals(session, chapter)
     # Scenes are the light model's work, like their prompts (owner's notes 25.11).
     model = _text_model(session, chapter.project_id, "prompts")
     try:
-        scenes = service.split_chapter(session, model, chapter)
+        service.propose_scenes(session, model, chapter)
     except BadModelOutput as exc:
         raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
-    return [_brief(scene, chapter) for scene in scenes]
+    return _proposals(session, chapter)
+
+
+@router.post("/chapters/{chapter_id}/scenes/proposals/{number}")
+def pick_proposal(chapter_id: str, number: int, session: SessionDep) -> SceneBrief:
+    """One proposed scene becomes a card (or opens the card made from it before)."""
+    chapter = _chapter(session, chapter_id)
+    split = session.get(SceneSplit, chapter.id)
+    if split is None or not 0 <= number < len(split.proposals):
+        raise HTTPException(404, "proposal_not_found")
+    if split.chapter_hash != chapter.content_hash:
+        raise HTTPException(409, "proposals_stale")
+    scene = service.scene_from_proposal(session, chapter, split.proposals[number])
+    return _brief(scene, chapter)
 
 
 @router.post("/chapters/{chapter_id}/scenes")
