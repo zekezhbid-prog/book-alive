@@ -397,6 +397,27 @@ export function CheckIcon() {
   )
 }
 
+/** Leafing through chapters: one chevron for the neighbour, two for the first or last. */
+export function ChevronIcon({ dir, double }: { dir: 'left' | 'right'; double?: boolean }) {
+  const one = dir === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'
+  const two = dir === 'left' ? 'M18 6l-6 6 6 6M11 6l-6 6 6 6' : 'M6 6l6 6-6 6M13 6l6 6-6 6'
+  return (
+    <svg {...stroke}>
+      <path d={double ? two : one} />
+    </svg>
+  )
+}
+
+/** A padlock, shut or open: whether a chapter is closed to AI. */
+export function LockIcon({ open }: { open?: boolean }) {
+  return (
+    <svg {...stroke}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d={open ? 'M8 11V7a4 4 0 0 1 7.5-2' : 'M8 11V7a4 4 0 0 1 8 0v4'} />
+    </svg>
+  )
+}
+
 export function QuestionIcon() {
   return (
     <svg {...stroke}>

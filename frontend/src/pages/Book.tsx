@@ -163,7 +163,13 @@ export default function Book() {
         )}
       </ProjectHeader>
       {/* The writer's checks and versions open beside the text; the chat floats over all pages. */}
-      <div className={`workspace ${sidePanel ? 'with-side' : ''}`}>
+      {/* On a phone the reading view is a page of its own: a chapter named in the address
+          hides the list, the cross goes back to the list alone (owner's notes 27.11). */}
+      <div
+        className={`workspace ${sidePanel ? 'with-side' : ''} ${
+          writing ? '' : chapterId ? 'reading-open' : 'reading-closed'
+        }`}
+      >
         <ProjectNav
           project={project}
           activeChapter={activeId}

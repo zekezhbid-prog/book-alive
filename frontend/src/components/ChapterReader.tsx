@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, sectionOf, type Chapter, type EntityKind, type Project } from '../api'
-import { useI18n } from '../i18n'
+import { useI18n, type MessageKey } from '../i18n'
 import { markMatches } from '../markMatches'
 import { ask } from '../dialogs'
+import { ChevronIcon, CloseIcon, LockIcon } from './icons'
 
 export interface NamedEntity {
   id: string
@@ -49,8 +50,17 @@ export default function ChapterReader({
     return (text, key) => markMatches(text, found, (part, sub) => link(part, `${key}${sub}`))
   }, [project.id, names, found])
 
+  const article = useRef<HTMLElement>(null)
+  // Set by the arrows below: the bar was pinned (the text scrolled past the chapter's top).
+  const pinned = (useLocation().state as { pinned?: boolean } | null)?.pinned === true
   useEffect(() => {
-    target.current?.scrollIntoView({ block: 'center' })
+    if (target.current) return target.current.scrollIntoView({ block: 'center' })
+    // Leafed on from the pinned bar (owner's notes 27.11): while the next chapter loaded the
+    // page was short and the scroll fell back to the top; the new text starts under the bar.
+    if (pinned || (article.current?.getBoundingClientRect().top ?? 0) < 0)
+      article.current?.scrollIntoView({ block: 'start' })
+    // Only a new chapter or paragraph scrolls; `pinned` comes with the chapter's address.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlighted, chapter.id])
 
   const splitIntoScenes = async () => {
@@ -90,40 +100,71 @@ export default function ChapterReader({
       .then((scene) => navigate(`/projects/${project.id}/scenes/${scene.id}`), onError)
   }
 
+  const first = project.chapters[0]
+  const last = project.chapters[project.chapters.length - 1]
+  const go = (to: { id: string } | undefined) => {
+    if (!to || to.id === chapter.id) return
+    const pinnedNow = (article.current?.getBoundingClientRect().top ?? 0) < 0
+    navigate(`/projects/${project.id}/chapters/${to.id}`, { state: { pinned: pinnedNow } })
+  }
+  const leaf = (key: MessageKey, to: { id: string } | undefined, icon: ReactNode, label?: ReactNode) => (
+    <button
+      className="btn ghost small icon"
+      title={t(key)}
+      aria-label={t(key)}
+      disabled={!to || to.id === chapter.id}
+      onClick={() => go(to)}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+  const splitButton = (
+    <button
+      className="btn small"
+      disabled={splitting || !paragraphs.length || chapter.private}
+      onClick={splitIntoScenes}
+    >
+      {splitting ? t('scenes.split.busy') : t('scenes.split')}
+    </button>
+  )
+
   return (
-    <article className="chapter" onMouseUp={readSelection}>
-      <div className="chapter-tools">
-        <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
-        <span className="spacer" />
-        {/* Leaf through the book from the chapter itself (owner's notes 26.11). */}
+    <article className="chapter" ref={article} onMouseUp={readSelection}>
+      {/* On a phone this row stays pinned at the top while the text scrolls (owner's notes 27.11). */}
+      <div className="chapter-tools chapter-bar">
+        <span className="faint small desk-only">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
+        <span className="spacer desk-only" />
+        {/* Leaf through the book from the chapter itself (owner's notes 26.11 and 27.11). */}
+        {leaf('chapter.first', first, <ChevronIcon dir="left" double />)}
+        {leaf('chapter.prev', previous, <ChevronIcon dir="left" />, <span className="desk-only">{t('chapter.prev')}</span>)}
+        {leaf('chapter.next', next, <ChevronIcon dir="right" />, <span className="desk-only">{t('chapter.next')}</span>)}
+        {leaf('chapter.last', last, <ChevronIcon dir="right" double />)}
         <button
-          className="btn ghost small"
-          disabled={!previous}
-          onClick={() => previous && navigate(`/projects/${project.id}/chapters/${previous.id}`)}
-        >
-          ‹ {t('chapter.prev')}
-        </button>
-        <button
-          className="btn ghost small"
-          disabled={!next}
-          onClick={() => next && navigate(`/projects/${project.id}/chapters/${next.id}`)}
-        >
-          {t('chapter.next')} ›
-        </button>
-        <button
-          className="btn ghost small"
+          className={`btn ghost small icon ${chapter.private ? 'on' : ''}`}
           onClick={togglePrivate}
           title={t('chapter.private.hint')}
+          aria-label={chapter.private ? t('chapter.private.on') : t('chapter.private.off')}
+          aria-pressed={chapter.private}
         >
-          {chapter.private ? t('chapter.private.on') : t('chapter.private.off')}
+          <LockIcon open={!chapter.private} />
+          <span className="desk-only">{chapter.private ? t('chapter.private.on') : t('chapter.private.off')}</span>
         </button>
+        <span className="desk-only">{splitButton}</span>
+        <span className="spacer phone-only" />
         <button
-          className="btn small"
-          disabled={splitting || !paragraphs.length || chapter.private}
-          onClick={splitIntoScenes}
+          className="btn ghost small icon phone-only"
+          title={t('chapter.close')}
+          aria-label={t('chapter.close')}
+          onClick={() => navigate(`/projects/${project.id}`)}
         >
-          {splitting ? t('scenes.split.busy') : t('scenes.split')}
+          <CloseIcon />
         </button>
+      </div>
+      <div className="chapter-tools phone-only">
+        <span className="faint small">{t('app.chars', { n: chapter.chars.toLocaleString() })}</span>
+        <span className="spacer" />
+        {splitButton}
       </div>
       <h2 className="chapter-title">{chapter.title || t('book.untitled')}</h2>
       {paragraphs.map((paragraph, index) => (
