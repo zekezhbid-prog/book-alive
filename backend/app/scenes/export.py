@@ -158,6 +158,9 @@ def _context(
         lines.append(f"{kind}: {entity.name} - pictures: {', '.join(numbers) or 'none'}")
         lines += [f"  permanent: {t}" for t in permanent]
         lines += [f"  at this point: {t}" for t in state]
+        # How it moves, speaks and feels: the acting of each clip (owner's notes, item 28).
+        if entity.temper.strip():
+            lines.append(f"  nature: {' '.join(entity.temper.split())}")
     return "\n".join(lines)
 
 

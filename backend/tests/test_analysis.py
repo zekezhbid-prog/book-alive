@@ -82,6 +82,8 @@ class FakeModel:
             return schema(note=messages[-1].content.split("Wishes: ", 1)[1])
         if schema is analysis.Looks:
             return analysis.Looks(appearance="Облик: " + messages[-1].content.split("\n")[0])
+        if schema is analysis.Temper:
+            return analysis.Temper(temper="Нрав: " + messages[-1].content.split("\n")[0])
         if schema is analysis.GeneralTexts:
             # The check returns every description unchanged.
             found = re.findall(r"^\[(\d+)\] [^\n]*\n([^\n]*)", messages[-1].content, re.MULTILINE)
@@ -952,6 +954,19 @@ def test_the_looks_step_always_gets_the_age(session, project):
     assert "ему 14 лет" in listing and "who it is (for the age only): Сын рыбака." in listing
     assert "the sex and the age" in prompts.looks_system("character")
     assert "the sex and the age" not in prompts.looks_system("location")
+
+
+def test_a_character_gets_its_nature_from_the_general_facts(session, project, client):
+    model = ProfileModel()
+    run(session, project, model)
+    rostan = cast(session, project)["Ростан"]
+    assert rostan.temper.startswith("Нрав: Ростан")
+    assert client.get(f"/api/entities/{rostan.id}").json()["temper"] == rostan.temper
+    listing = analysis._temper_text(session, rostan)
+    assert "старый мельник, живёт один" in listing and "На нём был чёрный плащ" in listing
+    # One request per character with general facts; nobody else is asked.
+    assert model.calls.count("temper_characters") == 1
+    assert "how it moves" in prompts.temper_system()
 
 
 def test_user_can_send_a_card_into_question_and_back_and_runs_keep_it(client, session, project):

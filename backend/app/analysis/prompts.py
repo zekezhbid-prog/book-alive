@@ -6,7 +6,8 @@ from app.models import KIND_CHARACTER, KIND_ITEM
 PROMPT_VERSION = 9
 # A kind whose prompt changed alone: only its stored answers are re-read, the rest stay.
 # Places got a strict filter on 23.11.2026 (no vague spots, a part says what it is part of).
-KIND_VERSIONS = {"location": 10}
+# Characters: movement and usual mood in "profile" for the "Character" section (27.11.2026).
+KIND_VERSIONS = {"location": 10, "character": 10}
 
 
 def prompt_version(kind: str) -> int:
@@ -28,8 +29,8 @@ the story makes it alive (it speaks or acts by itself)",
         "state": "clothes, hairstyle, injuries, dirt or blood, weapons and objects they "
         "carry, a visible change of form or condition",
         "profile": "lasting traits of behaviour and character that show again and again "
-        "(habits, manner of speech and acting, what they love or fear), their role and "
-        "occupation",
+        "(habits, manner of speech and acting, how they move - slowly, quickly, sharply -, "
+        "their usual mood, what they love or fear), their role and occupation",
     },
     "location": {
         "what": 'locations: places where the action happens or that are described (lands, \
@@ -261,6 +262,17 @@ Reply with one JSON object and nothing else:
 {{"appearance": ""}}"""
 
 
+TEMPER_SYSTEM = """Below is one character of a book: its name, who it is, and what the book says about how it behaves, each with its chapter and often the words of the book.
+
+Write "temper": the character's nature as it shows on the outside, for someone who will direct it in a video, in the language of the details. Three to six sentences on: how it behaves with others, how it speaks (manner, pace, favourite turns, silence or chatter), how it moves (slowly, quickly, sharply, heavily, gracefully), its usual mood and emotional ground, and what changes it (anger, fear, tenderness) when the book shows it.
+- Lasting traits only: a mood or an act of one scene is not the character, unless the book shows it again and again.
+- No looks, no plot, no role in the story.
+{notes_rule}Use only the details below; never invent. When they say nothing of its nature, reply with an empty "temper".
+
+Reply with one JSON object and nothing else:
+{{"temper": ""}}"""
+
+
 GENERAL_SYSTEM = """Below are numbered general descriptions of {noun} from one book. A general \
 description tells who or what it is, its role and occupation, its ties to others, the main \
 line of what it does across the story and its lasting traits.
@@ -432,6 +444,10 @@ def looks_system(kind: str) -> str:
     return LOOKS_SYSTEM.format(
         noun=_noun(kind), appearance=_APPEARANCE[kind], age=age, notes_rule=NOTES_RULE
     )
+
+
+def temper_system() -> str:
+    return TEMPER_SYSTEM.format(notes_rule=NOTES_RULE)
 
 
 def extract_system(kind: str) -> str:

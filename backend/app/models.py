@@ -201,6 +201,9 @@ class Entity(Base):
     # never touch it.
     appearance: Mapped[str] = mapped_column(Text, default="")
     appearance_own: Mapped[str] = mapped_column(Text, default="")
+    # A character's nature as it shows: behaviour, speech, movement, usual mood (owner's
+    # notes 27.11, item 28). Written by the model with the appearance; the video prompt uses it.
+    temper: Mapped[str] = mapped_column(Text, default="")
     # A character's outward looks, each drawn as its own set of base pictures (in a kerchief
     # and without; one being under several names and shapes): [{key, label, description,
     # shape}], shape "human" (six views) or "object" (two). Found on the user's press.

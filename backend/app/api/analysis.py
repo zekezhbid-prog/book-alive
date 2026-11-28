@@ -112,6 +112,8 @@ class EntityOut(BaseModel):
     # How it looks: the model's text and the user's own (which wins when set).
     appearance: str = ""
     appearance_own: str = ""
+    # A character's nature as it shows (behaviour, speech, movement), written by the model.
+    temper: str = ""
     uncertain: bool = False
     # What the author said about the card that the book does not say.
     author_notes: list[str] = []
@@ -543,6 +545,7 @@ def get_entity(entity_id: str, session: SessionDep) -> EntityOut:
         summary=entity.summary,
         appearance=entity.appearance,
         appearance_own=entity.appearance_own,
+        temper=entity.temper,
         uncertain=entity.uncertain,
         author_notes=entity.author_notes or [],
         profile=[out(f) for f in facts if f.category == FACT_PROFILE],

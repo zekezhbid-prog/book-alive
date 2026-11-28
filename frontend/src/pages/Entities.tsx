@@ -430,6 +430,7 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onEr
   const { t } = useI18n()
   // Only the description starts open; the rest is a click away.
   const [factsOpen, setFactsOpen] = useState(false)
+  const [temperOpen, setTemperOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const split = async (alias: string) => {
     if (!(await ask(t('entities.split.confirm', { alias })))) return
@@ -520,6 +521,19 @@ function Card({ onClose, onDelete, onRebuild, entity, projectId, onChanged, onEr
         none={t('entities.appearance.none')}
         save={(text) => api.saveEntityAppearance(entity.id, text)}
       />
+      {/* How a character behaves, speaks and moves: the video takes its acting from here
+          (owner's notes 27.11, item 28). Written by the search, read-only. */}
+      {entity.kind === 'character' && (
+        <div className="stack">
+          <FoldHead title={t('entities.temper')} open={temperOpen} onToggle={() => setTemperOpen(!temperOpen)} />
+          {temperOpen &&
+            (entity.temper ? (
+              <p className="entity-temper">{entity.temper}</p>
+            ) : (
+              <p className="faint small">{t('entities.temper.none')}</p>
+            ))}
+        </div>
+      )}
       <AuthorNotes key={`notes-${entity.id}`} entity={entity} onChanged={onChanged} onError={onError} />
       {entity.profile.length + entity.permanent.length > 0 && (
         <div className="stack">
@@ -867,7 +881,7 @@ function duration(seconds: number, t: Translate): string {
 
 // After the chapters the run still has its final steps; the bar keeps a part for them,
 // so it never sits at the end while work goes on.
-const FINAL_STAGES = ['reconcile', 'cards', 'check', 'adopt', 'summarize', 'general', 'looks']
+const FINAL_STAGES = ['reconcile', 'cards', 'check', 'adopt', 'summarize', 'general', 'looks', 'temper']
 const READING_SHARE = 80
 
 function runPercent(run: Run): number {
@@ -886,6 +900,7 @@ function runText(run: Run, t: Translate): string {
     if (run.stage === 'summarize' || run.stage === 'general')
       return t('rebuild.stage.summary', { name: run.entity_name })
     if (run.stage === 'looks') return t('rebuild.stage.looks', { name: run.entity_name })
+    if (run.stage === 'temper') return t('rebuild.stage.temper', { name: run.entity_name })
     return t('rebuild.progress', { name: run.entity_name, done: run.done, total: run.total })
   }
   if (FINAL_STAGES.includes(run.stage)) {

@@ -19,6 +19,7 @@ from app.analysis.entities import (
     ExtractedFact,
     chunks,
     describe_looks,
+    describe_temper,
     keep_general,
     locate_quote,
     norm,
@@ -142,6 +143,7 @@ def rebuild_card(session: Session, model: TextModel, run: AnalysisRun) -> None:
         keep_general(session, model, [entity], entity.kind, run)
     if PART_APPEARANCE in parts:
         describe_looks(session, model, [entity], entity.kind, run)
+        describe_temper(session, model, [entity], run)
 
 
 def _rebuild_facts(session: Session, model: TextModel, run: AnalysisRun, entity: Entity) -> None:

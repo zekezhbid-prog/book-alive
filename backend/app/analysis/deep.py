@@ -26,6 +26,7 @@ from app.analysis.entities import (
     FACT_MENTION,
     _is_proper,
     describe_looks,
+    describe_temper,
     drop_faceless_places,
     keep_general,
     locate_quote,
@@ -739,6 +740,8 @@ def execute(session: Session, run: AnalysisRun, light: TextModel, strong: TextMo
     keep_general(session, light, cards, run.kind, run)
     describe_looks(session, strong, main_cards, run.kind, run)
     describe_looks(session, light, rest, run.kind, run)
+    describe_temper(session, strong, main_cards, run)
+    describe_temper(session, light, rest, run)
 
 
 def _bind(

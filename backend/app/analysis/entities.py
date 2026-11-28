@@ -77,6 +77,10 @@ class Looks(BaseModel):
     appearance: str = ""
 
 
+class Temper(BaseModel):
+    temper: str = ""
+
+
 class Summaries(BaseModel):
     summaries: list[CardSummary] = Field(default_factory=list)
 
@@ -172,6 +176,7 @@ def start_fresh(session: Session, project_id: str, chapters: list[Chapter], kind
             entity.facts.clear()
             entity.summary = ""
             entity.appearance = ""
+            entity.temper = ""
             entity.aliases = list(entity.pinned_names)
         else:
             session.delete(entity)
@@ -727,6 +732,67 @@ def describe_looks(
         session.commit()
 
 
+def _temper_text(session: Session, entity: Entity) -> str | None:
+    """What the book says about how a character behaves, speaks and moves: its general facts
+    with their quotes, chapter by chapter in turn. None when there are none."""
+    chapters = {
+        c.id: c
+        for c in session.scalars(select(Chapter).where(Chapter.project_id == entity.project_id))
+    }
+    positions = {cid: c.position for cid, c in chapters.items()}
+    about = [f for f in entity.facts if f.text.strip() and f.category == FACT_PROFILE]
+    if not about:
+        return None
+    also = f" (also: {', '.join(entity.aliases)})" if entity.aliases else ""
+    lines = [f"{entity.name}{also}"]
+    who = (entity.description or entity.summary).strip()
+    if who:
+        lines.append(f"who it is: {' '.join(who.split())[:600]}")
+    lines.extend(notes_lines(entity))
+    picked = _spread(about, positions, LOOKS_FACTS, set())
+    for fact in sorted(picked, key=lambda f: positions.get(f.chapter_id, 10**6)):
+        chapter = chapters.get(fact.chapter_id)
+        quote = " ".join(fact.quote.split())
+        place = f"ch. {chapter.position + 1}" if chapter else "?"
+        line = f"- [{place}] {fact.text.strip()}"
+        if quote:
+            line += f" (text: «{quote[:200]}»)"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def describe_temper(
+    session: Session,
+    model: TextModel,
+    cards: list[Entity],
+    run: AnalysisRun | None = None,
+) -> None:
+    """A character's nature (behaviour, speech, movement, usual mood), card by card like the
+    appearance, for the video prompt (owner's notes 27.11, item 28). Places and objects have
+    none. An answer that cannot be read keeps the old text."""
+    jobs = [(card, _temper_text(session, card)) for card in cards if card.kind == KIND_CHARACTER]
+    jobs = [(card, listing) for card, listing in jobs if listing is not None]
+    if not jobs:
+        return
+    show_stage(session, run, "temper", 0, len(jobs))
+    session.commit()  # the model calls go out in other threads: nothing may stay open
+    system = prompts.temper_system()
+
+    def ask(job: tuple[Entity, str]) -> Temper | None:
+        try:
+            return model.invoke_json(
+                "temper_characters", [SystemMessage(system), HumanMessage(job[1])], Temper
+            )
+        except BadModelOutput:
+            return None
+
+    for done, ((card, _), answer) in enumerate(parallel.each(jobs, ask), 1):
+        if answer is not None and answer.temper.strip():
+            card.temper = answer.temper.strip()
+        show_stage(session, run, "temper", done, len(jobs))
+        session.commit()
+
+
 def _spread(facts: list, positions: dict[str, int], limit: int, seen: set[str]) -> list:
     """Up to `limit` facts with different texts, one chapter after another in turn."""
     by_chapter: dict[str, list] = {}
@@ -794,6 +860,7 @@ def summarize_cards(
     write_summaries(session, model, cards, kind, run)
     keep_general(session, model, cards, kind, run)
     describe_looks(session, model, cards, kind, run)
+    describe_temper(session, model, cards, run)
 
 
 def write_summaries(

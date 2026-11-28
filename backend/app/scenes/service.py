@@ -76,6 +76,9 @@ on screen, take the look made for this chapter when there is one; otherwise take
 base views the shots need (a face for a close-up, a full-length view for a wide shot). Use \
 as few as serve, at most 4 in all, and mention in the prompt only the ones you chose.
 - Appearance comes only from the facts given. Do not invent clothes, colours or features.
+- A character's "nature" says how it moves, speaks and feels: let it shape the pace and \
+manner of its movements, the tone of its lines and its expression, unless the scene shows \
+otherwise.
 - Say once where it happens, the time of day and the light; for each shot the camera: shot \
 size and one movement.
 - If the author's note below asks for something, it overrides your own choices.
@@ -496,6 +499,9 @@ def scene_context(
         lines.append(f"{kind}: {entity.name} - {', '.join(numbers) or 'no reference picture'}")
         lines += [f"  permanent: {t}" for t in permanent]
         lines += [f"  at this point: {t}" for t in state]
+        # How it behaves, speaks and moves: for the acting in the video (owner's notes, item 28).
+        if entity.temper.strip():
+            lines.append(f"  nature: {' '.join(entity.temper.split())}")
     if note.strip():
         lines += ["", f"Author's note: {note.strip()}"]
     return "\n".join(lines)

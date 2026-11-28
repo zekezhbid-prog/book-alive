@@ -906,6 +906,7 @@ def export_entity(entity_id: str, session: SessionDep) -> Response:
             "summary": entity.summary,
             "appearance": entity.appearance,
             "appearance_own": entity.appearance_own,
+            "temper": entity.temper,
             "facts": [
                 {
                     "category": f.category,
@@ -991,6 +992,7 @@ def import_entity(
         summary=_text(card, "summary"),
         appearance=_text(card, "appearance"),
         appearance_own=_text(card, "appearance_own"),
+        temper=_text(card, "temper"),
     )
     session.add(entity)
     session.flush()
@@ -1036,7 +1038,7 @@ def import_entity(
         if norm(name) in {norm(existing.name), *map(norm, existing.aliases)}:
             fill = {
                 key: getattr(entity, key)
-                for key in ("description", "summary", "appearance", "appearance_own")
+                for key in ("description", "summary", "appearance", "appearance_own", "temper")
                 if not getattr(existing, key).strip()
             }
             merge_by_hand(session, existing, entity)

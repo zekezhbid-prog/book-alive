@@ -310,6 +310,8 @@ export interface Entity {
   /** How it looks, written by the AI; the user's own version wins when set. */
   appearance: string
   appearance_own: string
+  /** A character's nature as it shows (behaviour, speech, movement, mood), written by the AI. */
+  temper: string
   /** What the author said in "Improve" and the book does not say. */
   author_notes: string[]
   profile: Fact[]
