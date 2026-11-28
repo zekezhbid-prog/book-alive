@@ -854,7 +854,9 @@ def test_a_place_prompt_is_built_around_the_chosen_view(client, session, project
     # Owner's notes 28.11, item 60: a room of a large place was asked for, the first prompt
     # described the whole place. The chosen view is the main condition of the prompt.
     castle = Entity(project_id=project.id, kind="location", name="Замок", aliases=[])
-    castle.views = [{"key": "hall", "label": "Зал", "framing": "Inside the great hall, at eye level."}]
+    castle.views = [
+        {"key": "hall", "label": "Зал", "framing": "Inside the great hall, at eye level."}
+    ]
     session.add(castle)
     session.commit()
     seen = []
