@@ -131,16 +131,24 @@ def plan(session: Session, model: TextModel, project: Project, item: Illustratio
     }
 
 
-def fill(project: Project, template: str, cast: list[Entity]) -> tuple[str, list[Image]]:
+def fill(
+    project: Project,
+    template: str,
+    cast: list[Entity],
+    skip: frozenset[str] | set[str] = frozenset(),
+    limit: int = angles.DRAWING_LIMIT,
+) -> tuple[str, list[Image]]:
     """The prompt with each [[name]] turned into "the figure from reference N", and the
-    pictures it refers to: the first picture of each card of the cast in the current style."""
+    pictures it refers to: the first picture of each card of the cast in the current style.
+    A picture the user removed from the references (`skip`, owner's notes 28.11, item 58)
+    is not used; that card's name is then plain text."""
     key = style_key(project)
     references: list[Image] = []
     prompt = template
     for card in cast:
-        pictures = _pictures(card, key)
+        pictures = [p for p in _pictures(card, key) if p.id not in skip]
         tag = f"[[{card.name}]]"
-        if pictures and len(references) < angles.DRAWING_LIMIT:
+        if pictures and len(references) < limit:
             references.append(pictures[0])
             what = "figure" if card.kind == KIND_CHARACTER else "place or thing"
             prompt = prompt.replace(tag, f"the {what} from reference {len(references)}")

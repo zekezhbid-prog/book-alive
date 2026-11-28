@@ -18,6 +18,7 @@ import { HelpButton } from './HelpButton'
 import { CheckIcon, CopyIcon, RefreshIcon, UploadIcon } from './icons'
 import { zoomLink } from './Lightbox'
 import { Composer } from './Composer'
+import { RefStrip } from './RefStrip'
 import { latest, orderOf, padTo } from './refViews'
 
 interface Props {
@@ -91,6 +92,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const [upload, setUpload] = useState<{ id: string; file: File } | null>(null)
   // The user's own pictures kept as samples for the next drawing.
   const [samples, setSamples] = useState<string[]>([])
+  // References removed with the cross above the field (owner's notes 28.11, item 58), and
+  // the pictures the next drawing would be sent, as the server picks them.
+  const [skip, setSkip] = useState<string[]>([])
+  const [strip, setStrip] = useState<ImageInfo[]>([])
   const [nextView, setNextView] = useState('')
   // Views drawn or put in here, `look:view`: the gallery may not have reloaded them yet.
   const [drawnHere, setDrawnHere] = useState<string[]>([])
@@ -208,6 +213,45 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     [],
   )
 
+  // The next drawing leans on the picture drawn last (owner's notes 28.11, item 58), a
+  // finished look's face when a new look starts, and the user's own samples; the server
+  // adds the card's main pictures. Everything removed with the cross stays out.
+  const carry =
+    pending?.image ??
+    bases
+      .filter((b) => b.origin === 'generated')
+      .reduce<ImageInfo | null>((best, b) => (!best || b.created_at > best.created_at ? b : best), null)
+  const fromLook = refLooks.find((v) => v.key === refLook)
+  const fromImage = fromLook && latest(allBases.filter((b) => b.variant === fromLook.key), orderOf(fromLook.shape)[0])
+  const wanted = [...new Set([carry?.id, fromImage?.id, ...samples.slice(-3)])]
+    .filter((ref): ref is string => !!ref && !skip.includes(ref))
+    .slice(0, 3)
+  const wantedKey = wanted.join(',')
+  const skipKey = skip.join(',')
+  const stripView = pending ? nextView || pending.image.angle : upNext
+  const stripLook = pending ? pending.image.variant || '' : (variant?.key ?? '')
+  useEffect(() => {
+    if (busy) return
+    let live = true
+    api
+      .drawingReferences(entityId, {
+        angle: stripView,
+        look_label: '',
+        chapter_from_id: '',
+        chapter_to_id: '',
+        variant: stripLook,
+        reference_ids: wantedKey ? wantedKey.split(',') : [],
+        skip_ids: skipKey ? skipKey.split(',') : [],
+      })
+      .then(
+        (list) => live && setStrip(list),
+        () => live && setStrip([]),
+      )
+    return () => {
+      live = false
+    }
+  }, [entityId, stripView, stripLook, wantedKey, skipKey, busy])
+
   const generate = (view: string, english: string, references: string[], lookKey: string) =>
     api.generateImage(entityId, {
       angle: view,
@@ -219,6 +263,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       size,
       add_view: true,
       reference_ids: references,
+      skip_ids: skip,
     })
 
   // A picture drawn: it waits for "OK, next" or "Fix", and a place gets its views after its
@@ -334,10 +379,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     setError('')
     const lookKey = given?.lookKey ?? variant?.key ?? ''
     const view = given?.view ?? upNext
-    let references = samples.slice(-3)
-    const from = refLooks.find((v) => v.key === refLook)
-    const fromImage = from && latest(allBases.filter((b) => b.variant === from.key), orderOf(from.shape)[0])
-    if (fromImage) references = [fromImage.id, ...references].slice(0, 3)
+    const references = wanted
     setBusy('image')
     try {
       const made = await generate(view, given?.english ?? (await twoLang.flush()), references, lookKey)
@@ -375,8 +417,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     setBusy('image')
     const lookKey = pending.image.variant || ''
     try {
-      const made = await generate(view, await twoLang.flush(), pending.references, lookKey)
-      await drawn(made, view, pending.references, lookKey, before)
+      const made = await generate(view, await twoLang.flush(), wanted, lookKey)
+      await drawn(made, view, wanted, lookKey, before)
     } catch (e) {
       setPending(null)
       fail(e)
@@ -388,7 +430,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   // The user's remark goes into the prompt; the picture is removed and drawn again.
   const fix = async (remark: string) => {
     if (!pending) return
-    const { image, references } = pending
+    const { image } = pending
+    const references = wanted
     setError('')
     setFixing(false)
     setBusy('prompt')
@@ -403,9 +446,9 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     }
     setBusy('image')
     try {
-      await api.deleteImage(image.id)
-      onChanged()
+      // Drawn first, so the picture being fixed can still be its reference (item 58).
       const made = await generate(image.angle, english, references, image.variant || '')
+      await api.deleteImage(image.id)
       onChanged()
       setPending({ image: made, references })
       await say([
@@ -901,6 +944,13 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           hidden
           onChange={(e) => putIn(e.target.files)}
         />
+        {!editing && !upload && !found && (
+          <RefStrip
+            items={strip.map((made) => ({ id: made.id, url: made.url, previous: made.id === carry?.id }))}
+            disabled={off}
+            onRemove={(ref) => setSkip((had) => [...had, ref])}
+          />
+        )}
         {editing && (
           <div className="ref-attach">
             {editing.attached ? (

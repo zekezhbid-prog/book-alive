@@ -505,6 +505,8 @@ export interface LookRequest {
   variant?: string
   /** The user's own samples, sent to the image model first. */
   reference_ids?: string[]
+  /** Pictures removed from the dialogue's references: not sent even if they would go in. */
+  skip_ids?: string[]
 }
 
 /** A message of an illustration's dialogue: the user's words, the model's answer or plan,
@@ -516,7 +518,9 @@ export interface IllustrationMessage {
   cast: string[]
   chapter_id: string
   reference_urls: string[]
+  reference_ids: string[]
   image_url: string
+  image_id: string
   /** Cards of a plan with no picture to draw them from, as they are now. */
   missing: { entity_id: string; name: string; kind: string }[]
 }
@@ -904,8 +908,9 @@ export const api = {
   /** The user's words: the model answers with a question or a plan; nothing is drawn yet. */
   askIllustration: (id: string, text: string) =>
     request<Illustration>('POST', `/illustrations/${id}/ask`, { text }),
-  drawIllustration: (id: string, size: ImageSize | '' = '') =>
-    request<Illustration>('POST', `/illustrations/${id}/draw`, { size }),
+  /** `previous_id`: the picture before, attached; `skip_ids`: references removed (item 58). */
+  drawIllustration: (id: string, size: ImageSize | '' = '', previous_id = '', skip_ids: string[] = []) =>
+    request<Illustration>('POST', `/illustrations/${id}/draw`, { size, previous_id, skip_ids }),
   /** "Pick from the book": moments of a chapter worth a picture (3 to 20). */
   /** `checked`: the looks were searched for once, the first drawing does not search again. */
   variants: (entityId: string) =>
@@ -945,6 +950,9 @@ export const api = {
     for (const file of files) form.append('files', file)
     return request<ReferenceSort>('POST', `/entities/${entityId}/references/sort`, form)
   },
+  /** The pictures the next drawing would be sent (owner's notes 28.11, item 58). */
+  drawingReferences: (entityId: string, look: LookRequest) =>
+    request<ImageInfo[]>('POST', `/entities/${entityId}/drawing-references`, look),
   generateImage: (
     entityId: string,
     body: LookRequest & { prompt: string; size: ImageSize | ''; add_view?: boolean },

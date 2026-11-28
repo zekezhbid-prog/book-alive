@@ -106,6 +106,9 @@ class LookRequest(BaseModel):
     # The user's own samples ("make it look like this"): pictures of the project, sent to
     # the image model first; the card's main pictures fill the remaining places.
     reference_ids: list[str] = Field(default_factory=list, max_length=angles.DRAWING_LIMIT)
+    # Pictures the user removed from the dialogue's references (owner's notes 28.11, item
+    # 58): the card's own pictures that would go in by themselves are left out.
+    skip_ids: list[str] = Field(default_factory=list, max_length=200)
 
 
 class PromptRequest(LookRequest):
@@ -456,7 +459,8 @@ def _drawing(session: SessionDep, entity: Entity, body: LookRequest) -> Drawing:
             human = {v["key"] for v in entity.variants if v.get("shape", "human") == "human"}
             others = [i for i in entity.images if i.variant in human and i.angle == "face_front"]
             drawn_from = angles.for_drawing(others, key)[:1]
-    references += [i for i in drawn_from if i not in references]
+    skipped = set(body.skip_ids)
+    references += [i for i in drawn_from if i not in references and i.id not in skipped]
     return Drawing(project, chapters, angle, references[: angles.DRAWING_LIMIT], variant)
 
 
@@ -543,6 +547,15 @@ def refine_image(entity_id: str, body: RefineRequest, session: SessionDep) -> Te
         return TextOut(text=refine_image_prompt(model, body.prompt, body.change))
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+
+
+@router.post("/entities/{entity_id}/drawing-references")
+def drawing_references(entity_id: str, body: LookRequest, session: SessionDep) -> list[ImageOut]:
+    """The pictures the next drawing would be sent, shown in the dialogue so that any of
+    them can be removed (owner's notes 28.11, item 58). Nothing is drawn."""
+    entity = _entity(session, entity_id)
+    drawing = _drawing(session, entity, body)
+    return [_out(image, drawing.project) for image in drawing.references]
 
 
 @router.post("/entities/{entity_id}/images/generate")

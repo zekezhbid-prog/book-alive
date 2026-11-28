@@ -18,6 +18,7 @@ import { zoomLink } from '../components/Lightbox'
 import { BoldPlusIcon, BookIcon, TrashIcon } from '../components/icons'
 import { useShowPrompt } from '../showPrompt'
 import CardGrid from '../components/CardGrid'
+import { RefStrip } from '../components/RefStrip'
 import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
 import { ask } from '../dialogs'
@@ -121,6 +122,8 @@ function IllustrationChat({ id, project, onClose, onDeleted, onDropped }: ChatPr
   const [size, setSize] = useState<ImageSize>('1:1')
   const [error, setError] = useState('')
   const [picking, setPicking] = useState(false)
+  // References the user removed with the cross: not sent to the next drawings (item 58).
+  const [skip, setSkip] = useState<string[]>([])
   const showPrompt = useShowPrompt()
   const end = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -169,7 +172,9 @@ function IllustrationChat({ id, project, onClose, onDeleted, onDropped }: ChatPr
       if (!go) return openCard(plan.missing[0])
     }
     setBusy('draw')
-    setItem(await api.drawIllustration(id, size))
+    // The picture drawn last goes with the next one, unless the user removed it (item 58).
+    const previous = [...current.messages].reverse().find((m) => m.image_id)?.image_id ?? ''
+    setItem(await api.drawIllustration(id, size, skip.includes(previous) ? '' : previous, skip))
   }
 
   // "Show the prompt" off: a plan is drawn at once; on, it waits for "Draw" (owner's notes
@@ -228,6 +233,13 @@ function IllustrationChat({ id, project, onClose, onDeleted, onDropped }: ChatPr
   const drawn = (item?.messages ?? []).map((m) => m.image_url).filter(Boolean)
   // The last message is a plan not drawn yet: the user said "No" to drawing without a reference.
   const waiting = item?.messages.length ? item.messages[item.messages.length - 1].prompt !== '' : false
+  // Above the field: the waiting plan's card pictures and the picture drawn last (item 58).
+  const previous = [...(item?.messages ?? [])].reverse().find((m) => m.image_id)?.image_id ?? ''
+  const planned = waiting && item ? item.messages[item.messages.length - 1].reference_ids : []
+  const strip = [
+    ...planned.map((ref) => ({ id: ref, url: `/api/images/${ref}/file` })),
+    ...(previous && !planned.includes(previous) ? [{ id: previous, url: `/api/images/${previous}/file`, previous: true }] : []),
+  ].filter((ref) => !skip.includes(ref.id))
 
   return (
     <section className="stack illustration-chat">
@@ -343,6 +355,7 @@ function IllustrationChat({ id, project, onClose, onDeleted, onDropped }: ChatPr
           onClose={() => setPicking(false)}
         />
       )}
+      <RefStrip items={strip} disabled={busy !== ''} onRemove={(ref) => setSkip((had) => [...had, ref])} />
       {/* The same field as in every dialogue, with the picture's aspect ratio (owner's notes 27.11, items 21 and 30). */}
       <Composer
         value={text}

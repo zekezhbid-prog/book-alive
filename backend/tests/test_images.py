@@ -881,3 +881,35 @@ def test_a_place_prompt_is_built_around_the_chosen_view(client, session, project
     client.post(url, json={"note": "The place seen from inside, at eye level."})
     assert "main condition" in seen[1]
     assert "The place seen from inside, at eye level." in seen[1]
+
+
+def test_the_pictures_a_drawing_leans_on_are_shown_and_can_be_left_out(
+    client, project, monkeypatch
+):
+    # Owner's notes 28.11 (58): the card's own pictures still go in by themselves, but the
+    # dialogue shows them and a removed one is not sent.
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append(len(references))
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.images.ImageModel", Painter)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    face = upload(client, project, project.hero_id)[0]
+    sample = upload(client, project)[0]
+    url = f"/api/entities/{project.hero_id}/drawing-references"
+    body = {"angle": "face_profile", "reference_ids": [sample["id"]]}
+    shown = client.post(url, json=body)
+    assert shown.status_code == 200, shown.text
+    assert [i["id"] for i in shown.json()] == [sample["id"], face["id"]]
+    left_out = {**body, "skip_ids": [face["id"]]}
+    assert [i["id"] for i in client.post(url, json=left_out).json()] == [sample["id"]]
+
+    generate = f"/api/entities/{project.hero_id}/images/generate"
+    made = client.post(generate, json={**left_out, "prompt": "x"}).json()
+    assert drawn == [1] and made["reference_ids"] == [sample["id"]]

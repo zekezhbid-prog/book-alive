@@ -175,3 +175,56 @@ def test_a_card_is_named_after_its_last_picture_until_the_user_renames_it(
     # An emptied name goes back to the automatic one.
     assert client.patch(url, json={"title": " "}).json()["title"] == "днём"
     assert client.patch(url, json={"title": "x" * 301}).status_code == 422
+
+
+def test_the_last_picture_leans_on_the_one_before_and_a_removed_reference_is_not_sent(
+    client, project, monkeypatch
+):
+    # Owner's notes 28.11 (58): the picture just drawn is attached to the next one; the
+    # card's picture can be removed, and then its name is plain text in the prompt.
+    plan = {"chapter": "", "cast": ["Лана"], "say": "Рисую.", "prompt": "[[Лана]] at the mill."}
+
+    class Plans(Planner):
+        def invoke_json(self, operation, messages, schema):
+            return schema.model_validate(plan)
+
+    drawn = []
+
+    class Painter:
+        def __init__(self, session, project_id):
+            pass
+
+        def generate(self, prompt, references, size=""):
+            drawn.append((prompt, len(references)))
+            return type("Result", (), {"data": PNG, "mime": "image/png"})()
+
+    monkeypatch.setattr("app.api.illustrations.TextModel", Plans)
+    monkeypatch.setattr("app.api.illustrations.ImageModel", Painter)
+    monkeypatch.setattr(illustrations, "search", lambda *a, **k: [])
+    monkeypatch.setattr(illustrations, "index_project", lambda *a: 0)
+    client.put(f"/api/projects/{project.id}/style", json={"style_id": "anime"})
+    face = upload(client, project, project.hero_id)[0]
+    client.patch(f"/api/images/{face['id']}", json={"is_main": True, "angle": "face_front"})
+    url = f"/api/illustrations/{client.post(f'/api/projects/{project.id}/illustrations').json()['id']}"
+
+    planned = client.post(f"{url}/ask", json={"text": "Лана у мельницы"}).json()["messages"][-1]
+    assert planned["reference_ids"] == [face["id"]]
+    first = client.post(f"{url}/draw").json()["messages"][-1]
+    assert first["image_id"] and drawn[-1] == ("the figure from reference 1 at the mill.", 1)
+
+    client.post(f"{url}/ask", json={"text": "ночью"})
+    body = {"previous_id": first["image_id"], "skip_ids": [face["id"]]}
+    done = client.post(f"{url}/draw", json=body).json()["messages"][-1]
+    prompt, count = drawn[-1]
+    assert count == 1 and prompt.startswith("Лана at the mill.")
+    assert "reference 1" in prompt and done["reference_ids"] == [first["image_id"]]
+
+    client.post(f"{url}/ask", json={"text": "днём"})
+    client.post(f"{url}/draw", json={"previous_id": first["image_id"]})
+    prompt, count = drawn[-1]
+    assert (
+        count == 2 and prompt.startswith("the figure from reference 1") and "reference 2" in prompt
+    )
+    foreign = {"previous_id": "nope"}
+    client.post(f"{url}/ask", json={"text": "вечером"})
+    assert client.post(f"{url}/draw", json=foreign).status_code == 404

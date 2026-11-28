@@ -10,6 +10,7 @@ from app import illustrations as service
 from app.api.images import EXTENSIONS, _store
 from app.config import settings
 from app.db import SessionDep
+from app.images import angles
 from app.images.generate import SIZES, ImageGenerationFailed, ImageModel, ImageModelNotConfigured
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel
@@ -31,7 +32,10 @@ class Message(BaseModel):
     cast: list[str] = Field(default_factory=list)
     chapter_id: str = ""
     reference_urls: list[str] = Field(default_factory=list)
+    # The same pictures by id, so the dialogue can show them and leave one out (item 58).
+    reference_ids: list[str] = Field(default_factory=list)
     image_url: str = ""
+    image_id: str = ""
     # Cards of a plan with no picture to draw them from, as they are now (owner's notes 27.11).
     missing: list[Missing] = Field(default_factory=list)
 
@@ -78,7 +82,9 @@ def _full(session: SessionDep, item: Illustration) -> IllustrationOut:
                 cast=m.get("cast", []),
                 chapter_id=m.get("chapter_id", ""),
                 reference_urls=[_url(i) for i in m.get("reference_ids", [])],
+                reference_ids=m.get("reference_ids", []),
                 image_url=_url(m["image_id"]) if m.get("image_id") else "",
+                image_id=m.get("image_id", ""),
                 # Only the last message can be a plan waiting to be drawn.
                 missing=[
                     Missing(**c) for c in service.missing(project, service.cast_of(session, m))
@@ -190,6 +196,10 @@ class DrawIn(BaseModel):
     # A key of SIZES, chosen in the dialogue's field (owner's notes 27.11, item 30);
     # empty means square.
     size: str = ""
+    # The picture drawn before, attached to this one so the style and looks carry over;
+    # empty when the user removed it. `skip_ids`: card pictures the user removed (item 58).
+    previous_id: str = ""
+    skip_ids: list[str] = Field(default_factory=list, max_length=200)
 
     @field_validator("size")
     @classmethod
@@ -202,8 +212,15 @@ class DrawIn(BaseModel):
 @router.post("/illustrations/{illustration_id}/draw")
 def draw(illustration_id: str, session: SessionDep, body: DrawIn | None = None) -> IllustrationOut:
     """Draws the last plan with its references."""
-    size = body.size if body else ""
+    body = body or DrawIn()
+    size = body.size
+    skip = set(body.skip_ids)
     item, project = _item(session, illustration_id)
+    previous = session.get(Image, body.previous_id) if body.previous_id else None
+    if body.previous_id and (previous is None or previous.project_id != project.id):
+        raise HTTPException(404, "image_not_found")
+    # The picture before takes one of the places the image model accepts.
+    limit = angles.DRAWING_LIMIT - (1 if previous else 0)
     last = next((m for m in reversed(item.messages) if m.get("prompt")), None)
     if last is None:
         raise HTTPException(409, "no_plan_yet")
@@ -215,7 +232,9 @@ def draw(illustration_id: str, session: SessionDep, body: DrawIn | None = None) 
         raise HTTPException(409, str(exc)) from exc
     if last.get("template"):
         # The references are taken again: one made after the plan counts.
-        prompt, references = service.fill(project, last["template"], service.cast_of(session, last))
+        prompt, references = service.fill(
+            project, last["template"], service.cast_of(session, last), skip, limit
+        )
         # A new list of new dicts: a JSON column is saved only when its value changes.
         item.messages = [
             {**m, "prompt": prompt, "reference_ids": [r.id for r in references]} if m is last else m
@@ -225,7 +244,13 @@ def draw(illustration_id: str, session: SessionDep, body: DrawIn | None = None) 
     else:
         prompt = last["prompt"]
         references = [session.get(Image, i) for i in last.get("reference_ids", [])]
-        references = [r for r in references if r is not None]
+        references = [r for r in references if r is not None and r.id not in skip][:limit]
+    if previous is not None and previous not in references:
+        references.append(previous)
+        prompt = (
+            f"{prompt} Keep the drawing style, the colours and the looks of everyone from "
+            f"reference {len(references)}, the previous picture; what happens is as described."
+        )
     paths = [settings.files_dir / r.path for r in references]
     key = style_key(project)
     try:
