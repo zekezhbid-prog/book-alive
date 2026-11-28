@@ -11,6 +11,7 @@ from app.api.images import _out as image_out
 from app.config import settings
 from app.db import SessionDep
 from app.images.generate import SIZES, ImageGenerationFailed, ImageModel, ImageModelNotConfigured
+from app.images.prompts import refine_image_prompt
 from app.images.styles import style_key, style_prompt
 from app.llm.calls import BadModelOutput, ModelNotConfigured, TextModel, estimate_tokens
 from app.models import Chapter, Entity, Image, Project, Scene, SceneSplit
@@ -416,6 +417,29 @@ def refine(scene_id: str, body: RefineRequest, session: SessionDep) -> SceneOut:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
     session.commit()
     return _full(session, scene, chapter, project)
+
+
+class FramePromptChange(BaseModel):
+    prompt: str = Field(min_length=1, max_length=8000)
+    change: str = Field(min_length=1, max_length=2000)
+
+
+class FramePromptOut(BaseModel):
+    text: str
+
+
+@router.post("/scenes/{scene_id}/frame-prompt/refine")
+def refine_frame_prompt(
+    scene_id: str, body: FramePromptChange, session: SessionDep
+) -> FramePromptOut:
+    """Words typed under the first frame's prompt, shown before drawing, change it
+    (owner's notes 28.11, item 47); the frame is drawn from the result."""
+    _, _, project = _scene(session, scene_id)
+    model = _text_model(session, project.id, "prompts")
+    try:
+        return FramePromptOut(text=refine_image_prompt(model, body.prompt, body.change))
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
 
 
 @router.post("/scenes/{scene_id}/chat")

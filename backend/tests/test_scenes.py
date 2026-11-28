@@ -500,3 +500,26 @@ def test_a_chapter_is_split_once_and_a_card_is_made_from_the_scene_picked(
     session.commit()
     assert client.get(f"{url}/proposals").json()["stale"]
     assert client.post(f"{url}/proposals/0").json()["detail"] == "proposals_stale"
+
+
+def test_first_frame_prompt_is_changed_in_words(client, book, monkeypatch):
+    # Owner's notes 28.11, item 47: words typed under the shown frame prompt change it.
+    from app.api import scenes as scenes_api
+
+    made = client.post(
+        f"/api/chapters/{book.mill.id}/scenes",
+        json={"paragraph_from": 2, "paragraph_to": 3, "title": "Ключ"},
+    ).json()
+    seen = []
+    monkeypatch.setattr(scenes_api, "_text_model", lambda *a: "model")
+    monkeypatch.setattr(
+        scenes_api,
+        "refine_image_prompt",
+        lambda model, prompt, change: seen.append((model, prompt, change)) or "A still, at dusk.",
+    )
+    answer = client.post(
+        f"/api/scenes/{made['id']}/frame-prompt/refine",
+        json={"prompt": "A still.", "change": "вечером"},
+    )
+    assert answer.json() == {"text": "A still, at dusk."}
+    assert seen == [("model", "A still.", "вечером")]

@@ -15,7 +15,7 @@ import { errorText, useI18n, type MessageKey } from '../i18n'
 import { useShowPrompt } from '../showPrompt'
 import { useTwoLang } from '../twoLang'
 import { HelpButton } from './HelpButton'
-import { CheckIcon, CopyIcon, RefreshIcon, TrashIcon, UploadIcon } from './icons'
+import { CheckIcon, CopyIcon, RefreshIcon, UploadIcon } from './icons'
 import { zoomLink } from './Lightbox'
 import { Composer } from './Composer'
 import { latest, orderOf, padTo } from './refViews'
@@ -32,6 +32,8 @@ interface Props {
   /** A picture was drawn, put in or deleted: the gallery reloads. */
   onChanged: () => void
   onClose: () => void
+  /** "Change" on a picture of the scene: the dialogue opens on changing it (item 49). */
+  editId?: string
 }
 
 // The first picture of a place or object, when it has none (owner's answers 27.11).
@@ -66,7 +68,7 @@ type Busy = '' | 'prompt' | 'image' | 'upload' | 'variants' | 'views'
  * words fix the picture just drawn, or describe the next one. The paperclip puts in the
  * user's own picture: the window asks which view it is. The lines are kept with the card.
  */
-export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases, hasStyle, onChanged, onClose }: Props) {
+export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases, hasStyle, onChanged, onClose, editId }: Props) {
   const { t } = useI18n()
   const withAngles = kind === 'character'
   const [lines, setLines] = useState<RefLine[] | null>(null)
@@ -81,7 +83,10 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   const [fixing, setFixing] = useState(false)
   // "Change" on a finished view (owner's notes 27.11, item 22): attached, the model edits
   // that very picture; detached, it draws the view anew from the card's other references.
-  const [editing, setEditing] = useState<{ image: ImageInfo; attached: boolean } | null>(null)
+  const [editing, setEditing] = useState<{ image: ImageInfo; attached: boolean } | null>(() => {
+    const image = editId ? allBases.find((b) => b.id === editId) : undefined
+    return image ? { image, attached: true } : null
+  })
   // A picture put in with the paperclip, waiting for the user to say which view it is.
   const [upload, setUpload] = useState<{ id: string; file: File } | null>(null)
   // The user's own pictures kept as samples for the next drawing.
@@ -312,6 +317,18 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   }
 
   /** `given`: the prompt just written, drawn without waiting for "Draw" (item 46). */
+  // "Cancel" under the prompt: back to choosing a view, the field asks for a new one (item 47).
+  const cancelPrompt = async () => {
+    setPromptReady(false)
+    await say([{ role: 'user', text: t('app.cancel') }])
+  }
+  // "OK" under a picture: it stays in the references, the next view is chosen (item 47).
+  const accept = async () => {
+    setPending(null)
+    setFixing(false)
+    await say([{ role: 'user', text: t('scene.chat.ok') }])
+  }
+
   const draw = async (given?: { english: string; view: string; lookKey: string; before: RefLineIn[] }) => {
     setError('')
     const lookKey = given?.lookKey ?? variant?.key ?? ''
@@ -712,6 +729,14 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           {/* The next views as links, just their names; a press draws it. A remark on this
               picture is typed in the field; the bin removes it (owner's notes 27.11, item 38). */}
           <div className="quick-replies">
+            {/* OK keeps the picture, Cancel takes it away (owner's notes 28.11, item 47); the
+                next views beside them still draw at once. */}
+            <button className="quick-reply" onClick={() => void accept()}>
+              {t('scene.chat.ok')}
+            </button>
+            <button className="quick-reply dim" onClick={() => void drop()}>
+              {t('app.cancel')}
+            </button>
             {stepChoices.length > 0 ? (
               stepChoices.slice(0, 6).map((view) => (
                 <button key={view} className="quick-reply" onClick={() => goOn(view)}>
@@ -723,10 +748,6 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
                 {stepLook ? t('generate.step.next_look', { look: stepLook.label }) : t('generate.step.done')}
               </button>
             )}
-            <span className="spacer" />
-            <button className="btn ghost small icon" title={t('ref.drop')} aria-label={t('ref.drop')} onClick={drop}>
-              <TrashIcon />
-            </button>
           </div>
         </>
       )
@@ -735,6 +756,9 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         <div className="quick-replies">
           <button className="quick-reply" disabled={!hasStyle || !prompt.trim()} onClick={() => void draw()}>
             {t('ref.draw', { view: viewLabel(upNext) })}
+          </button>
+          <button className="quick-reply dim" onClick={() => void cancelPrompt()}>
+            {t('app.cancel')}
           </button>
           {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}
         </div>
@@ -901,7 +925,9 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
           value={text}
           onChange={setText}
           onSend={send}
-          placeholder={t(editing ? 'ref.placeholder.edit' : pending ? 'ref.placeholder.fix' : 'ref.placeholder')}
+          // The field follows the step (item 47): a picture to change, a picture to fix, the
+          // prompt to change, or a view of one's own.
+          placeholder={t(editing ? 'ref.placeholder.edit' : pending ? 'ref.placeholder.fix' : promptReady ? 'ref.placeholder.prompt' : 'ref.placeholder.view')}
           disabled={off || !!upload || !!found}
           sendDisabled={!text.trim()}
           maxLength={1000}

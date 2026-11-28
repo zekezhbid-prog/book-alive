@@ -986,6 +986,8 @@ export const api = {
     }),
   buildScenePrompt: (id: string, note: string) =>
     request<Scene>('POST', `/scenes/${id}/prompt`, { note }),
+  refineFramePrompt: (id: string, prompt: string, change: string) =>
+    request<{ text: string }>('POST', `/scenes/${id}/frame-prompt/refine`, { prompt, change }),
   refineScenePrompt: (id: string, change: string) =>
     request<Scene>('POST', `/scenes/${id}/prompt/refine`, { change }),
   saveScenePrompt: (id: string, prompt: string) =>

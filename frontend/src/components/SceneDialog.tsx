@@ -18,6 +18,8 @@ interface Props {
   onAddReference: (entityId: string) => void
   /** Goes up by one each time "Add to the description" is pressed by the scene's text. */
   enrichAsk: number
+  /** Goes up by one on "Change" by the video prompt's status: the field waits for the change. */
+  changeAsk?: number
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * is drawn here with its aspect ratio and fixed by a remark; "Add to the description" offers
  * a fuller description to apply. The lines are kept with the scene.
  */
-export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAsk }: Props) {
+export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAsk, changeAsk = 0 }: Props) {
   const { t } = useI18n()
   const [text, setText] = useState('')
   const [said, setSaid] = useState('') // the user's words on screen while the model works
@@ -37,6 +39,8 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
   // The frame a remark goes to after "Fix".
   const [fixing, setFixing] = useState('')
   const [copied, setCopied] = useState(false)
+  // "Change" by the prompt's status pressed: the field says what it changes (item 49).
+  const [changing, setChanging] = useState(false)
   const field = useRef<HTMLTextAreaElement>(null)
   const clip = useRef<HTMLInputElement>(null)
   const end = useRef<HTMLDivElement>(null)
@@ -100,6 +104,18 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
       const next = await api.generateSceneFrame(scene.id, prompt, size)
       return [{ role: 'assistant', kind: 'frame', image_id: next.frames[0]?.id ?? '' }]
     })
+  // Words under the frame's prompt change it; the new one waits for "Draw" again (item 47).
+  const refineFrame = (prompt: string, change: string) =>
+    step('prompt', change, async () => {
+      const next = await api.refineFramePrompt(scene.id, prompt, change)
+      return [{ role: 'assistant', kind: 'frame_prompt', text: t('scene.chat.frame.prompt'), prompt: next.text }]
+    })
+  // "Cancel" under a frame just drawn: the frame goes, the first frame can be asked for again.
+  const dropFrame = (imageId: string) =>
+    step('', t('app.cancel'), async () => {
+      await api.deleteImage(imageId)
+      return []
+    })
   const fixFrame = async (remark: string) => {
     const imageId = fixing
     if (
@@ -116,6 +132,14 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
       return [{ role: 'assistant', kind: 'enrich', text: offer.text, added: offer.added }]
     })
   // The link by the scene's text: the offer comes here, with "Apply" / "No need" (item 43).
+  const changeAsked = useRef(changeAsk)
+  useEffect(() => {
+    if (changeAsk === changeAsked.current) return
+    changeAsked.current = changeAsk
+    setFixing('')
+    setChanging(true)
+    field.current?.focus()
+  }, [changeAsk])
   const asked = useRef(enrichAsk)
   useEffect(() => {
     if (enrichAsk === asked.current) return
@@ -149,7 +173,9 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
     const words = text.trim()
     if (!words) return
     if (fixing) return void fixFrame(words)
-    if (last?.kind === 'enrich') return void enrich(words)
+    setChanging(false)
+    if (last?.kind === 'frame_prompt' && !changing) return void refineFrame(last.prompt, words)
+    if (last?.kind === 'enrich' && !changing) return void enrich(words)
     if (scene.prompt) return void refine(words)
     void build(words)
   }
@@ -175,6 +201,7 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
           setFixing(last.image_id)
           field.current?.focus()
         }),
+        reply(t('app.cancel'), () => void dropFrame(last.image_id), true),
       ]
     }
     if (last?.kind === 'frame_prompt') {
@@ -310,7 +337,18 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
         value={text}
         onChange={setText}
         onSend={send}
-        placeholder={t(fixing ? 'scene.chat.fix.placeholder' : scene.prompt ? 'scene.chat.placeholder.change' : 'scene.chat.placeholder')}
+        // The field follows the step (items 47, 49).
+        placeholder={t(
+          fixing
+            ? 'scene.chat.fix.placeholder'
+            : changing
+              ? 'scene.chat.placeholder.edit_prompt'
+              : last?.kind === 'frame_prompt'
+                ? 'scene.chat.placeholder.frame'
+                : scene.prompt
+                  ? 'scene.chat.placeholder.change'
+                  : 'scene.chat.placeholder',
+        )}
         disabled={off}
         sendDisabled={!text.trim()}
         maxLength={2000}

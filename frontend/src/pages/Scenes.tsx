@@ -29,16 +29,7 @@ import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
 import { ProposalList } from '../components/SceneProposals'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import {
-  CheckIcon,
-  TrashIcon,
-  GoldPlusSymbol,
-  GoldSparklesSymbol,
-  DownloadIcon,
-  PlusIcon,
-  SparklesIcon,
-  UploadIcon,
-} from '../components/icons'
+import { CheckIcon, DownloadIcon, GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from '../components/icons'
 import FoldHead from '../components/FoldHead'
 
 type Participant = Scene['participants'][number]
@@ -441,17 +432,19 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
   const aiReady = useTextModelReady()
   const [error, setError] = useState('')
   // The picture window over the scene, for a card in it.
-  const [adding, setAdding] = useState<{ who: Participant; bases: ImageInfo[] } | null>(null)
+  const [adding, setAdding] = useState<{ who: Participant; bases: ImageInfo[]; editId?: string } | null>(null)
   const closeAdding = useCallback(() => setAdding(null), [])
   const [exporting, setExporting] = useState(false)
   const [enrichAsk, setEnrichAsk] = useState(0)
+  const [changeAsk, setChangeAsk] = useState(0)
   const closeExport = useCallback(() => setExporting(false), [])
   // The user changed the pictures by hand after the prompt was written: its numbers may be off.
   const [refsChanged, setRefsChanged] = useState(false)
-  const addFor = async (who: Participant) => {
+  // `editId`: "Change" on a picture, the card's dialogue opens on changing it (item 49).
+  const addFor = async (who: Participant, editId?: string) => {
     try {
       const images = await api.images(projectId, who.id)
-      setAdding({ who, bases: images.filter((i) => i.is_main && i.current_style) })
+      setAdding({ who, bases: images.filter((i) => i.is_main && i.current_style), editId })
     } catch (e) {
       setError(errorText(t, e))
     }
@@ -543,6 +536,18 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
       {!writing && (
         <>
       <h4>{t('scene.references')}</h4>
+      {/* What the scene still lacks, at a glance (owner's notes 28.11, item 49). */}
+      {!scene.participants.length ? (
+        <p className="scene-status ok small">✓ {t('scene.status.refs.none')}</p>
+      ) : scene.missing.length ? (
+        <p className="scene-status small">
+          {t('scene.status.refs.missing', {
+            names: [...new Set(scene.missing.map((m) => m.name))].join(', '),
+          })}
+        </p>
+      ) : (
+        <p className="scene-status ok small">✓ {t('scene.status.refs.ok')}</p>
+      )}
       {!hasStyle && <p className="faint small">{t('scene.references.no_style')}</p>}
       <div className="refs">
         {/* Everyone in the scene gets a frame with all of the card's pictures, those that go
@@ -579,6 +584,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
             addTitle={t('scene.ref.add')}
             onAdd={() => addFor(who)}
             onToggle={toggleRef}
+            onEdit={(imageId) => void addFor(who, imageId)}
           />
         ))}
       </div>
@@ -593,13 +599,25 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
           hasStyle={hasStyle}
           onChanged={reload}
           onClose={closeAdding}
+          editId={adding.editId}
         />
       )}
 
       {/* The video prompt, the first frame and a fuller description in one dialogue
           (owner's notes 27.11). */}
       <h4>{t('scene.prompt')}</h4>
+      {scene.prompt ? (
+        <div className="row scene-status ok small">
+          <span>✓ {t('scene.status.prompt.ok')}</span>
+          <button className="btn ghost small" disabled={aiReady === false} onClick={() => setChangeAsk((n) => n + 1)}>
+            {t('scene.change')}
+          </button>
+        </div>
+      ) : (
+        <p className="scene-status small">{t('scene.status.prompt.none')}</p>
+      )}
       <SceneDialog
+        changeAsk={changeAsk}
         scene={scene}
         aiReady={aiReady !== false}
         onChange={onChange}
@@ -647,10 +665,12 @@ interface SlotProps {
   addTitle: string
   onAdd: () => void
   onToggle?: (imageId: string) => void
+  /** "Change" on a picture that goes to the video (item 49). */
+  onEdit?: (imageId: string) => void
 }
 
 /** One frame among the references: its pictures one at a time, and a "+" to add another. */
-function RefSlot({ title, pictures, empty, addTitle, onAdd, onToggle }: SlotProps) {
+function RefSlot({ title, pictures, empty, addTitle, onAdd, onToggle, onEdit }: SlotProps) {
   const { t } = useI18n()
   const [index, setIndex] = useState(0)
   const at = Math.min(index, pictures.length - 1)
@@ -665,6 +685,17 @@ function RefSlot({ title, pictures, empty, addTitle, onAdd, onToggle }: SlotProp
           </a>
         ) : (
           <div className="ref-blank" />
+        )}
+        {/* "Change" in the picture's corner: the caption below stays wide enough for the name. */}
+        {onEdit && shown?.id && shown.inVideo && (
+          <button
+            className="btn ghost small icon ref-edit"
+            title={t('scene.change')}
+            aria-label={t('scene.change')}
+            onClick={() => onEdit(shown.id!)}
+          >
+            <PencilIcon />
+          </button>
         )}
         {pictures.length > 1 && (
           <>
