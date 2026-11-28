@@ -275,7 +275,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     try {
       let written = (
         await api.imagePrompt(entityId, {
-          angle: '',
+          // A place or object: the chosen view is what the prompt is built on (item 60).
+          angle: !withAngles && placeViews.some((v) => v.key === view) ? view : '',
           look_label: '',
           chapter_from_id: '',
           chapter_to_id: '',

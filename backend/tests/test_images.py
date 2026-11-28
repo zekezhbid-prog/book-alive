@@ -848,3 +848,34 @@ def test_a_place_gets_views_of_its_own_drawn_with_their_framing(
     listed = client.get(f"/api/projects/{project.id}/images?entity_id={castle.id}").json()
     pictures = {i["id"]: i for i in listed}
     assert pictures[top.json()["id"]]["angle"] == ""
+
+
+def test_a_place_prompt_is_built_around_the_chosen_view(client, session, project, monkeypatch):
+    # Owner's notes 28.11, item 60: a room of a large place was asked for, the first prompt
+    # described the whole place. The chosen view is the main condition of the prompt.
+    castle = Entity(project_id=project.id, kind="location", name="Замок", aliases=[])
+    castle.views = [{"key": "hall", "label": "Зал", "framing": "Inside the great hall, at eye level."}]
+    session.add(castle)
+    session.commit()
+    seen = []
+
+    class Model:
+        def __init__(self, session, project_id, task=None):
+            pass
+
+        def invoke(self, operation, messages):
+            seen.append(messages[0].content)
+            return "prompt"
+
+    monkeypatch.setattr("app.api.images.TextModel", Model)
+    url = f"/api/entities/{castle.id}/image-prompt"
+    answer = client.post(url, json={"angle": "hall"})
+    assert answer.status_code == 200, answer.text
+    assert "Inside the great hall, at eye level." in seen[0]
+    assert "main condition" in seen[0]
+    assert "Do not mention the view" not in seen[0]
+    # The first picture of a place has no view of its own yet: the way to see it, given as
+    # the note, is the main condition too.
+    client.post(url, json={"note": "The place seen from inside, at eye level."})
+    assert "main condition" in seen[1]
+    assert "The place seen from inside, at eye level." in seen[1]

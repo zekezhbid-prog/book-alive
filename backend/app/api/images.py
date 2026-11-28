@@ -466,6 +466,13 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
     entity = _entity(session, entity_id)
     drawing = _drawing(session, entity, body)
     view_free = body.view_free and drawing.chapters is None
+    # A place or object: the chosen view, or for its first picture the way to see it given
+    # as the note, is what the prompt is built on (owner's notes 28.11, item 60).
+    view, note = "", body.note
+    if entity.kind != KIND_CHARACTER and drawing.chapters is None:
+        view = _framing(entity, drawing.angle) if drawing.angle else note
+        if view:
+            view_free, note = False, ""
     try:
         model = TextModel(session, drawing.project.id, "prompts")
     except ModelNotConfigured as exc:
@@ -480,8 +487,9 @@ def image_prompt(entity_id: str, body: PromptRequest, session: SessionDep) -> Pr
             bool(drawing.references),
             "" if view_free else drawing.angle,
             view_free,
-            body.note,
+            note,
             drawing.variant,
+            view,
         )
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc

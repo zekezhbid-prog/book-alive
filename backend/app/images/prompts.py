@@ -39,6 +39,14 @@ VIEW_FREE = (
     "light: they are added to each picture of the set separately."
 )
 
+# A place or object drawn in one chosen view (a room of a castle, its gate): the whole
+# prompt is built on that view (owner's notes 28.11, item 60).
+MAIN_VIEW = (
+    "The picture shows this view, and it is the main condition the whole prompt is built "
+    "on: {view} Start with it and describe what is seen from it; use the rest of the facts "
+    "only where they fit this view, and leave out parts not seen from here."
+)
+
 FRAMING = {
     "character": "Full-body view of the character alone, standing, neutral pose, plain "
     "uncluttered background, even light, face clearly visible.",
@@ -69,11 +77,13 @@ def build_image_prompt(
     view_free: bool = False,
     note: str = "",
     variant: dict | None = None,
+    view: str = "",
 ) -> str:
     """`chapters` given: a look at that point of the story (its state facts are used).
     None: a main picture, from permanent traits only, in the given view, or with
     `view_free` in none, for a set of views drawn from one prompt. `note` is the user's
-    own wish for this picture ("a view from above")."""
+    own wish for this picture ("a view from above"). `view`: the camera line of the one view
+    a place or object is drawn in, the main condition of the prompt."""
     permanent = [f.text for f in entity.facts if f.category == FACT_PERMANENT]
     state: list[str] = []
     if chapters is not None:
@@ -135,7 +145,11 @@ def build_image_prompt(
         age=age,
         visible=visible,
         subject={KIND_CHARACTER: "character", KIND_ITEM: "object"}.get(entity.kind, "location"),
-        framing=VIEW_FREE if view_free else ANGLES.get(angle) or FRAMING[entity.kind],
+        framing=MAIN_VIEW.format(view=view.strip())
+        if view.strip()
+        else VIEW_FREE
+        if view_free
+        else ANGLES.get(angle) or FRAMING[entity.kind],
         continuity=continuity,
         style=style_prompt(project) or "(no style chosen: omit this part)",
     )
