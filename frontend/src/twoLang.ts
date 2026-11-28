@@ -23,6 +23,8 @@ export function useTwoLang(
   const both = lang !== 'en'
   const [local, setLocalState] = useState('')
   const [busy, setBusy] = useState(false)
+  // The last translation failed: the English half is shown instead of a blank local one.
+  const [failed, setFailed] = useState(false)
   // The last pair known to say the same: a half equal to its pair needs no translation.
   const synced = useRef({ english: '', local: '' })
   const current = useRef({ english, local })
@@ -52,6 +54,7 @@ export function useTwoLang(
         // Typed on while the answer was coming: the next pause translates the newer text.
         if (current.current[from].trim() !== text) return current.current.english
         dirty.current = ''
+        setFailed(false)
         if (from === 'english') {
           synced.current = { english: text, local: other }
           setLocalState(other)
@@ -61,6 +64,7 @@ export function useTwoLang(
         setEnglish(other)
         return other
       } catch (e) {
+        setFailed(true)
         onError(errorText(t, e))
         return current.current.english
       } finally {
@@ -71,10 +75,10 @@ export function useTwoLang(
   )
 
   const schedule = useCallback(
-    (from: 'english' | 'local') => {
+    (from: 'english' | 'local', delay = PAUSE_MS) => {
       dirty.current = from
       window.clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => sync(from), PAUSE_MS)
+      timer.current = window.setTimeout(() => sync(from), delay)
     },
     [sync],
   )
@@ -84,7 +88,10 @@ export function useTwoLang(
   useEffect(() => {
     if (!both || !enabled || english.trim() === synced.current.english.trim()) return
     if (dirty.current === 'local') return // our own answer to the user's local edit is on its way
-    schedule('english')
+    // No local half yet (the window has just opened, or the model wrote a new prompt): the
+    // switch shows the local language, so translate at once instead of after the pause
+    // (owner's notes 28.11, item 64).
+    schedule('english', current.current.local.trim() ? PAUSE_MS : 0)
   }, [english, both, enabled, schedule])
 
   const setLocal = (text: string) => {
@@ -99,5 +106,9 @@ export function useTwoLang(
     return current.current.english
   }
 
-  return { both, local, setLocal, busy, flush }
+  /** The local half is shown as soon as it exists; until then, a "translating" line, unless
+   * the translation failed and only English is left. */
+  const waiting = both && enabled && english.trim() !== '' && local.trim() === '' && !failed
+
+  return { both, local, setLocal, busy, flush, waiting }
 }

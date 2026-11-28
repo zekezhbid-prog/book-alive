@@ -835,3 +835,4 @@ button.tab { background: transparent; border: 0; border-bottom: 2px solid transp
 /* The empty picture explains the form; the prompt of a finished one is edited in place. */
 .image-dialog .slot-hint { gap: 12px; max-width: 300px; }
 .image-dialog .redo-prompt { min-height: 150px; resize: vertical; }
+.settings-tab[hidden] { display: none; }

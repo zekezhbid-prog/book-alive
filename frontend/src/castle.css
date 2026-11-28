@@ -635,7 +635,8 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 .bubble-head .btn.icon:hover:not(:disabled) { color: var(--accent); }
 .prompt-full { margin: 6px 0 0; white-space: pre-wrap; color: var(--text); }
 /* The model's progress: grey lines at the end of the dialogue (item 37). */
-.chat-progress { align-self: flex-start; color: var(--faint); font: 13px/1.5 var(--sans); }
+/* The same type as the lines of the dialogue (owner's notes 28.11, item 65). */
+.chat-progress { align-self: flex-start; color: var(--faint); font: 15px/1.55 var(--sans); }
 .profile-head .quick-reply { font-size: 13px; }
 /* 27.11, item 45: the first card of a grid is empty and makes a new one. */
 /* "Create new" keeps the book sigil in its corner, like every empty niche (item 48). */

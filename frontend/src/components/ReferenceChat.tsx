@@ -477,7 +477,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       setDrawnHere((had) => had.filter((k) => k !== `${image.variant || ''}:${image.angle}`))
       if (editing?.image.id === image.id) setEditing(null)
       if (pending?.image.id === image.id) setPending(null)
-      await say([{ role: 'user', text: t('ref.deleted', { view: viewLabel(image.angle) }) }])
+      // Deleted quietly, no line in the dialogue (owner's notes 28.11, item 66).
     } catch (e) {
       fail(e)
     }
@@ -639,15 +639,17 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
               <CopyIcon />
             </button>
           </div>
-          <p className="prompt-full">{showLocal ? twoLang.local : prompt}</p>
-          {twoLang.both && half === 'local' && !showLocal && twoLang.busy && (
+          {/* The language marked in the switch from the first moment (item 64): while the
+              local half is being made, a "translating" line instead of the English text. */}
+          {twoLang.both && half === 'local' && !showLocal && twoLang.waiting ? (
             <p className="chat-progress">{t('generate.prompt.translating')}</p>
+          ) : (
+            <p className="prompt-full">{showLocal ? twoLang.local : prompt}</p>
           )}
         </>
       )
     }
     if (m.kind === 'image' || m.kind === 'upload') {
-      if (!m.image_url) return <p className="faint small">{t('ref.image.gone')}</p>
       const urls = (lines ?? []).map((l) => l.image_url).filter(Boolean)
       return (
         <a {...zoomLink(urls, urls.indexOf(m.image_url))}>
@@ -879,11 +881,13 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
         )}
         <div className="stack illustration-log ref-tape">
           {lines === null && <p className="muted">{t('app.loading')}</p>}
-          {lines?.map((m, n) => (
-            <div key={n} className={`illustration-bubble ${m.role}${m.kind === 'prompt' ? ' wide' : ''}`}>
-              {line(m, n)}
-            </div>
-          ))}
+          {lines?.map((m, n) =>
+            hiddenLine(m) ? null : (
+              <div key={n} className={`illustration-bubble ${m.role}${m.kind === 'prompt' ? ' wide' : ''}`}>
+                {line(m, n)}
+              </div>
+            ),
+          )}
           {/* While the model works, only a grey line at the end (item 37). */}
           {lines !== null && (busy ? live() : <div className="illustration-bubble assistant">{live()}</div>)}
           <div ref={end} />
@@ -949,4 +953,11 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       </div>
     </div>
   )
+}
+
+/** Lines left from a deleted picture are not shown (owner's notes 28.11, item 66): the
+ * picture itself once it is gone, and the "Delete: <view>" note older dialogues still keep. */
+function hiddenLine(m: RefLine): boolean {
+  if ((m.kind === 'image' || m.kind === 'upload') && !m.image_url) return true
+  return m.role === 'user' && m.kind === 'text' && /^(Удалить|Delete): /.test(m.text)
 }

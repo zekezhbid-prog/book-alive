@@ -222,7 +222,9 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
     return [reply(t('scene.chat.frame'), () => void frame())]
   }
 
-  const line = (m: Required<SceneLine>, n: number) => (
+  // A frame whose picture was deleted leaves no line (owner's notes 28.11, item 66).
+  const line = (m: Required<SceneLine>, n: number) =>
+    m.kind === 'frame' && !m.image_url ? null : (
     <div key={n} className={`illustration-bubble ${m.role}${m.kind === 'prompt' ? ' wide' : ''}`}>
       {m.kind === 'enrich' ? (
         <>
@@ -258,14 +260,11 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
           )}
         </details>
       )}
-      {m.kind === 'frame' &&
-        (m.image_url ? (
-          <a {...zoomLink(frames, frames.indexOf(frameUrl(m, n)))}>
-            <img className="illustration-picture" src={frameUrl(m, n)} alt="" />
-          </a>
-        ) : (
-          <p className="faint small">{t('scene.chat.frame.gone')}</p>
-        ))}
+      {m.kind === 'frame' && (
+        <a {...zoomLink(frames, frames.indexOf(frameUrl(m, n)))}>
+          <img className="illustration-picture" src={frameUrl(m, n)} alt="" />
+        </a>
+      )}
     </div>
   )
 

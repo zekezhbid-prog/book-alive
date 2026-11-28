@@ -35,6 +35,9 @@ export default function Settings() {
   const setTab = (name: "general" | "connections") => {
     const next = new URLSearchParams(params);
     next.set("tab", name);
+    // The top of the page before the other tab shows, so it never lands half-scrolled and
+    // then jumps (owner's notes 28.11, item 55).
+    window.scrollTo(0, 0);
     setParams(next, { replace: true });
   };
 
@@ -87,11 +90,12 @@ export default function Settings() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      {tab === "general" && projectId && (
-        <ProjectTitle projectId={projectId} onError={fail} />
-      )}
+      {/* Both tabs stay mounted and only the hidden one is out of sight: switching back does
+          not load the project name and the models again, so nothing grows after it shows
+          (owner's notes 28.11, item 55). */}
+      <div className="stack settings-tab" hidden={tab !== "general"}>
+        {projectId && <ProjectTitle projectId={projectId} onError={fail} />}
 
-      {tab === "general" && (
         <section className="panel pad row">
           <h2 className="grow">{t("settings.language")}</h2>
           <select
@@ -107,111 +111,114 @@ export default function Settings() {
             ))}
           </select>
         </section>
-      )}
 
-      {/* Pictures: show the prompt before drawing, or draw at once (owner's notes 28.11, item 46). */}
-      {tab === "general" && settings && (
-        <section className="panel pad stack">
-          <h2>{t("settings.images")}</h2>
-          <label className="row">
-            <input
-              type="checkbox"
-              checked={settings.image_show_prompt !== "off"}
-              onChange={(e) => {
-                save({ image_show_prompt: e.target.checked ? "" : "off" });
-                setShowPrompt(e.target.checked);
-              }}
-            />
-            <span>{t("settings.show_prompt")}</span>
-          </label>
-          <p className="muted small">{t("settings.show_prompt.hint")}</p>
-        </section>
-      )}
+        {/* Pictures: show the prompt before drawing, or draw at once (owner's notes 28.11, item 46). */}
+        {settings && (
+          <section className="panel pad stack">
+            <h2>{t("settings.images")}</h2>
+            <label className="row">
+              <input
+                type="checkbox"
+                checked={settings.image_show_prompt !== "off"}
+                onChange={(e) => {
+                  save({ image_show_prompt: e.target.checked ? "" : "off" });
+                  setShowPrompt(e.target.checked);
+                }}
+              />
+              <span>{t("settings.show_prompt")}</span>
+            </label>
+            <p className="muted small">{t("settings.show_prompt.hint")}</p>
+          </section>
+        )}
 
-      {tab === "connections" && isAdmin && (
-        <section className="panel pad stack">
-          <div>
-            <h2>{t("settings.connections")}</h2>
-            <p className="muted">{t("settings.connections.hint")}</p>
-          </div>
-          {connections.length === 0 && (
-            <p className="faint">{t("settings.connections.empty")}</p>
-          )}
-          {connections.map((connection) => (
-            <div key={connection.id} className="row connection">
-              <div className="grow">
-                <b>{connection.name}</b>
-                <div className="muted small">
-                  {`${connection.base_url} · ${
-                    connection.api_key_hint
-                      ? t("settings.key.stored", {
-                          hint: connection.api_key_hint,
-                        })
-                      : t("settings.key.none")
-                  }`}
-                </div>
-              </div>
-              <button
-                className="btn ghost small danger"
-                onClick={() => remove(connection)}
-              >
-                {t("app.delete")}
-              </button>
+        {accounts && <ChangePassword />}
+      </div>
+
+      <div className="stack settings-tab" hidden={tab !== "connections"}>
+        {isAdmin && (
+          <section className="panel pad stack">
+            <div>
+              <h2>{t("settings.connections")}</h2>
+              <p className="muted">{t("settings.connections.hint")}</p>
             </div>
-          ))}
-          <AddConnection onAdded={loadConnections} />
-        </section>
-      )}
+            {connections.length === 0 && (
+              <p className="faint">{t("settings.connections.empty")}</p>
+            )}
+            {connections.map((connection) => (
+              <div key={connection.id} className="row connection">
+                <div className="grow">
+                  <b>{connection.name}</b>
+                  <div className="muted small">
+                    {`${connection.base_url} · ${
+                      connection.api_key_hint
+                        ? t("settings.key.stored", {
+                            hint: connection.api_key_hint,
+                          })
+                        : t("settings.key.none")
+                    }`}
+                  </div>
+                </div>
+                <button
+                  className="btn ghost small danger"
+                  onClick={() => remove(connection)}
+                >
+                  {t("app.delete")}
+                </button>
+              </div>
+            ))}
+            <AddConnection onAdded={loadConnections} />
+          </section>
+        )}
 
-      {tab === "connections" && settings && (
-        <section className="panel pad stack">
-          <div>
-            <h2>{t("settings.models")}</h2>
-            <p className="muted">{t("settings.models.hint")}</p>
-          </div>
-          {/* Each text task has its own model; there is no common one to fall back on here
+        {settings && (
+          <section className="panel pad stack">
+            <div>
+              <h2>{t("settings.models")}</h2>
+              <p className="muted">{t("settings.models.hint")}</p>
+            </div>
+            {/* Each text task has its own model; there is no common one to fall back on here
               (the server still uses a shared default an administrator may have set). */}
-          {TEXT_TASKS.map((task) => (
+            {TEXT_TASKS.map((task) => (
+              <ModelPicker
+                key={task}
+                title={t(`settings.task.${task}`)}
+                hint={t(`settings.task.${task}.hint`)}
+                noneLabel={t("settings.task.main")}
+                kind="text"
+                connections={connections}
+                connectionId={settings[`text_${task}_connection_id`]}
+                model={settings[`text_${task}_model`]}
+                onChange={(connectionId, model) =>
+                  save({
+                    [`text_${task}_connection_id`]: connectionId,
+                    [`text_${task}_model`]: model,
+                  })
+                }
+              />
+            ))}
             <ModelPicker
-              key={task}
-              title={t(`settings.task.${task}`)}
-              hint={t(`settings.task.${task}.hint`)}
-              noneLabel={t("settings.task.main")}
-              kind="text"
+              title={t("settings.models.image")}
+              kind="image"
               connections={connections}
-              connectionId={settings[`text_${task}_connection_id`]}
-              model={settings[`text_${task}_model`]}
+              connectionId={settings.image_connection_id}
+              model={settings.image_model}
               onChange={(connectionId, model) =>
-                save({
-                  [`text_${task}_connection_id`]: connectionId,
-                  [`text_${task}_model`]: model,
-                })
+                save({ image_connection_id: connectionId, image_model: model })
               }
             />
-          ))}
-          <ModelPicker
-            title={t("settings.models.image")}
-            kind="image"
-            connections={connections}
-            connectionId={settings.image_connection_id}
-            model={settings.image_model}
-            onChange={(connectionId, model) =>
-              save({ image_connection_id: connectionId, image_model: model })
-            }
-          />
-          <ModelPicker
-            title={t("settings.models.video")}
-            kind="video"
-            connections={connections}
-            connectionId={settings.video_connection_id}
-            model={settings.video_model}
-            onChange={(connectionId, model) =>
-              save({ video_connection_id: connectionId, video_model: model })
-            }
-          />
-        </section>
-      )}
-      {tab === "general" && accounts && <ChangePassword />}
+            <ModelPicker
+              title={t("settings.models.video")}
+              kind="video"
+              connections={connections}
+              connectionId={settings.video_connection_id}
+              model={settings.video_model}
+              onChange={(connectionId, model) =>
+                save({ video_connection_id: connectionId, video_model: model })
+              }
+            />
+          </section>
+        )}
+      </div>
     </main>
   );
 }

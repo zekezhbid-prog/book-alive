@@ -80,6 +80,7 @@ export default function Illustrations() {
             project={project}
             onClose={() => navigate(base)}
             onDeleted={() => navigate(base)}
+            onDropped={() => api.illustrations(projectId).then(setItems, () => {})}
           />
         ) : (
           // Cards like the characters' and places': "Create new picture" first (item 45).
@@ -107,10 +108,12 @@ interface ChatProps {
   project: Project
   onClose: () => void
   onDeleted: () => void
+  /** An empty picture was removed on the way out; the list is read again. */
+  onDropped: () => void
 }
 
 /** The dialogue of one picture: the user's words, the model's questions and plans, pictures. */
-function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
+function IllustrationChat({ id, project, onClose, onDeleted, onDropped }: ChatProps) {
   const { t } = useI18n()
   const [item, setItem] = useState<Illustration | null>(null)
   const [text, setText] = useState('')
@@ -125,6 +128,24 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   useEffect(() => {
     api.illustration(id).then(setItem, (e) => setError(errorText(t, e)))
   }, [id, t])
+  // A picture left with no dialogue and no image is not kept (owner's notes 28.11, item 62):
+  // leaving it any way (the cross, another section, "+") deletes it. Only a loaded, empty
+  // picture counts, so a picture still loading is never touched.
+  const latest = useRef<Illustration | null>(null)
+  const dropped = useRef(onDropped)
+  useEffect(() => {
+    latest.current = item
+    dropped.current = onDropped
+  })
+  useEffect(
+    () => () => {
+      const last = latest.current
+      if (last && last.id === id && last.messages.length === 0) {
+        api.deleteIllustration(id).then(() => dropped.current(), () => {})
+      }
+    },
+    [id],
+  )
   // Braces matter: new Chrome returns a Promise from scrollIntoView, and React would call it
   // as the effect's cleanup ("l is not a function", owner's notes 26.11).
   useEffect(() => {
