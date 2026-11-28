@@ -71,11 +71,8 @@ export default function App() {
     return (
       <>
         <header className="topbar">
-          <Link to="/about" className="brand">
-            <span className="brand-mark">
-              <img src="/emblem.svg" alt="" />
-            </span>
-            <span className="brand-name">Lorebook</span>
+          <Link to="/about" className="brand" title="Lorebook">
+            <img className="brand-logo" src="/logo-small.webp" alt="Lorebook" />
           </Link>
           <span className="spacer" />
           {languageButton}
@@ -90,15 +87,10 @@ export default function App() {
           into the slot); the name of the app and the account menu in the right corner. */}
       <header className="topbar">
         {/* The name of the app leads to what it is; the projects are in the account menu. */}
-        <Link to="/about" className="brand brand-mark-only" title="Lorebook">
-          <span className="brand-mark">
-            <img src="/emblem.svg" alt="Lorebook" />
-          </span>
+        <Link to="/about" className="brand" title="Lorebook">
+          <img className="brand-logo" src="/logo-small.webp" alt="Lorebook" />
         </Link>
         <div id="topbar-slot" className="topbar-slot" />
-        <Link to="/about" className="brand brand-right">
-          <span className="brand-name">Lorebook</span>
-        </Link>
         <AccountMenu
           accounts={session.accounts}
           email={session.email}

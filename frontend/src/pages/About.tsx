@@ -109,6 +109,7 @@ export default function About({ signedIn }: { signedIn: boolean }) {
   const text = TEXT[lang]
   return (
     <main className="page narrow about">
+      <img className="about-logo" src="/logo.webp" alt="Lorebook" />
       <div className="page-head">
         <h1 className="grow">{text.title}</h1>
         {/* Back to wherever the Lorebook name was clicked. */}
