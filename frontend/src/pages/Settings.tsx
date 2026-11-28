@@ -10,6 +10,12 @@ import { errorText, LANGS, useI18n, type Lang, type MessageKey } from "../i18n";
 import { ask } from "../dialogs";
 import PageClose from "../components/PageClose";
 import { setShowPrompt } from "../showPrompt";
+import { StyleSettings } from "./Style";
+
+// The sections of Settings, in their order. "Style" belongs to a project and shows only
+// when Settings are opened from one (owner's notes 28.11, items 54 and 57).
+const TABS = ["general", "images", "style", "connections"] as const;
+type Tab = (typeof TABS)[number];
 
 // Each language by its own name, so the reader finds theirs whatever is chosen now.
 const LANG_NAMES: Record<Lang, string> = {
@@ -31,8 +37,10 @@ export default function Settings() {
   const [params, setParams] = useSearchParams();
   const projectId = params.get("project");
   // Two tabs: the general ones (name, language, password) and the connections with models.
-  const tab = params.get("tab") === "connections" ? "connections" : "general";
-  const setTab = (name: "general" | "connections") => {
+  const asked = params.get("tab") as Tab | null;
+  const tabs = TABS.filter((name) => name !== "style" || projectId);
+  const tab: Tab = asked && tabs.includes(asked) ? asked : "general";
+  const setTab = (name: Tab) => {
     const next = new URLSearchParams(params);
     next.set("tab", name);
     // The top of the page before the other tab shows, so it never lands half-scrolled and
@@ -76,7 +84,7 @@ export default function Settings() {
         <PageClose fallback={projectId ? `/projects/${projectId}` : "/"} />
       </div>
       <div className="segmented settings-tabs" role="tablist">
-        {(["general", "connections"] as const).map((name) => (
+        {tabs.map((name) => (
           <button
             key={name}
             role="tab"
@@ -90,7 +98,7 @@ export default function Settings() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      {/* Both tabs stay mounted and only the hidden one is out of sight: switching back does
+      {/* Every tab stays mounted and only the hidden one is out of sight: switching back does
           not load the project name and the models again, so nothing grows after it shows
           (owner's notes 28.11, item 55). */}
       <div className="stack settings-tab" hidden={tab !== "general"}>
@@ -112,10 +120,14 @@ export default function Settings() {
           </select>
         </section>
 
+        {accounts && <ChangePassword />}
+      </div>
+
+      {/* Pictures: a section of its own, new picture settings go here (item 54). */}
+      <div className="stack settings-tab" hidden={tab !== "images"}>
         {/* Pictures: show the prompt before drawing, or draw at once (owner's notes 28.11, item 46). */}
         {settings && (
           <section className="panel pad stack">
-            <h2>{t("settings.images")}</h2>
             <label className="row">
               <input
                 type="checkbox"
@@ -130,9 +142,13 @@ export default function Settings() {
             <p className="muted small">{t("settings.show_prompt.hint")}</p>
           </section>
         )}
-
-        {accounts && <ChangePassword />}
       </div>
+
+      {projectId && (
+        <div className="stack settings-tab" hidden={tab !== "style"}>
+          <StyleSettings projectId={projectId} />
+        </div>
+      )}
 
       <div className="stack settings-tab" hidden={tab !== "connections"}>
         {isAdmin && (

@@ -431,7 +431,9 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
   color: #1a0f04; font-family: var(--book); font-size: 17px; letter-spacing: 0.3px;
   border-radius: var(--radius);
 }
-.settings-tabs { align-self: flex-start; }
+.settings-tabs { align-self: flex-start; max-width: 100%; }
+/* Four sections fit a phone in one row (owner's notes 28.11, items 54 and 57). */
+@media (max-width: 640px) { .settings-tabs { align-self: stretch; } .settings-tabs button { flex: 1 1 auto; padding: 6px 6px; font-size: 14px; } }
 /* The confirm / doubt icon in a card tile's corner. */
 .tile-corner { position: absolute; z-index: 2; top: 8px; right: 8px; padding: 5px; opacity: 0.55; }
 .tile-wrap:hover .tile-corner, .tile-corner:focus-visible { opacity: 1; }

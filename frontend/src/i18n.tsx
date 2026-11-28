@@ -12,6 +12,8 @@ const ru = {
   'chat.close': 'Свернуть чат',
   'settings.tab.general': 'Общие',
   'settings.tab.connections': 'Подключения',
+  'settings.tab.images': 'Изображения',
+  'settings.tab.style': 'Стиль',
   'settings.language': 'Язык интерфейса',
   'settings.images': 'Изображения',
   'settings.show_prompt': 'Показывать промпт',
@@ -957,7 +959,7 @@ const ru = {
   'scene.frame.short': 'Промпт и референсы уже готовы: нажмите «Сгенерировать» или поправьте их.',
   'scene.frame.no_refs': 'Референсов нет: кадр нарисуется только по промпту.',
   'scene.references.no_style':
-    'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его в разделе «Стиль».',
+    'Стиль проекта не выбран, поэтому референсы не подбираются. Выберите его в Настройках, раздел «Стиль».',
   'scene.look': 'облик',
   'scene.prompt': 'Промпт для видео',
   'scene.note.placeholder': 'Пожелания к сцене (необязательно): что показать, откуда камера',
@@ -1120,7 +1122,7 @@ const ru = {
     'Модель ответила не в том виде, который ожидался. Попробуйте ещё раз или выберите другую модель.',
   'error.image_model_not_configured':
     'Не выбрана модель для картинок. Откройте Настройки, добавьте подключение с ключом и выберите модель. Промпт можно скопировать и нарисовать в другом сервисе, а результат загрузить сюда.',
-  'error.style_not_chosen': 'Сначала выберите стиль проекта в разделе «Стиль».',
+  'error.style_not_chosen': 'Сначала выберите стиль проекта: Настройки, раздел «Стиль».',
   'error.not_an_image': 'Это не картинка. Подходят PNG, JPEG и WebP.',
   'error.not_a_card_file': 'Это не файл карточки. Нужен zip, сохранённый кнопкой «Экспорт».',
   'error.style_text_required': 'Опишите свой стиль.',
@@ -1142,6 +1144,8 @@ const en: Record<keyof typeof ru, string> = {
   'chat.close': 'Fold the chat',
   'settings.tab.general': 'General',
   'settings.tab.connections': 'Connections',
+  'settings.tab.images': 'Pictures',
+  'settings.tab.style': 'Style',
   'settings.language': 'Interface language',
   'settings.images': 'Pictures',
   'settings.show_prompt': 'Show the prompt',
@@ -2086,7 +2090,7 @@ const en: Record<keyof typeof ru, string> = {
   'scene.frame.short': 'The prompt and references are ready: press “Generate” or adjust them.',
   'scene.frame.no_refs': 'No references: the frame is drawn from the prompt only.',
   'scene.references.no_style':
-    'No project style is chosen, so references are not picked. Choose one in the Style section.',
+    'No project style is chosen, so references are not picked. Choose one in Settings, the Style section.',
   'scene.look': 'look',
   'scene.prompt': 'Video prompt',
   'scene.note.placeholder': 'Wishes for the scene (optional): what to show, where the camera is',
@@ -2249,7 +2253,7 @@ const en: Record<keyof typeof ru, string> = {
     'The model replied in an unexpected form. Try again or choose another model.',
   'error.image_model_not_configured':
     'No image model is selected. Open Settings, add a connection with a key and choose a model. You can copy the prompt, draw it in another service and upload the result here.',
-  'error.style_not_chosen': 'Choose the project style in the Style section first.',
+  'error.style_not_chosen': 'Choose the project style first: Settings, the Style section.',
   'error.not_an_image': 'This is not a picture. PNG, JPEG and WebP are accepted.',
   'error.not_a_card_file': 'This is not a card file. Use a zip saved with “Export”.',
   'error.style_text_required': 'Describe your style.',

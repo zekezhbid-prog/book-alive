@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import type { Project } from '../api'
 import { useI18n } from '../i18n'
 import { useSide, useView, type Side } from '../view'
 import BookSearch from './BookSearch'
-import { BookIcon, FilmIcon, ImageIcon, HistoryIcon, PaletteIcon, KeyIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
+import { BookIcon, FilmIcon, ImageIcon, HistoryIcon, KeyIcon, PinIcon, ReviewIcon, UsersIcon } from './icons'
 import ChatDock from './ChatDock'
-import { isWindowPage } from '../windows'
 
 interface Props {
   project: Project
@@ -21,7 +20,6 @@ interface Props {
 export default function ProjectHeader({ project, children, chat }: Props) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const overWindow = isWindowPage(useLocation().pathname)
   const view = useView(project)
   const [side, setSide] = useSide(project.id)
   // The style is a step of the illustrator's work (references and frames wait for it).
@@ -84,13 +82,6 @@ export default function ProjectHeader({ project, children, chat }: Props) {
             <span>{t('tabs.scenes')}</span>
           </NavLink>
         )}
-        {illustrating && (
-          <NavLink replace={overWindow} to={`${base}/style`} className={({ isActive }) => tabClass(isActive)}>
-            <PaletteIcon />
-            <span>{t('tabs.style')}</span>
-            {!project.style_id && <span className="dot" title={t('style.not_chosen')} />}
-          </NavLink>
-        )}
         {project.mode === 'writer' && view === 'writer' && (
           <>
             {writerTool('review')}
@@ -118,4 +109,4 @@ export default function ProjectHeader({ project, children, chat }: Props) {
 }
 
 const tabClass = (active: boolean) => `tab ${active ? 'active' : ''}`
-const isSection = () => /\/(characters|locations|items|scenes|images|style|usage)(\/|$)/.test(location.pathname)
+const isSection = () => /\/(characters|locations|items|scenes|images|usage)(\/|$)/.test(location.pathname)

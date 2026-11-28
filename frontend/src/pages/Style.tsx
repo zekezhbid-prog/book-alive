@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { api, peek, type Project, type StylePreset } from '../api'
-import Gallery from '../components/Gallery'
-import PageClose from '../components/PageClose'
-import ProjectHeader from '../components/ProjectHeader'
 import { errorText, useI18n, type MessageKey } from '../i18n'
 import { ask } from '../dialogs'
 
-/** One look for every picture in the project, plus references that belong to no card. */
+/** The old address of the style tab: the style now lives in Settings (owner's notes 28.11, item 57). */
 export default function Style() {
-  const { t } = useI18n()
   const { projectId = '' } = useParams()
+  return <Navigate replace to={`/settings?project=${projectId}&tab=style`} />
+}
+
+/**
+ * One look for every picture in the project, chosen once: a section of Settings (owner's
+ * notes 28.11, item 57). The project's "general references" are no longer shown here: no
+ * generation reads them, and pictures of the "Pictures" section landed among them (item 58).
+ */
+export function StyleSettings({ projectId }: { projectId: string }) {
+  const { t } = useI18n()
   const [project, setProject] = useState<Project | null>(() => peek.project(projectId) ?? null)
   const [presets, setPresets] = useState<StylePreset[]>([])
   const [custom, setCustom] = useState(() => peek.project(projectId)?.style_text ?? '')
@@ -25,7 +31,7 @@ export default function Style() {
     api.styles().then(setPresets, fail)
   }, [projectId, t])
 
-  if (!project) return <main className="page muted">{error || t('app.loading')}</main>
+  if (!project) return <p className="muted">{error || t('app.loading')}</p>
 
   const choose = async (styleId: string, text = '') => {
     // Pictures made so far carry the old style's label and stop being offered as references.
@@ -40,53 +46,44 @@ export default function Style() {
   }
 
   return (
-    <>
-      <ProjectHeader project={project} />
-      <main className="page narrow stack">
-        <div className="page-head">
-          <div className="grow">
-            <h1>{t('style.title')}</h1>
-            <p className="muted">{t('style.hint')}</p>
-          </div>
-          <PageClose fallback={`/projects/${projectId}`} />
+    <section className="panel pad stack">
+      <div>
+        <h2>{t('style.title')}</h2>
+        <p className="muted">{t('style.hint')}</p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="style-grid">
+        {presets.map((preset) => (
+          <button
+            key={preset.id}
+            className={`mode-option ${project.style_id === preset.id ? 'active' : ''}`}
+            onClick={() => project.style_id !== preset.id && choose(preset.id)}
+          >
+            <b>{t(`style.preset.${preset.id}` as MessageKey)}</b>
+            <span className="muted small">{preset.prompt}</span>
+          </button>
+        ))}
+      </div>
+      <div className={`mode-option ${project.style_id === 'custom' ? 'active' : ''}`}>
+        <b>{t('style.custom')}</b>
+        <textarea
+          className="input"
+          rows={2}
+          maxLength={1000}
+          value={custom}
+          placeholder={t('style.custom.placeholder')}
+          onChange={(e) => setCustom(e.target.value)}
+        />
+        <div>
+          <button
+            className="btn small"
+            disabled={!custom.trim() || (project.style_id === 'custom' && custom.trim() === project.style_text)}
+            onClick={() => choose('custom', custom)}
+          >
+            {t('style.custom.use')}
+          </button>
         </div>
-        {error && <p className="error">{error}</p>}
-        <div className="style-grid">
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              className={`mode-option ${project.style_id === preset.id ? 'active' : ''}`}
-              onClick={() => project.style_id !== preset.id && choose(preset.id)}
-            >
-              <b>{t(`style.preset.${preset.id}` as MessageKey)}</b>
-              <span className="muted small">{preset.prompt}</span>
-            </button>
-          ))}
-        </div>
-        <div className={`mode-option ${project.style_id === 'custom' ? 'active' : ''}`}>
-          <b>{t('style.custom')}</b>
-          <textarea
-            className="input"
-            rows={2}
-            maxLength={1000}
-            value={custom}
-            placeholder={t('style.custom.placeholder')}
-            onChange={(e) => setCustom(e.target.value)}
-          />
-          <div>
-            <button
-              className="btn small"
-              disabled={!custom.trim() || (project.style_id === 'custom' && custom.trim() === project.style_text)}
-              onClick={() => choose('custom', custom)}
-            >
-              {t('style.custom.use')}
-            </button>
-          </div>
-        </div>
-        <section className="panel pad">
-          <Gallery projectId={projectId} chapters={project.chapters} hasStyle={Boolean(project.style_id)} />
-        </section>
-      </main>
-    </>
+      </div>
+    </section>
   )
 }
