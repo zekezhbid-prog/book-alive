@@ -215,6 +215,8 @@ export interface ModelSettings {
   image_model: string
   video_connection_id: string
   video_model: string
+  /** "off": pictures are drawn at once, the prompt is not shown first (item 46). */
+  image_show_prompt: string
 }
 
 export interface TestResult {
@@ -602,7 +604,7 @@ export interface Scene extends SceneBrief {
  * a fuller description offered (`added` marks what is new). */
 export interface SceneLine {
   role: 'user' | 'assistant'
-  kind: 'text' | 'prompt' | 'frame' | 'enrich'
+  kind: 'text' | 'prompt' | 'frame' | 'enrich' | 'frame_prompt'
   text?: string
   prompt?: string
   image_id?: string

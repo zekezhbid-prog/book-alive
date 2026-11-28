@@ -20,6 +20,9 @@ NAMES = (
     "image_model",
     "video_connection_id",
     "video_model",
+    # "off": pictures are drawn at once, without stopping at the prompt (owner's notes 28.11,
+    # item 46); empty means the prompt is shown first.
+    "image_show_prompt",
 )
 
 

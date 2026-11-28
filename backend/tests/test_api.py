@@ -204,3 +204,10 @@ def test_a_task_uses_its_own_model_or_falls_back_to_the_main_one(client):
     client.delete(f"/api/connections/{conn}")
     settings = client.get("/api/settings").json()
     assert (settings["text_chat_connection_id"], settings["text_chat_model"]) == ("", "")
+
+
+def test_show_prompt_setting_is_kept(client):
+    # Owner's notes 28.11, item 46: shown by default, "off" draws at once.
+    assert client.get("/api/settings").json()["image_show_prompt"] == ""
+    client.put("/api/settings", json={"image_show_prompt": "off"})
+    assert client.get("/api/settings").json()["image_show_prompt"] == "off"

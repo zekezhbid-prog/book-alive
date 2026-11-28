@@ -6,6 +6,7 @@ import { errorText, useI18n } from '../i18n'
 import { Composer } from './Composer'
 import { zoomLink } from './Lightbox'
 import { CopyIcon, RefreshIcon, UploadIcon } from './icons'
+import { useShowPrompt } from '../showPrompt'
 
 type Busy = '' | 'prompt' | 'frame' | 'enrich' | 'apply' | 'upload'
 
@@ -39,6 +40,7 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
   const field = useRef<HTMLTextAreaElement>(null)
   const clip = useRef<HTMLInputElement>(null)
   const end = useRef<HTMLDivElement>(null)
+  const showPrompt = useShowPrompt()
   const lines = scene.chat
   const last = lines[lines.length - 1]
 
@@ -85,9 +87,17 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
       const next = await api.refineScenePrompt(scene.id, change)
       return [{ role: 'assistant', kind: 'prompt', text: t('scene.chat.refined'), prompt: next.prompt }]
     })
+  // "Show the prompt" on: the frame's prompt first, drawn by "Draw" (owner's notes 28.11,
+  // items 46, 51); off: drawn at once.
   const frame = () =>
-    step('frame', t('scene.chat.frame'), async () => {
-      const next = await api.generateSceneFrame(scene.id, '', size)
+    showPrompt
+      ? step('', t('scene.chat.frame'), async () => [
+          { role: 'assistant', kind: 'frame_prompt', text: t('scene.chat.frame.prompt'), prompt: scene.frame_prompt },
+        ])
+      : drawFrame(t('scene.chat.frame'), '')
+  const drawFrame = (words: string, prompt: string) =>
+    step('frame', words, async () => {
+      const next = await api.generateSceneFrame(scene.id, prompt, size)
       return [{ role: 'assistant', kind: 'frame', image_id: next.frames[0]?.id ?? '' }]
     })
   const fixFrame = async (remark: string) => {
@@ -167,6 +177,12 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
         }),
       ]
     }
+    if (last?.kind === 'frame_prompt') {
+      return [
+        reply(t('scene.chat.frame.draw'), () => void drawFrame(t('scene.chat.frame.draw'), last.prompt)),
+        reply(t('app.cancel'), () => void say(t('app.cancel')), true),
+      ]
+    }
     if (last?.kind === 'enrich' && last.added.length) {
       return [
         reply(t('scene.chat.apply'), () => void apply(last)),
@@ -202,6 +218,7 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
       ) : (
         m.text && <p>{m.text}</p>
       )}
+      {m.kind === 'frame_prompt' && <p className="prompt-full">{m.prompt}</p>}
       {m.kind === 'prompt' && (
         <details open={n === lastPrompt}>
           <summary className="small muted">{t('scene.prompt')}</summary>

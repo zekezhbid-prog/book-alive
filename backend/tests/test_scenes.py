@@ -256,6 +256,20 @@ def test_video_prompt_gets_the_state_as_of_the_chapter(session, book):
     assert "cinematic realism" in model.system
 
 
+def test_video_prompt_follows_the_scene_text_not_the_book(session, book):
+    # Owner's notes 28.11, item 51: the prompt (and the first frame made from it) comes
+    # from the scene's own text; the book's text stays only for the spoken lines.
+    scene = service.mark_scene(session, book.mill, 0, 3, "Ключ")
+    model = FakeModel()
+    service.video_prompt(session, model, book, scene, "")
+    assert model.context.startswith("Scene text:\n")  # no scene text yet: the book's text
+    scene.summary = "Девушка у мельницы молча отдаёт ключ."
+    service.video_prompt(session, model, book, scene, "")
+    first, _, rest = model.context.partition("\n\n")
+    assert first.startswith("Scene text (film this") and scene.summary in first
+    assert rest.startswith("The book's text of the scene")
+
+
 def test_a_change_in_the_dialogue_may_take_a_picture_in_or_leave_one_out(session, book):
     # Owner's notes 27.11, scene dialogue: "we need ..." / "no reference for ..." in words.
     scene = service.mark_scene(session, book.mill, 0, 3, "Ключ")
@@ -289,8 +303,11 @@ def test_the_scene_dialogue_keeps_its_lines(client, session, book):
         {"role": "assistant", "kind": "frame", "image_id": picture.id},
         {"role": "assistant", "kind": "frame", "image_id": "gone"},
         {"role": "assistant", "kind": "enrich", "text": "Полнее.", "added": ["Полнее."]},
+        # The first frame's prompt shown before drawing (owner's notes 28.11, item 46).
+        {"role": "assistant", "kind": "frame_prompt", "prompt": "A still of a key."},
     ]
     scene = client.post(f"/api/scenes/{made['id']}/chat", json=lines).json()
+    assert scene["chat"][5]["prompt"] == "A still of a key."
     assert [(m["kind"], m["text"]) for m in scene["chat"]][:2] == [
         ("text", "Собрать промпт"),
         ("prompt", ""),

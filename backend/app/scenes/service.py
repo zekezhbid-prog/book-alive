@@ -488,7 +488,19 @@ def scene_context(
     note: str,
     refs: list[Reference],
 ) -> str:
-    lines = ["Scene text:", scene_text(scene, chapter), ""]
+    # The scene's own text is what gets filmed; the book's text stays for the spoken lines
+    # and small details (owner's notes 28.11, item 51). No scene text yet: the book's text.
+    if scene.summary.strip():
+        lines = [
+            "Scene text (film this; where the book differs, follow this):",
+            scene.summary.strip(),
+            "",
+            "The book's text of the scene (for the spoken lines and details only):",
+            scene_text(scene, chapter),
+            "",
+        ]
+    else:
+        lines = ["Scene text:", scene_text(scene, chapter), ""]
     for entity_id in scene.entity_ids:
         entity = session.get(Entity, entity_id)
         if entity is None:

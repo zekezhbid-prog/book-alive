@@ -16,6 +16,7 @@ import { Composer } from '../components/Composer'
 import { ProposalList } from '../components/SceneProposals'
 import { zoomLink } from '../components/Lightbox'
 import { BoldPlusIcon, BookIcon, TrashIcon } from '../components/icons'
+import { useShowPrompt } from '../showPrompt'
 import CardGrid from '../components/CardGrid'
 import { HelpButton } from '../components/HelpButton'
 import { errorText, useI18n } from '../i18n'
@@ -117,6 +118,7 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
   const [size, setSize] = useState<ImageSize>('1:1')
   const [error, setError] = useState('')
   const [picking, setPicking] = useState(false)
+  const showPrompt = useShowPrompt()
   const end = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -149,7 +151,8 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
     setItem(await api.drawIllustration(id, size))
   }
 
-  // A plan is drawn at once: the user sees what the model found, then the picture.
+  // "Show the prompt" off: a plan is drawn at once; on, it waits for "Draw" (owner's notes
+  // 28.11, item 46).
   const send = async () => {
     const words = text.trim()
     if (!words) return
@@ -160,7 +163,7 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
       const answered = await api.askIllustration(id, words)
       setItem(answered)
       setBusy('')
-      await draw(answered)
+      if (!showPrompt) await draw(answered)
     } catch (e) {
       setError(errorText(t, e))
       api.illustration(id).then(setItem, () => {})
@@ -254,7 +257,8 @@ function IllustrationChat({ id, project, onClose, onDeleted }: ChatProps) {
               </p>
             )}
             {m.prompt && (
-              <details>
+              // The plan waiting for "Draw" shows its prompt open when "Show the prompt" is on.
+              <details open={showPrompt && waiting && n === item.messages.length - 1}>
                 <summary className="small muted">{t('gallery.prompt.show')}</summary>
                 <p className="small prompt-last">{m.prompt}</p>
               </details>

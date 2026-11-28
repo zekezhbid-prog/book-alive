@@ -80,8 +80,9 @@ class SceneOut(SceneBrief):
 class SceneLine(BaseModel):
     role: Literal["user", "assistant"]
     # text | prompt (a version of the video prompt) | frame (a first frame drawn) |
-    # enrich (a fuller description offered, `added` marks what is new)
-    kind: Literal["text", "prompt", "frame", "enrich"] = "text"
+    # enrich (a fuller description offered, `added` marks what is new) |
+    # frame_prompt (the first frame's prompt shown before drawing, owner's notes 28.11, item 46)
+    kind: Literal["text", "prompt", "frame", "enrich", "frame_prompt"] = "text"
     text: str = Field(default="", max_length=6000)
     prompt: str = Field(default="", max_length=8000)
     image_id: str = Field(default="", max_length=32)

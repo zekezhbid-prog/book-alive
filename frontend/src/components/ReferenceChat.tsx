@@ -12,6 +12,7 @@ import {
 } from '../api'
 import { ask } from '../dialogs'
 import { errorText, useI18n, type MessageKey } from '../i18n'
+import { useShowPrompt } from '../showPrompt'
 import { useTwoLang } from '../twoLang'
 import { HelpButton } from './HelpButton'
 import { CheckIcon, CopyIcon, RefreshIcon, TrashIcon, UploadIcon } from './icons'
@@ -128,6 +129,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
   }, [onClose, busy])
 
   const twoLang = useTwoLang(entityId, prompt, setPrompt, true, setError)
+  const showPrompt = useShowPrompt()
   const variant = variants.find((v) => v.key === variantKey) ?? null
   const SET_ORDER = orderOf(variant?.shape)
   const bases = allBases.filter((b) => (b.variant || '') === (variant?.key ?? ''))
@@ -281,6 +283,8 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
       ).prompt
       if (withAngles && words) written = (await api.refineImagePrompt(entityId, written, words)).text
       setPrompt(written)
+      // "Show the prompt" off: no stop at the prompt, the picture is drawn at once (item 46).
+      if (!showPrompt) return await draw({ english: written, view, lookKey, before: said })
       setPromptReady(true)
       await say([...said, { role: 'assistant', kind: 'prompt', prompt: written, view }])
     } catch (e) {
@@ -307,22 +311,24 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     setBusy('')
   }
 
-  const draw = async () => {
+  /** `given`: the prompt just written, drawn without waiting for "Draw" (item 46). */
+  const draw = async (given?: { english: string; view: string; lookKey: string; before: RefLineIn[] }) => {
     setError('')
-    const lookKey = variant?.key ?? ''
-    const view = upNext
+    const lookKey = given?.lookKey ?? variant?.key ?? ''
+    const view = given?.view ?? upNext
     let references = samples.slice(-3)
     const from = refLooks.find((v) => v.key === refLook)
     const fromImage = from && latest(allBases.filter((b) => b.variant === from.key), orderOf(from.shape)[0])
     if (fromImage) references = [fromImage.id, ...references].slice(0, 3)
     setBusy('image')
     try {
-      const made = await generate(view, await twoLang.flush(), references, lookKey)
+      const made = await generate(view, given?.english ?? (await twoLang.flush()), references, lookKey)
       setPromptReady(false)
       setSamples([])
-      await drawn(made, view, references, lookKey)
+      await drawn(made, view, references, lookKey, given?.before)
     } catch (e) {
       fail(e)
+      if (given?.before.length) await say(given.before)
     }
     setBusy('')
   }
@@ -727,7 +733,7 @@ export function ReferenceChat({ projectId, entityId, kind, name, bases: allBases
     if (promptReady)
       return (
         <div className="quick-replies">
-          <button className="quick-reply" disabled={!hasStyle || !prompt.trim()} onClick={draw}>
+          <button className="quick-reply" disabled={!hasStyle || !prompt.trim()} onClick={() => void draw()}>
             {t('ref.draw', { view: viewLabel(upNext) })}
           </button>
           {!hasStyle && <span className="muted small">{t('generate.no_style')}</span>}

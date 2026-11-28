@@ -9,6 +9,7 @@ import {
 import { errorText, LANGS, useI18n, type Lang, type MessageKey } from "../i18n";
 import { ask } from "../dialogs";
 import PageClose from "../components/PageClose";
+import { setShowPrompt } from "../showPrompt";
 
 // Each language by its own name, so the reader finds theirs whatever is chosen now.
 const LANG_NAMES: Record<Lang, string> = {
@@ -105,6 +106,25 @@ export default function Settings() {
               </option>
             ))}
           </select>
+        </section>
+      )}
+
+      {/* Pictures: show the prompt before drawing, or draw at once (owner's notes 28.11, item 46). */}
+      {tab === "general" && settings && (
+        <section className="panel pad stack">
+          <h2>{t("settings.images")}</h2>
+          <label className="row">
+            <input
+              type="checkbox"
+              checked={settings.image_show_prompt !== "off"}
+              onChange={(e) => {
+                save({ image_show_prompt: e.target.checked ? "" : "off" });
+                setShowPrompt(e.target.checked);
+              }}
+            />
+            <span>{t("settings.show_prompt")}</span>
+          </label>
+          <p className="muted small">{t("settings.show_prompt.hint")}</p>
         </section>
       )}
 

@@ -72,6 +72,8 @@ class SettingsBody(BaseModel):
     # Chosen now, used once video generation exists.
     video_connection_id: str = ""
     video_model: str = ""
+    # "off": draw at once without showing the prompt first (owner's notes 28.11, item 46).
+    image_show_prompt: str = ""
 
 
 def _hint(connection: Connection) -> str:
