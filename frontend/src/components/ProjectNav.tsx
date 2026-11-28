@@ -4,6 +4,7 @@ import { api, peek, type EntityBrief, type EntityKind, type EntitySection, type 
 import { errorText, useI18n } from '../i18n'
 import { ArrowDownIcon, ArrowUpIcon, BoldPlusIcon, PlusIcon, SparklesIcon, TrashIcon } from './icons'
 import { AddCardDialog } from './AddCardDialog'
+import { shownTitle } from '../chapterTitle'
 
 type Section = 'chapters' | EntitySection | 'scenes'
 const SECTIONS: Section[] = ['chapters', 'characters', 'locations', 'items', 'scenes']
@@ -128,7 +129,7 @@ export default function ProjectNav({ project, activeChapter, onAddChapter, onMov
             >
               {/* A title like "Глава 3" or "III" already carries its number. */}
               {!/\d|^[IVXLC]+\b/.test(item.title) && <span className="chapter-num">{index + 1}</span>}
-              <span className={item.title ? '' : 'faint'}>{item.title || t('book.untitled')}</span>
+              <span className={item.title ? '' : 'faint'}>{shownTitle(item.title, t)}</span>
               {item.private && (
                 <span className="faint" title={t('chapter.private.hint')}>
                   🔒

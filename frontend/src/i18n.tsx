@@ -117,6 +117,7 @@ const ru = {
   'book.view.illustrator': 'Иллюстратор',
 
   'chapter.title.placeholder': 'Название главы',
+  'chapter.private.title': 'Личные данные автора',
   'chapter.text.placeholder': 'Текст главы…',
   'chapter.add': 'Добавить главу',
   'chapter.private.on': 'Закрыта для ИИ',
@@ -1249,6 +1250,7 @@ const en: Record<keyof typeof ru, string> = {
   'book.view.illustrator': 'Illustrator',
 
   'chapter.title.placeholder': 'Chapter title',
+  'chapter.private.title': "The author's personal data",
   'chapter.text.placeholder': 'Chapter text…',
   'chapter.add': 'Add chapter',
   'chapter.private.on': 'Closed to AI',

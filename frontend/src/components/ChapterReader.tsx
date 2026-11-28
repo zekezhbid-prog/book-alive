@@ -5,6 +5,7 @@ import { useI18n, type MessageKey } from '../i18n'
 import { markMatches } from '../markMatches'
 import SceneProposalsDialog from './SceneProposals'
 import { ChevronIcon, ClapperIcon, CloseIcon, LockIcon } from './icons'
+import { shownTitle } from '../chapterTitle'
 
 export interface NamedEntity {
   id: string
@@ -163,7 +164,7 @@ export default function ChapterReader({
       </div>
       {/* On a phone the chapter fills the screen and only this part scrolls (owner's notes 27.11, item 16). */}
       <div className="chapter-scroll" ref={scroller}>
-        <h2 className="chapter-title">{chapter.title || t('book.untitled')}</h2>
+        <h2 className="chapter-title">{shownTitle(chapter.title, t)}</h2>
         {paragraphs.map((paragraph, index) => (
           <p
             key={index}
