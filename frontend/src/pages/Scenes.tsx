@@ -29,7 +29,7 @@ import { saveView, useView } from '../view'
 import { ask } from '../dialogs'
 import { ProposalList } from '../components/SceneProposals'
 import AiNotice, { useTextModelReady } from '../components/AiNotice'
-import { CheckIcon, DownloadIcon, GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, PlusIcon, SparklesIcon, TrashIcon, UploadIcon } from '../components/icons'
+import { CheckIcon, DownloadIcon, GoldPlusSymbol, GoldSparklesSymbol, PencilIcon, PlusIcon, RefreshIcon, SparklesIcon, TrashIcon, UploadIcon } from '../components/icons'
 import FoldHead from '../components/FoldHead'
 
 type Participant = Scene['participants'][number]
@@ -238,17 +238,59 @@ interface TextsProps {
   writing: boolean
   aiReady: boolean
   onChange: (scene: Scene) => void
-  /** "Add to the description" for an illustrator: the scene's dialogue makes the offer. */
-  onEnrich?: () => void
+  /** "Add to the description" for an illustrator: the scene's dialogue makes the offer for
+   *  the whole scene or for one block (`sub`, -1 is the whole scene). */
+  onEnrich?: (sub: number) => void
 }
 
 /** Two folds like a card's sections: the scene as written for the screen, and the book's
- *  own text. "Add more" suggests what fits but the book does not say; it is shown marked
- *  and saved only by "Apply" (owner's notes 25.11). */
+ *  own text. The scene's text is a row of blocks "Scene N" like a screenplay (owner's notes
+ *  28.11, items 67, 68), each with its own "Add more"; "Rebuild" writes them anew from the
+ *  book. "Add more" suggests what fits but the book does not say; it is shown marked and
+ *  saved only by "Apply" (owner's notes 25.11). */
 function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps) {
   const { t } = useI18n()
   const [open, setOpen] = useState({ scene: true, book: false })
-  const [enriching, setEnriching] = useState(false)
+  // The block "Add more" works on in the window; -1 is the whole scene.
+  const [enriching, setEnriching] = useState<number | null>(null)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [error, setError] = useState('')
+  const subs = scene.subscenes
+  const rebuild = async () => {
+    if ((subs.length || scene.summary.trim()) && !(await ask(t('scene.text.rebuild.confirm')))) return
+    setRebuilding(true)
+    setError('')
+    try {
+      onChange(await api.rebuildScene(scene.id))
+      setOpen((now) => ({ ...now, scene: true }))
+    } catch (e) {
+      setError(errorText(t, e))
+    }
+    setRebuilding(false)
+  }
+  const enrichButton = (sub: number) =>
+    writing ? (
+      <button
+        className="btn ghost small"
+        disabled={!aiReady || rebuilding}
+        title={t('scene.enrich.hint')}
+        onClick={() => setEnriching(sub)}
+      >
+        <SparklesIcon />
+        {t('scene.enrich')}
+      </button>
+    ) : (
+      onEnrich && (
+        <button
+          className="quick-reply"
+          disabled={!aiReady || rebuilding}
+          title={t('scene.enrich.hint')}
+          onClick={() => onEnrich(sub)}
+        >
+          {t(sub >= 0 ? 'scene.enrich' : 'scene.chat.enrich')}
+        </button>
+      )
+    )
   return (
     <div className="stack scene-texts">
       {/* The book's own text first, the scene's text under it (owner's notes 28.11, item 50). */}
@@ -268,52 +310,79 @@ function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps)
         title={t('scene.description')}
         open={open.scene}
         onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
-      />
-      {enriching && (
+      >
+        {/* "Rebuild": the blocks written anew from the book (item 67), two arrows (item 39). */}
+        <button
+          className="btn ghost small icon"
+          disabled={!aiReady || rebuilding}
+          title={t('scene.text.rebuild')}
+          aria-label={t('scene.text.rebuild')}
+          onClick={() => void rebuild()}
+        >
+          <RefreshIcon />
+        </button>
+      </FoldHead>
+      {enriching !== null && (
         <EnrichDialog
           scene={scene}
+          sub={enriching}
           onApplied={(next) => {
             onChange(next)
             setOpen((now) => ({ ...now, scene: true }))
           }}
-          onClose={() => setEnriching(false)}
+          onClose={() => setEnriching(null)}
         />
       )}
-      {open.scene && (
+      {rebuilding && <p className="muted small">{t('scene.text.rebuild.busy')}</p>}
+      {error && <p className="error small">{error}</p>}
+      {open.scene && !rebuilding && (
         <>
-          {writing ? (
-            <DescriptionEditor
-              value={scene.summary}
-              label={t('description.title')}
-              placeholder={t('description.scene.placeholder')}
-              onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
-            />
-          ) : scene.summary ? (
-            <p className="scene-summary">{scene.summary}</p>
+          {subs.length > 0 ? (
+            <div className="stack subscenes">
+              {subs.map((sub, n) => (
+                <details key={n} className={`subscene${sub.past ? ' past' : ''}`} open>
+                  <summary>
+                    <span className="subscene-number">{t('scene.subscene', { n: n + 1 })}</span>
+                    {sub.heading && <span className="subscene-heading"> · {sub.heading}</span>}
+                  </summary>
+                  <div className="stack subscene-body">
+                    {sub.cast.length > 0 && <p className="small faint">{sub.cast.join(', ')}</p>}
+                    {sub.action && <p className="scene-summary">{sub.action}</p>}
+                    {sub.lines.map((line, i) => (
+                      <p key={i} className="subscene-line">
+                        {line.who && (
+                          <span className="muted">
+                            {[line.who, line.how].filter(Boolean).join(', ')}
+                            {line.voice && ` (${t('scene.subscene.voice')})`}:{' '}
+                          </span>
+                        )}
+                        «{line.text}»
+                      </p>
+                    ))}
+                    {sub.goal && <p className="small muted">{sub.goal}</p>}
+                    <div className="row">{enrichButton(n)}</div>
+                  </div>
+                </details>
+              ))}
+            </div>
           ) : (
-            <p className="faint small">{t('scene.description.empty')}</p>
-          )}
-          {/* "Add to the description" sits at the end of the open scene text, not on its
-              heading (items 34, 35, 43, 50); for an illustrator the offer comes in the dialogue. */}
-          {!writing && onEnrich && (
-            <div className="row">
-              <button className="quick-reply" disabled={!aiReady} title={t('scene.enrich.hint')} onClick={onEnrich}>
-                {t('scene.chat.enrich')}
-              </button>
-            </div>
-          )}
-          {writing && (
-            <div className="row">
-              <button
-                className="btn ghost small"
-                disabled={!aiReady}
-                title={t('scene.enrich.hint')}
-                onClick={() => setEnriching(true)}
-              >
-                <SparklesIcon />
-                {t('scene.enrich')}
-              </button>
-            </div>
+            <>
+              {writing ? (
+                <DescriptionEditor
+                  value={scene.summary}
+                  label={t('description.title')}
+                  placeholder={t('description.scene.placeholder')}
+                  onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
+                />
+              ) : scene.summary ? (
+                <p className="scene-summary">{scene.summary}</p>
+              ) : (
+                <p className="faint small">{t('scene.description.empty')}</p>
+              )}
+              {/* "Add to the description" sits at the end of the open scene text, not on its
+                  heading (items 34, 35, 43, 50); for an illustrator the offer comes in the dialogue. */}
+              <div className="row">{enrichButton(-1)}</div>
+            </>
           )}
         </>
       )}
@@ -326,10 +395,13 @@ function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps)
  *  "Cancel" leaves the scene as it was (owner's notes 26.11). */
 function EnrichDialog({
   scene,
+  sub,
   onApplied,
   onClose,
 }: {
   scene: Scene
+  /** A block's number: only its action is enriched; -1 is the whole scene. */
+  sub: number
   onApplied: (scene: Scene) => void
   onClose: () => void
 }) {
@@ -342,7 +414,7 @@ function EnrichDialog({
     setBusy('enrich')
     setError('')
     try {
-      setOffer(await api.enrichScene(scene.id, wishes.trim()))
+      setOffer(await api.enrichScene(scene.id, wishes.trim(), sub))
     } catch (e) {
       setError(errorText(t, e))
     }
@@ -353,7 +425,11 @@ function EnrichDialog({
     setBusy('apply')
     setError('')
     try {
-      onApplied(await api.saveSceneSummary(scene.id, offer.text))
+      onApplied(
+        await (sub >= 0
+          ? api.saveSubscene(scene.id, sub, offer.text)
+          : api.saveSceneSummary(scene.id, offer.text)),
+      )
       onClose()
     } catch (e) {
       setError(errorText(t, e))
@@ -436,6 +512,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
   const closeAdding = useCallback(() => setAdding(null), [])
   const [exporting, setExporting] = useState(false)
   const [enrichAsk, setEnrichAsk] = useState(0)
+  const [enrichSub, setEnrichSub] = useState(-1)
   const [changeAsk, setChangeAsk] = useState(0)
   // "References" and "Prompt for the video" fold like the scene's texts (item 63).
   const [fold, setFold] = useState({ refs: true, prompt: true })
@@ -532,7 +609,8 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         writing={writing}
         aiReady={!!aiReady}
         onChange={onChange}
-        onEnrich={() => {
+        onEnrich={(sub) => {
+          setEnrichSub(sub)
           setEnrichAsk((n) => n + 1)
           setFold((now) => ({ ...now, prompt: true }))
         }}
@@ -641,6 +719,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         aiReady={aiReady !== false}
         onChange={onChange}
         enrichAsk={enrichAsk}
+        enrichSub={enrichSub}
         onAddReference={(entityId) => {
           const who = scene.participants.find((p) => p.id === entityId)
           if (who) void addFor(who)

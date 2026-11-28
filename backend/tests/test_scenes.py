@@ -523,3 +523,143 @@ def test_first_frame_prompt_is_changed_in_words(client, book, monkeypatch):
     )
     assert answer.json() == {"text": "A still, at dusk."}
     assert seen == [("model", "A still.", "вечером")]
+
+
+# ---------- sub-scenes (owner's notes 28.11, items 67, 68) ----------
+
+BREAKDOWN = {
+    "subscenes": [
+        {
+            "from": 0,
+            "to": 1,
+            "heading": "У мельницы — рассвет",
+            "past": False,
+            "cast": ["Ростан"],
+            "action": "Ростан подходит к мельнице. Колесо скрипит.",
+            "lines": [],
+            "goal": "Дойти до мельницы.",
+        },
+        {
+            "from": 2,
+            "to": 9,  # past the scene: clamped
+            "heading": "Внутри мельницы",
+            "past": False,
+            "cast": ["Лана"],
+            "action": "Лана молча протягивает ключ.",
+            "lines": [
+                {"who": "Лана", "how": "тихо", "text": "серебряный ключ", "voice": False},
+                {"who": "Лана", "how": "", "text": "Этого нет в книге", "voice": False},
+                {"who": "Лана", "how": "", "text": "ждала Лана … красном платке", "voice": True},
+            ],
+            "goal": "",
+        },
+    ]
+}
+
+
+class BreakdownModel(FakeModel):
+    def __init__(self, answer=BREAKDOWN):
+        super().__init__()
+        self.answer = answer
+
+    def invoke_json(self, operation, messages, schema):
+        if schema is service.Breakdown:
+            self.system, self.context = messages[0].content, messages[1].content
+            return schema.model_validate(self.answer)
+        return super().invoke_json(operation, messages, schema)
+
+
+def _scene(session, book, start=0, end=3):
+    return service.mark_scene(session, book.mill, start, end, "Ключ")
+
+
+def test_breakdown_makes_sub_scenes_with_the_book_s_own_lines(session, book):
+    scene = _scene(session, book)
+    model = BreakdownModel()
+    service.break_down(session, model, book, scene, book.mill)
+    subs = scene.subscenes
+    assert [(s["from"], s["to"]) for s in subs] == [(0, 1), (2, 3)]
+    # Only lines whose words stand in the scene text are kept; "…" joins two pieces of it.
+    assert [line["text"] for line in subs[1]["lines"]] == [
+        "серебряный ключ",
+        "ждала Лана … красном платке",
+    ]
+    assert subs[0]["entity_ids"] and subs[0]["entity_ids"] != subs[1]["entity_ids"]
+    # The scene's text is made of the blocks: the video prompt and the export read it.
+    assert "1. У мельницы — рассвет" in scene.summary
+    assert "Лана молча протягивает ключ." in scene.summary
+    assert "Этого нет в книге" not in scene.summary
+    # The model sees the numbered paragraphs of the scene and what is around it.
+    assert "[3] Она молча протянула ему серебряный ключ." in model.context
+    assert "К вечеру" in model.context  # the paragraph after, for context
+
+
+def test_a_breakdown_with_nothing_usable_keeps_the_scene_whole(session, book):
+    scene = _scene(session, book)
+    service.break_down(session, BreakdownModel({"subscenes": []}), book, scene, book.mill)
+    assert len(scene.subscenes) == 1
+    assert (scene.subscenes[0]["from"], scene.subscenes[0]["to"]) == (0, 3)
+
+
+def test_a_private_chapter_is_not_broken_down(client, session, book):
+    book.mill.private = True
+    session.commit()
+    scene = _scene(session, book)
+    assert client.post(f"/api/scenes/{scene.id}/rebuild").status_code == 403
+
+
+def test_rebuild_and_edit_a_sub_scene(client, session, book, monkeypatch):
+    monkeypatch.setattr("app.api.scenes.TextModel", lambda *a: BreakdownModel())
+    scene = _scene(session, book)
+    out = client.post(f"/api/scenes/{scene.id}/rebuild").json()
+    assert [s["heading"] for s in out["subscenes"]] == ["У мельницы — рассвет", "Внутри мельницы"]
+    assert out["subscenes"][1]["cast"] == ["Лана"]
+    edited = client.put(
+        f"/api/scenes/{scene.id}/subscenes/1", json={"action": "Лана кладёт ключ на стол."}
+    ).json()
+    assert edited["subscenes"][1]["action"] == "Лана кладёт ключ на стол."
+    assert "Лана кладёт ключ на стол." in edited["summary"]
+    assert (
+        client.put(f"/api/scenes/{scene.id}/subscenes/5", json={"action": "x"}).status_code == 404
+    )
+
+
+def test_a_scene_picked_from_the_proposals_is_broken_down_at_once(
+    client, session, book, monkeypatch
+):
+    monkeypatch.setattr("app.api.scenes.TextModel", lambda *a: BreakdownModel())
+    session.add(
+        SceneSplit(
+            chapter_id=book.mill.id,
+            project_id=book.id,
+            chapter_hash=book.mill.content_hash,
+            proposals=[
+                {
+                    "from": 0,
+                    "to": 3,
+                    "title": "Ключ",
+                    "summary": "Кратко.",
+                    "vivid": False,
+                    "entity_ids": [],
+                }
+            ],
+        )
+    )
+    session.commit()
+    brief = client.post(f"/api/chapters/{book.mill.id}/scenes/proposals/0").json()
+    scene = client.get(f"/api/scenes/{brief['id']}").json()
+    assert len(scene["subscenes"]) == 2
+    # Picked again: the same card, not broken down anew over the author's changes.
+    client.put(f"/api/scenes/{brief['id']}/subscenes/0", json={"action": "Своё."})
+    client.post(f"/api/chapters/{book.mill.id}/scenes/proposals/0")
+    assert client.get(f"/api/scenes/{brief['id']}").json()["subscenes"][0]["action"] == "Своё."
+
+
+def test_enrich_of_one_sub_scene_reads_only_its_paragraphs(session, book):
+    scene = _scene(session, book)
+    service.break_down(session, BreakdownModel(), book, scene, book.mill)
+    model = FakeModel()
+    service.enrich_scene(session, model, book, scene, book.mill, "", sub=0)
+    assert "Ростан подходит к мельнице." in model.context
+    scene_part = model.context.split("Scene text:")[1].split("Before the scene:")[0]
+    assert "серебряный ключ" not in scene_part

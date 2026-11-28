@@ -431,6 +431,9 @@ class Scene(Base):
     reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     # The scene's dialogue that leads to the video prompt (owner's notes 27.11): its lines.
     chat: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    # The scene broken down like a screenplay (owner's notes 28.11, items 67, 68): one place,
+    # one time, one action each, a remembered event its own block; empty for older scenes.
+    subscenes: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 

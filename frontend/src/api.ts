@@ -602,6 +602,22 @@ export interface Scene extends SceneBrief {
   missing: { entity_id: string; name: string; kind: EntityKind; need: 'face' | 'figure' | 'base' }[]
   /** The dialogue that leads to the video prompt. */
   chat: Required<SceneLine>[]
+  /** The scene block by block, like a screenplay; empty for older scenes. */
+  subscenes: Subscene[]
+}
+
+/** One place, one time, one action; a remembered event is a block of its own. */
+export interface Subscene {
+  paragraph_from: number
+  paragraph_to: number
+  heading: string
+  past: boolean
+  cast: string[]
+  entity_ids: string[]
+  action: string
+  /** The book's own words; `voice` is told over the picture. */
+  lines: { who: string; how: string; text: string; voice: boolean }[]
+  goal: string
 }
 
 /** A line of the scene's dialogue: words, a version of the video prompt, a first frame, or
@@ -613,6 +629,8 @@ export interface SceneLine {
   prompt?: string
   image_id?: string
   added?: string[]
+  /** The sub-scene an `enrich` offer is for; -1 is the whole scene. */
+  sub?: number
   /** Set by the server; empty once the picture was deleted. */
   image_url?: string
 }
@@ -1060,9 +1078,13 @@ export const api = {
   saveSceneSummary: (sceneId: string, text: string) =>
     request<Scene>('PUT', `/scenes/${sceneId}/summary`, { text }),
   /** Suggested additions to the scene's description; nothing is saved until applied. */
-  enrichScene: (sceneId: string, wishes = '') =>
+  enrichScene: (sceneId: string, wishes = '', sub = -1) =>
     request<{ text: string; added: string[]; why: string }>('POST', `/scenes/${sceneId}/enrich`, {
       wishes,
+      sub: sub >= 0 ? sub : null,
     }),
+  rebuildScene: (sceneId: string) => request<Scene>('POST', `/scenes/${sceneId}/rebuild`),
+  saveSubscene: (sceneId: string, number: number, action: string) =>
+    request<Scene>('PUT', `/scenes/${sceneId}/subscenes/${number}`, { action }),
   saveSettings: (body: ModelSettings) => request<ModelSettings>('PUT', '/settings', body),
 }

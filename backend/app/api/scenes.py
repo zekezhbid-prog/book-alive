@@ -64,6 +64,25 @@ class Missing(BaseModel):
     need: str
 
 
+class SpokenLineOut(BaseModel):
+    who: str
+    how: str
+    text: str
+    voice: bool
+
+
+class SubsceneOut(BaseModel):
+    paragraph_from: int
+    paragraph_to: int
+    heading: str
+    past: bool
+    cast: list[str]
+    entity_ids: list[str]
+    action: str
+    lines: list[SpokenLineOut]
+    goal: str
+
+
 class SceneOut(SceneBrief):
     text: str
     prompt: str
@@ -76,6 +95,8 @@ class SceneOut(SceneBrief):
     missing: list[Missing] = Field(default_factory=list)
     # The dialogue that leads to the video prompt (owner's notes 27.11).
     chat: list["SceneLineOut"] = Field(default_factory=list)
+    # The scene block by block, like a screenplay (owner's notes 28.11, items 67, 68).
+    subscenes: list[SubsceneOut] = Field(default_factory=list)
 
 
 class SceneLine(BaseModel):
@@ -88,6 +109,8 @@ class SceneLine(BaseModel):
     prompt: str = Field(default="", max_length=8000)
     image_id: str = Field(default="", max_length=32)
     added: list[str] = Field(default_factory=list, max_length=40)
+    # The sub-scene an `enrich` offer is for; -1 is the whole scene.
+    sub: int = -1
 
 
 class SceneLineOut(SceneLine):
@@ -244,6 +267,15 @@ def _full(session: SessionDep, scene: Scene, chapter: Chapter | None, project: P
         frames=[image_out(frame, project) for frame in frames],
         missing=[Missing(**m) for m in service.missing_references(session, project, scene)],
         chat=_chat(session, scene),
+        subscenes=[
+            SubsceneOut(
+                paragraph_from=sub["from"],
+                paragraph_to=sub["to"],
+                **{k: sub[k] for k in ("heading", "past", "cast", "entity_ids", "action", "goal")},
+                lines=[SpokenLineOut(**line) for line in sub["lines"]],
+            )
+            for sub in scene.subscenes or []
+        ],
     )
 
 
@@ -361,7 +393,27 @@ def pick_proposal(chapter_id: str, number: int, session: SessionDep) -> SceneBri
         raise HTTPException(404, "proposal_not_found")
     if split.chapter_hash != chapter.content_hash:
         raise HTTPException(409, "proposals_stale")
-    scene = service.scene_from_proposal(session, chapter, split.proposals[number])
+    proposal = split.proposals[number]
+    before = session.scalar(
+        select(Scene.id).where(
+            Scene.chapter_id == chapter.id,
+            Scene.chapter_hash == chapter.content_hash,
+            Scene.paragraph_from == proposal["from"],
+            Scene.paragraph_to == proposal["to"],
+            Scene.origin == "auto",
+        )
+    )
+    scene = service.scene_from_proposal(session, chapter, proposal)
+    # A new card is broken down at once (the press that makes it asks for it); one picked
+    # again keeps the author's changes. Without a model it stays whole: "Rebuild" later.
+    if before is None and not chapter.private:
+        try:
+            model = TextModel(session, chapter.project_id, "prompts")
+            service.break_down(
+                session, model, session.get(Project, scene.project_id), scene, chapter
+            )
+        except Exception:  # noqa: BLE001 - the card is made either way
+            session.rollback()
     return _brief(scene, chapter)
 
 
@@ -470,6 +522,8 @@ class EnrichOut(BaseModel):
 
 class EnrichRequest(BaseModel):
     wishes: str = Field(default="", max_length=2000)
+    # A sub-scene's number: only its action is enriched.
+    sub: int | None = None
 
 
 @router.post("/scenes/{scene_id}/enrich")
@@ -480,15 +534,54 @@ def enrich(scene_id: str, session: SessionDep, body: EnrichRequest | None = None
         raise HTTPException(409, "chapter_not_found")
     if chapter.private:
         raise HTTPException(403, "chapter_private")
+    sub = body.sub if body else None
+    if sub is not None and not 0 <= sub < len(scene.subscenes or []):
+        raise HTTPException(404, "subscene_not_found")
     model = _text_model(session, project.id, "prompts")
     try:
         wishes = body.wishes if body else ""
-        answer = service.enrich_scene(session, model, project, scene, chapter, wishes)
+        answer = service.enrich_scene(session, model, project, scene, chapter, wishes, sub)
     except BadModelOutput as exc:
         raise HTTPException(502, f"bad_model_output: {exc}") from exc
     except Exception as exc:
         raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
     return EnrichOut(text=answer.text, added=answer.added, why=answer.why)
+
+
+@router.post("/scenes/{scene_id}/rebuild")
+def rebuild(scene_id: str, session: SessionDep) -> SceneOut:
+    """ "Rebuild": the scene's blocks written anew from the book's text (item 67); the author
+    confirmed that changes to them are lost."""
+    scene, chapter, project = _scene(session, scene_id)
+    if chapter is None:
+        raise HTTPException(409, "chapter_not_found")
+    if chapter.private:
+        raise HTTPException(403, "chapter_private")
+    model = _text_model(session, project.id, "prompts")
+    try:
+        service.break_down(session, model, project, scene, chapter)
+    except BadModelOutput as exc:
+        raise HTTPException(502, f"bad_model_output: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"provider_error: {str(exc)[:300]}") from exc
+    return _full(session, scene, chapter, project)
+
+
+class SubscenePatch(BaseModel):
+    action: str = Field(max_length=6000)
+
+
+@router.put("/scenes/{scene_id}/subscenes/{number}")
+def save_subscene(scene_id: str, number: int, body: SubscenePatch, session: SessionDep) -> SceneOut:
+    """The author's own action of one block ("Apply" of "Add more", or typed)."""
+    scene, chapter, project = _scene(session, scene_id)
+    subs = [dict(s) for s in scene.subscenes or []]
+    if not 0 <= number < len(subs):
+        raise HTTPException(404, "subscene_not_found")
+    subs[number]["action"] = body.action.strip()
+    service.set_subscenes(scene, subs)
+    session.commit()
+    return _full(session, scene, chapter, project)
 
 
 @router.put("/scenes/{scene_id}/summary")

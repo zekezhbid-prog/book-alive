@@ -36,11 +36,14 @@ A scene is a continuous stretch of the text in one place and time. Rules:
 - Cover every paragraph, in order, with no gaps and no overlaps.
 - "from" and "to" are paragraph numbers, inclusive.
 - "title": a few words, in the language of the chapter.
-- "summary": the scene as a film director would see it, 3 to 6 sentences in the language \
-of the chapter: where and when it happens and what the place looks like, who is there, \
-what they do one after another, what happens and why it matters for the story. Read the \
-paragraphs around the scene to understand what is going on and say it plainly, but add \
-no events the chapter does not give.
+- "summary": one or two sentences in the language of the chapter: what happens in the \
+scene. It only tells the scenes apart in a list; the scene's text for the screen is \
+written later from the paragraphs.
+- A story told or remembered inside a conversation (someone recalls the past, tells what \
+happened elsewhere) belongs to the scene of that conversation, however long it is: it is \
+filmed as its own sub-scenes later. Do not cut the conversation around it.
+- A scene ends after its turn - the moment that changes the situation (a revelation, a \
+decision, a vow, an arrival) and the reactions to it - never in the middle of it.
 - A paragraph marked [heading] is a title of the book or the chapter, not part of the story.
 - Do not make a scene of a passage that only announces, sums up or comments on what a \
 neighbouring scene shows: join it to that scene. Two scenes must never tell the same event. \
@@ -323,6 +326,181 @@ def mark_scene(session: Session, chapter: Chapter, start: int, end: int, title: 
     session.add(scene)
     session.commit()
     return scene
+
+
+# ---------- sub-scenes (owner's notes 28.11, items 67, 68) ----------
+
+BREAKDOWN_SYSTEM = """You break one scene of a book into sub-scenes for a screen \
+adaptation, the way a screenwriter writes a scene breakdown. The scene's paragraphs are \
+numbered; the paragraphs before and after are given for context only.
+
+A sub-scene is one place, one time and one action (or one exchange of lines). Start a new \
+sub-scene when the place or the time changes, when someone enters or leaves and that \
+changes the situation, or when the goal changes or the situation turns. A story a \
+character tells or remembers is not someone talking: show the events of it as sub-scenes \
+of their own, in their own place and time, one for each different event, with the telling \
+as a voice-over; the return to the present is a new sub-scene. Smaller is better: each \
+sub-scene must fit one video clip of 5 to 15 seconds. A scene with a single action is one \
+sub-scene.
+
+For each sub-scene, in the language of the book:
+- "heading": where and when, as the text says or clearly implies ("" for what is not \
+known), and a mark in the language of the book for a remembered or told event, for \
+example "a hut by the river - night, remembered".
+- "past": true for events a character tells or remembers.
+- "cast": who is on screen, as the text names them.
+- "action": what is seen and heard, in the present tense, one thing after another. Only \
+what a camera can show: feelings through face, gesture and pause. Never write "he \
+remembers that..." - show the remembered events themselves.
+- "lines": the spoken lines copied word for word from the scene's paragraphs, each with \
+who says it and how; the telling of a story is a voice-over ("voice": true) over the \
+sub-scene of that event. At most about 35 words of lines per sub-scene: give the rest of a \
+long speech to the next sub-scenes, in order.
+- "goal": one line - who wants what here and what stands in the way; "" if nothing.
+- "from", "to": the numbers of the paragraphs it comes from, inclusive; sub-scenes made \
+from one long paragraph share it.
+Add nothing the book and the neighbouring paragraphs do not give.
+
+Reply with one JSON object and nothing else:
+{"subscenes": [{"from": 0, "to": 0, "heading": "", "past": false, "cast": [], \
+"action": "", "lines": [{"who": "", "how": "", "text": "", "voice": false}], "goal": ""}]}"""
+
+
+class SpokenLine(BaseModel):
+    who: str = ""
+    how: str = ""
+    text: str = ""
+    voice: bool = False
+
+
+class SubsceneDraft(BaseModel):
+    start: int = Field(default=0, alias="from")
+    end: int = Field(default=0, alias="to")
+    heading: str = ""
+    past: bool = False
+    cast: list[str] = Field(default_factory=list)
+    action: str = ""
+    lines: list[SpokenLine] = Field(default_factory=list)
+    goal: str = ""
+
+
+class Breakdown(BaseModel):
+    subscenes: list[SubsceneDraft] = Field(default_factory=list)
+
+
+def _words(text: str) -> str:
+    return re.sub(r"[\W_]+", " ", text.casefold()).strip()
+
+
+def is_quoted(line: str, source: str) -> bool:
+    """The book's own words: every piece of the line between "…" stands in the source."""
+    pieces = [_words(p) for p in re.split(r"…|\.\.\.", line)]
+    pieces = [p for p in pieces if p]
+    return bool(pieces) and all(p in _words(source) for p in pieces)
+
+
+def render_subscenes(subscenes: list[dict]) -> str:
+    """The scene's text made of its blocks: what the video prompt and the export read."""
+    blocks = []
+    for n, sub in enumerate(subscenes, 1):
+        rows = [f"{n}. {sub['heading']}".rstrip(". ") if sub["heading"] else f"{n}."]
+        if sub["action"]:
+            rows.append(sub["action"])
+        for line in sub["lines"]:
+            who = ", ".join(p for p in (line["who"], line["how"]) if p)
+            rows.append(f'{who}: "{line["text"]}"' if who else f'"{line["text"]}"')
+        if sub["goal"]:
+            rows.append(sub["goal"])
+        blocks.append("\n".join(rows))
+    return "\n\n".join(blocks)
+
+
+def set_subscenes(scene: Scene, subscenes: list[dict]) -> None:
+    # A JSON list is saved only when a new list is assigned.
+    scene.subscenes = [dict(s) for s in subscenes]
+    scene.summary = render_subscenes(scene.subscenes)
+
+
+def break_down(
+    session: Session, model: TextModel, project: Project, scene: Scene, chapter: Chapter
+) -> None:
+    """The scene's text for the screen, block by block, written anew from the book's text
+    ("Rebuild" and a new card); the author's changes to it are replaced."""
+    paragraphs = paragraphs_of(chapter)
+    book, title = project.title, chapter.title
+    first, last = scene.paragraph_from, scene.paragraph_to
+
+    def numbered(start: int, end: int) -> str:
+        return "\n\n".join(
+            f"[{n}] {paragraphs[n]}"
+            for n in range(max(start, 0), min(end, len(paragraphs) - 1) + 1)
+            if not is_heading(paragraphs[n], book, title)
+        )
+
+    message = "\n".join(
+        [
+            "Before the scene (context only):",
+            numbered(first - 3, first - 1) or "(start of the chapter)",
+            "",
+            "The scene:",
+            numbered(first, last),
+            "",
+            "After the scene (context only):",
+            numbered(last + 1, last + 3) or "(end of the chapter)",
+        ]
+    )
+    answer = model.invoke_json(
+        "break_down_scene", [SystemMessage(BREAKDOWN_SYSTEM), HumanMessage(message)], Breakdown
+    )
+    source = "\n\n".join(paragraphs[first : last + 1])
+    subscenes = []
+    for draft in sorted(answer.subscenes, key=lambda d: d.start):
+        start = min(max(draft.start, first), last)
+        end = min(max(draft.end, start), last)
+        lines = [
+            {
+                "who": ln.who.strip(),
+                "how": ln.how.strip(),
+                "text": ln.text.strip(),
+                "voice": ln.voice,
+            }
+            for ln in draft.lines
+            if is_quoted(ln.text, source)  # an unverified line is dropped, never shown
+        ]
+        if not (draft.action.strip() or lines):
+            continue
+        cast = [c.strip() for c in draft.cast if c.strip()]
+        subscenes.append(
+            {
+                "from": start,
+                "to": end,
+                "heading": draft.heading.strip()[:300],
+                "past": draft.past,
+                "cast": cast,
+                # Only who the model put on screen: a long paragraph names many more.
+                "entity_ids": entities_in(session, project.id, " ".join(cast), cast),
+                "action": draft.action.strip(),
+                "lines": lines,
+                "goal": draft.goal.strip(),
+            }
+        )
+    if not subscenes:
+        # Nothing usable: the scene stays one block made of its book text.
+        subscenes = [
+            {
+                "from": first,
+                "to": last,
+                "heading": "",
+                "past": False,
+                "cast": [],
+                "entity_ids": list(scene.entity_ids),
+                "action": _story_text(paragraphs[first : last + 1], book, title),
+                "lines": [],
+                "goal": "",
+            }
+        ]
+    set_subscenes(scene, subscenes)
+    session.commit()
 
 
 # ---------- references ----------
@@ -612,28 +790,36 @@ def enrich_scene(
     scene: Scene,
     chapter: Chapter,
     wishes: str = "",
+    sub: int | None = None,
 ) -> EnrichAnswer:
-    """Suggested additions to the scene's description; nothing is saved here: the author
-    sees them marked and applies them or not (owner's notes 25.11)."""
+    """Suggested additions to the scene's description, or to the action of one of its
+    sub-scenes (`sub`); nothing is saved here: the author sees them marked and applies them
+    or not (owner's notes 25.11)."""
     paragraphs = paragraphs_of(chapter)
     book, title = project.title, chapter.title
+    first, last = scene.paragraph_from, scene.paragraph_to
+    current, entity_ids = scene.summary, scene.entity_ids
+    if sub is not None:
+        block = scene.subscenes[sub]
+        first, last = block["from"], block["to"]
+        current, entity_ids = block["action"], block["entity_ids"]
 
     def around(start: int, end: int) -> str:
         return _story_text(paragraphs[max(start, 0) : max(end, 0)], book, title)
 
-    cast = [session.get(Entity, entity_id) for entity_id in scene.entity_ids]
+    cast = [session.get(Entity, entity_id) for entity_id in entity_ids]
     lines = [
         "Current description:",
-        scene.summary.strip() or "(none yet)",
+        current.strip() or "(none yet)",
         "",
         "Scene text:",
-        _story_text(paragraphs[scene.paragraph_from : scene.paragraph_to + 1], book, title),
+        _story_text(paragraphs[first : last + 1], book, title),
         "",
         "Before the scene:",
-        around(scene.paragraph_from - 4, scene.paragraph_from) or "(start of the chapter)",
+        around(first - 4, first) or "(start of the chapter)",
         "",
         "After the scene:",
-        around(scene.paragraph_to + 1, scene.paragraph_to + 5) or "(end of the chapter)",
+        around(last + 1, last + 5) or "(end of the chapter)",
         "",
         "In the scene:",
     ]

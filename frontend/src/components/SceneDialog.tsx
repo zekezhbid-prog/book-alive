@@ -18,6 +18,8 @@ interface Props {
   onAddReference: (entityId: string) => void
   /** Goes up by one each time "Add to the description" is pressed by the scene's text. */
   enrichAsk: number
+  /** The block of the scene text "Add more" was pressed in; -1 is the whole scene. */
+  enrichSub?: number
   /** Goes up by one on "Change" by the video prompt's status: the field waits for the change. */
   changeAsk?: number
 }
@@ -29,7 +31,7 @@ interface Props {
  * is drawn here with its aspect ratio and fixed by a remark; "Add to the description" offers
  * a fuller description to apply. The lines are kept with the scene.
  */
-export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAsk, changeAsk = 0 }: Props) {
+export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAsk, enrichSub = -1, changeAsk = 0 }: Props) {
   const { t } = useI18n()
   const [text, setText] = useState('')
   const [said, setSaid] = useState('') // the user's words on screen while the model works
@@ -126,10 +128,10 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
     )
       setFixing('')
   }
-  const enrich = (wishes: string) =>
-    step('enrich', wishes || t('scene.chat.enrich'), async () => {
-      const offer = await api.enrichScene(scene.id, wishes)
-      return [{ role: 'assistant', kind: 'enrich', text: offer.text, added: offer.added }]
+  const enrich = (wishes: string, sub: number) =>
+    step('enrich', wishes || (sub >= 0 ? `${t('scene.enrich')}: ${t('scene.subscene', { n: sub + 1 })}` : t('scene.chat.enrich')), async () => {
+      const offer = await api.enrichScene(scene.id, wishes, sub)
+      return [{ role: 'assistant', kind: 'enrich', text: offer.text, added: offer.added, sub }]
     })
   // The link by the scene's text: the offer comes here, with "Apply" / "No need" (item 43).
   const changeAsked = useRef(changeAsk)
@@ -144,13 +146,15 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
   useEffect(() => {
     if (enrichAsk === asked.current) return
     asked.current = enrichAsk
-    if (!busy && aiReady) void enrich('')
+    if (!busy && aiReady) void enrich('', enrichSub)
     // Only a new press; `enrich` reads the current scene.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enrichAsk])
   const apply = (offer: Required<SceneLine>) =>
     step('apply', t('scene.chat.apply'), async () => {
-      await api.saveSceneSummary(scene.id, offer.text)
+      await (offer.sub >= 0
+        ? api.saveSubscene(scene.id, offer.sub, offer.text)
+        : api.saveSceneSummary(scene.id, offer.text))
       return [{ role: 'assistant', kind: 'text', text: t('scene.chat.applied') }]
     })
   const upload = (file: File | undefined) => {
@@ -175,7 +179,7 @@ export function SceneDialog({ scene, aiReady, onChange, onAddReference, enrichAs
     if (fixing) return void fixFrame(words)
     setChanging(false)
     if (last?.kind === 'frame_prompt' && !changing) return void refineFrame(last.prompt, words)
-    if (last?.kind === 'enrich' && !changing) return void enrich(words)
+    if (last?.kind === 'enrich' && !changing) return void enrich(words, last.sub)
     if (scene.prompt) return void refine(words)
     void build(words)
   }

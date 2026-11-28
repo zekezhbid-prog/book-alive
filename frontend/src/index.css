@@ -675,6 +675,16 @@ body:has(.chat-dock) main.page { margin-right: calc(var(--dock) + 16px); }
 .variant-offer { gap: 6px; padding: 10px; border: 1px dashed var(--accent-line); border-radius: var(--radius); }
 /* A scene's two texts; an offer to add more shows the new parts lit, softer than a search hit. */
 .scene-summary { white-space: pre-wrap; line-height: 1.6; margin: 0; }
+/* The scene's blocks, like a screenplay (owner's notes 28.11, items 67, 68); a remembered event is set apart. */
+.subscenes { gap: 10px; }
+.subscene { border: 1px solid var(--accent-line); border-radius: 10px; padding: 8px 12px; background: rgba(255, 255, 255, 0.02); }
+.subscene.past { border-style: dashed; background: rgba(255, 224, 122, 0.03); }
+.subscene > summary { cursor: pointer; list-style-position: inside; }
+.subscene-number { color: var(--accent); font-weight: 600; }
+.subscene-heading { color: var(--muted); }
+.subscene-body { gap: 6px; margin-top: 6px; }
+.subscene-body > p { margin: 0; }
+.subscene-line { margin: 0; line-height: 1.6; font-style: italic; }
 .enrich-offer mark { background: rgba(250, 204, 21, 0.2); color: inherit; box-shadow: none; border-bottom: 1px solid var(--accent); }
 .remark-overlay { z-index: 70; }
 .dialog.remark-dialog { width: min(520px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 22px; }
