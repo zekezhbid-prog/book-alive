@@ -437,6 +437,8 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
   const [exporting, setExporting] = useState(false)
   const [enrichAsk, setEnrichAsk] = useState(0)
   const [changeAsk, setChangeAsk] = useState(0)
+  // "References" and "Prompt for the video" fold like the scene's texts (item 63).
+  const [fold, setFold] = useState({ refs: true, prompt: true })
   const closeExport = useCallback(() => setExporting(false), [])
   // The user changed the pictures by hand after the prompt was written: its numbers may be off.
   const [refsChanged, setRefsChanged] = useState(false)
@@ -530,12 +532,21 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         writing={writing}
         aiReady={!!aiReady}
         onChange={onChange}
-        onEnrich={() => setEnrichAsk((n) => n + 1)}
+        onEnrich={() => {
+          setEnrichAsk((n) => n + 1)
+          setFold((now) => ({ ...now, prompt: true }))
+        }}
       />
 
       {!writing && (
         <>
-      <h4>{t('scene.references')}</h4>
+      <FoldHead
+        title={t('scene.references')}
+        open={fold.refs}
+        ready={!scene.participants.length || !scene.missing.length}
+        onToggle={() => setFold((now) => ({ ...now, refs: !now.refs }))}
+      />
+      <div className="stack" hidden={!fold.refs}>
       {/* What the scene still lacks, at a glance (owner's notes 28.11, item 49). */}
       {!scene.participants.length ? (
         <p className="scene-status ok small">✓ {t('scene.status.refs.none')}</p>
@@ -589,6 +600,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
         ))}
       </div>
       {refsChanged && <p className="muted small">{t('scene.refs.changed')}</p>}
+      </div>
       {adding && (
         <ReferenceChat
           projectId={projectId}
@@ -605,7 +617,14 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
 
       {/* The video prompt, the first frame and a fuller description in one dialogue
           (owner's notes 27.11). */}
-      <h4>{t('scene.prompt')}</h4>
+      <FoldHead
+        title={t('scene.prompt')}
+        open={fold.prompt}
+        ready={!!scene.prompt}
+        onToggle={() => setFold((now) => ({ ...now, prompt: !now.prompt }))}
+      />
+      {/* Folded, the dialogue stays mounted: it keeps its lines and answers "Change". */}
+      <div className="stack" hidden={!fold.prompt}>
       {scene.prompt ? (
         <div className="row scene-status ok small">
           <span>✓ {t('scene.status.prompt.ok')}</span>
@@ -627,6 +646,7 @@ function SceneView({ onClose, projectId, scene, hasStyle, writing, onChange, onD
           if (who) void addFor(who)
         }}
       />
+      </div>
       {aiReady === false && <AiNotice ready={aiReady} />}
       {/* The archive is what the work here is for: one large button at the end. */}
       <div className="row scene-export-row">

@@ -271,6 +271,11 @@ export function GoldPlusSymbol() {
   return <GoldSymbol id="gold-plus">{(fill) => <path d={PLUS} fill={fill} />}</GoldSymbol>
 }
 
+/** A section that is ready: the same shining gold, no green (owner's notes 28.11, item 63). */
+export function GoldCheckSymbol() {
+  return <GoldSymbol id="gold-check">{(fill) => <path d="M10 54 26 38 42 54 76 16 92 32 42 84Z" fill={fill} />}</GoldSymbol>
+}
+
 export function GoldSparklesSymbol() {
   return (
     <GoldSymbol id="gold-stars">
