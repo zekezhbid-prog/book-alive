@@ -85,6 +85,7 @@ export default function Illustrations() {
           items && (
             <CardGrid
               actions={[]}
+              pictures
               create={{ title: t('images.create'), onClick: add }}
               tiles={items.map((item) => ({
                 id: item.id,

@@ -278,17 +278,26 @@ mark { background: rgba(220, 184, 102, 0.85); }
   box-shadow: inset 0 0 0 1px rgba(220, 184, 102, 0.6), inset 0 10px 28px rgba(0, 0, 0, 0.5), 0 18px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 170, 70, 0.1);
 }
 .tile.picked { box-shadow: inset 0 0 0 2px var(--accent), var(--drop); }
-.tile-cover { opacity: 0.92; filter: saturate(0.85) contrast(1.05); }
-.tile:hover .tile-cover { opacity: 1; }
-.tile.with-cover { padding: 0; gap: 0; justify-content: flex-end; }
-.tile.with-cover::after { background: linear-gradient(180deg, rgba(8, 7, 6, 0.25) 0%, transparent 30%, transparent 55%, rgba(8, 7, 6, 0.55) 100%); box-shadow: inset 0 0 0 1px rgba(170, 128, 66, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.55); z-index: 1; }
-.tile.with-cover > .tile-title, .tile.with-cover > .tile-text, .tile.with-cover > .tile-meta {
-  z-index: 2; margin: 0; padding-inline: 14px;
-  background: linear-gradient(180deg, rgba(22, 19, 15, 0.92), rgba(10, 9, 8, 0.96));
+/* Cards of characters, places, objects and scenes: the picture is a faint background of the
+   whole card, the text stays in front, bright and readable (owner's notes 28.11, items 52-53). */
+.tile-cover { opacity: 0.3; filter: saturate(0.85) contrast(1.05); }
+.tile:hover .tile-cover { opacity: 0.42; }
+.tile.with-cover::after { background: linear-gradient(180deg, rgba(8, 7, 6, 0.45) 0%, rgba(8, 7, 6, 0.25) 50%, rgba(8, 7, 6, 0.6) 100%); box-shadow: inset 0 0 0 1px rgba(170, 128, 66, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.55); z-index: 1; }
+.tile.with-cover > .tile-title, .tile.with-cover > .tile-text, .tile.with-cover > .tile-meta { z-index: 2; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.7); }
+.tile.with-cover > .tile-title { color: var(--gold-light); }
+.tile.with-cover > .tile-text { color: var(--text); }
+.tile.with-cover > .tile-meta { color: var(--muted); opacity: 1; }
+/* The pictures section the other way round: the picture at full strength over the whole card,
+   the name a see-through caption over its bottom edge (items 48, 53). */
+.card-grid.pictures .tile.with-cover { padding: 0; justify-content: flex-end; }
+.card-grid.pictures .tile-cover, .card-grid.pictures .tile:hover .tile-cover { opacity: 1; filter: none; }
+.card-grid.pictures .tile.with-cover::after { background: none; }
+.card-grid.pictures .tile.with-cover > .tile-meta { display: none; }
+.card-grid.pictures .tile.with-cover > .tile-title {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 6px 12px; -webkit-line-clamp: 1; color: var(--text);
+  background: rgba(10, 9, 8, 0.42); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
-.tile.with-cover > .tile-title { order: 1; padding-top: 8px; border-top: 1px solid rgba(220, 184, 102, 0.45); box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.8); }
-.tile.with-cover > .tile-text { order: 2; -webkit-line-clamp: 1; }
-.tile.with-cover > .tile-meta { order: 3; padding-bottom: 8px; padding-top: 2px; }
 .tile-text { color: var(--muted); }
 .tile-meta { color: var(--faint); }
 .tile-action .tile-title { color: var(--gold-light); }
@@ -629,7 +638,8 @@ article.chapter .btn.primary.floating, .btn.primary.floating:hover {
 .chat-progress { align-self: flex-start; color: var(--faint); font: 13px/1.5 var(--sans); }
 .profile-head .quick-reply { font-size: 13px; }
 /* 27.11, item 45: the first card of a grid is empty and makes a new one. */
-.tile.tile-new { align-items: center; justify-content: center; text-align: center; gap: 10px; background: var(--corners), var(--surface-stone-deep); }
+/* "Create new" keeps the book sigil in its corner, like every empty niche (item 48). */
+.tile.tile-new, .tile.tile-new:hover { align-items: center; justify-content: center; text-align: center; gap: 10px; background: var(--corners), url('/tex/sigil.svg') right 14px bottom 12px / 58px no-repeat, var(--surface-stone-deep); }
 .tile.tile-new .tile-title { color: var(--gold-light); }
 .tile-new-plus { width: 64px; height: 64px; opacity: 0.75; transition: opacity 0.2s, transform 0.2s; filter: sepia(0.4) saturate(0.7) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.8)); }
 .tile-new-plus svg { width: 100%; height: 100%; overflow: visible; }

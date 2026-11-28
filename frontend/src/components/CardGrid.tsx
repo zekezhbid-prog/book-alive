@@ -35,6 +35,8 @@ interface Props {
   /** The first cell of the grid, always empty: "Create new" (owner's notes 27.11, item 45). */
   create?: { title: string; onClick: () => void }
   onOpen: (id: string) => void
+  /** The pictures section: the picture at full strength, the name a caption over it (item 53). */
+  pictures?: boolean
   /** Under the grid, a heading and more tiles (doubtful cards). */
   more?: { title: string; hint?: string; tiles: Tile[] }
   /** Tiles can be picked and removed several at once. The boxes show only after "Select cards". */
@@ -55,7 +57,7 @@ interface Props {
 }
 
 /** The page of a section when nothing is open: every card as a tile, the actions first. */
-export default function CardGrid({ actions, tiles, create, onOpen, more, selection }: Props) {
+export default function CardGrid({ actions, tiles, create, onOpen, pictures, more, selection }: Props) {
   // Picking mode: the boxes are hidden until asked for, so the tiles stay clean.
   const [picking, setPicking] = useState(false)
   const [moving, setMoving] = useState(false)
@@ -220,7 +222,7 @@ export default function CardGrid({ actions, tiles, create, onOpen, more, selecti
         </div>
       )}
       {(tiles.length > 0 || create) && (
-        <div className="card-grid">
+        <div className={pictures ? 'card-grid pictures' : 'card-grid'}>
           {create && (
             <button className="tile tile-new" onClick={create.onClick}>
               <span className="tile-new-plus" aria-hidden>

@@ -273,17 +273,14 @@ export default function Entities({ kind }: { kind: EntityKind }) {
               <CardGrid
                 // Objects: "Create new" is the first card of the grid (owner's notes 27.11, item 45).
                 create={kind === 'item' ? { title: t('tiles.create'), onClick: () => setAdding(true) } : undefined}
+                // Objects too: "Add by hand" beside "Find in the book" (owner's notes 28.11, item 48).
                 actions={[
-                  ...(kind === 'item'
-                    ? []
-                    : [
-                        {
-                          icon: <GoldPlusSymbol />,
-                          title: t(`nav.add.${section}`),
-                          hint: t(`tiles.add.${kind}`),
-                          onClick: () => setAdding(true),
-                        },
-                      ]),
+                  {
+                    icon: <GoldPlusSymbol />,
+                    title: t(`nav.add.${section}`),
+                    hint: t(`tiles.add.${kind}`),
+                    onClick: () => setAdding(true),
+                  },
                   {
                     icon: <GoldSparklesSymbol />,
                     title: t(`nav.find.${section}`),

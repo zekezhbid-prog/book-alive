@@ -260,53 +260,7 @@ function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps)
   const [enriching, setEnriching] = useState(false)
   return (
     <div className="stack scene-texts">
-      <FoldHead
-        title={t('scene.description')}
-        open={open.scene}
-        onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
-      >
-        {/* An illustrator adds to the description from here, the offer comes in the scene's
-            dialogue (owner's notes 27.11, items 34, 35, 43). */}
-        {!writing && onEnrich && (
-          <button className="quick-reply" disabled={!aiReady} title={t('scene.enrich.hint')} onClick={onEnrich}>
-            {t('scene.chat.enrich')}
-          </button>
-        )}
-        {writing && (
-          <button
-            className="btn ghost small"
-            disabled={!aiReady}
-            title={t('scene.enrich.hint')}
-            onClick={() => setEnriching(true)}
-          >
-            <SparklesIcon />
-            {t('scene.enrich')}
-          </button>
-        )}
-      </FoldHead>
-      {enriching && (
-        <EnrichDialog
-          scene={scene}
-          onApplied={(next) => {
-            onChange(next)
-            setOpen((now) => ({ ...now, scene: true }))
-          }}
-          onClose={() => setEnriching(false)}
-        />
-      )}
-      {open.scene &&
-        (writing ? (
-          <DescriptionEditor
-            value={scene.summary}
-            label={t('description.title')}
-            placeholder={t('description.scene.placeholder')}
-            onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
-          />
-        ) : scene.summary ? (
-          <p className="scene-summary">{scene.summary}</p>
-        ) : (
-          <p className="faint small">{t('scene.description.empty')}</p>
-        ))}
+      {/* The book's own text first, the scene's text under it (owner's notes 28.11, item 50). */}
       <FoldHead
         title={t('scene.text')}
         open={open.book}
@@ -318,6 +272,59 @@ function SceneTexts({ scene, writing, aiReady, onChange, onEnrich }: TextsProps)
             <p key={i}>{paragraph}</p>
           ))}
         </div>
+      )}
+      <FoldHead
+        title={t('scene.description')}
+        open={open.scene}
+        onToggle={() => setOpen((now) => ({ ...now, scene: !now.scene }))}
+      />
+      {enriching && (
+        <EnrichDialog
+          scene={scene}
+          onApplied={(next) => {
+            onChange(next)
+            setOpen((now) => ({ ...now, scene: true }))
+          }}
+          onClose={() => setEnriching(false)}
+        />
+      )}
+      {open.scene && (
+        <>
+          {writing ? (
+            <DescriptionEditor
+              value={scene.summary}
+              label={t('description.title')}
+              placeholder={t('description.scene.placeholder')}
+              onSave={(text) => api.saveSceneSummary(scene.id, text).then(onChange)}
+            />
+          ) : scene.summary ? (
+            <p className="scene-summary">{scene.summary}</p>
+          ) : (
+            <p className="faint small">{t('scene.description.empty')}</p>
+          )}
+          {/* "Add to the description" sits at the end of the open scene text, not on its
+              heading (items 34, 35, 43, 50); for an illustrator the offer comes in the dialogue. */}
+          {!writing && onEnrich && (
+            <div className="row">
+              <button className="quick-reply" disabled={!aiReady} title={t('scene.enrich.hint')} onClick={onEnrich}>
+                {t('scene.chat.enrich')}
+              </button>
+            </div>
+          )}
+          {writing && (
+            <div className="row">
+              <button
+                className="btn ghost small"
+                disabled={!aiReady}
+                title={t('scene.enrich.hint')}
+                onClick={() => setEnriching(true)}
+              >
+                <SparklesIcon />
+                {t('scene.enrich')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
